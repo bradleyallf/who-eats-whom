@@ -1,0 +1,18 @@
+/* --------------------- ===
+  NORMALIZE
+--------------------------- */
+body {
+  margin: 0;
+}
+
+button {
+  padding: 0; // Safari on ipad fix
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+img {
+  width: 100%;
+  max-width: 100%;
+}

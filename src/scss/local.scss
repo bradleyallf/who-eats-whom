@@ -1,0 +1,9 @@
+/* --------------------- ===
+  LOCAL IMPORTS
+--------------------------- */
+// These files should be loaded into each scss file and used with CSS Modules
+// https://github.com/css-modules/css-modules
+@import './vendors/bootstrap-5.1.3/bootstrap-utilities';
+@import './custom-colors';
+@import './custom-variables';
+@import './utils/mixins';

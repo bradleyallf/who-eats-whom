@@ -1,0 +1,10 @@
+// --------------------- ===
+//  UTILITIES - common structures and common bug fixes
+// ---------------------
+.safe-absolute-flex {
+  @include safe-absolute-flex;
+}
+
+.is-hidden {
+  visibility: hidden;
+}

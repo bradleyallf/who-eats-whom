@@ -1,0 +1,33 @@
+/* --------------------- ===
+  BASE
+--------------------------- */
+html {
+  font-size: 16px; //Base for rem
+}
+
+body {
+  color: map-get($colors-text, 'black');
+}
+
+body,
+p,
+a,
+button {
+  font-family: $base-font-family;
+  line-height: $base-line-height;
+  letter-spacing: $base-font-spacing;
+}
+
+body,
+p {
+  font-weight: $base-font-weight;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-size: 1rem;
+}

@@ -1,0 +1,35 @@
+// --------------------- ===
+//  MIXINS - please add notes
+// ---------------------
+// https://stackoverflow.com/questions/33454533/cant-scroll-to-top-of-flex-item-that-is-overflowing-container
+// Works best with a single wrapper child element
+@mixin safe-absolute-flex {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  & > * {
+    margin: auto;
+  }
+}
+
+// https://css-tricks.com/snippets/css/change-autocomplete-styles-webkit-browsers/
+// Autocomplete styles in Chrome
+@mixin autofill-styling($class, $color, $background) {
+  &input.#{$class}:-webkit-autofill,
+  &input.#{$class}:-webkit-autofill:hover,
+  &input.#{$class}:-webkit-autofill:focus,
+  &textarea.#{$class}:-webkit-autofill,
+  &textarea.#{$class}:-webkit-autofill:hover,
+  &textarea.#{$class}:-webkit-autofill:focus,
+  &select.#{$class}:-webkit-autofill,
+  &select.#{$class}:-webkit-autofill:hover,
+  &select.#{$class}:-webkit-autofill:focus {
+    border: 1px solid #{$background} !important;
+    -webkit-text-fill-color: #{$color} !important;
+    -webkit-box-shadow: 0 0 0 1000px #{$background} inset !important;
+    background-color: #{$background} !important;
+  }
+}
