@@ -20,18 +20,14 @@ export const routes = [
       { index: true, element: <LoadableHome /> },
       {
         path: routePaths.about,
-        element: <LoadableHome />,
-      },
-      {
-        path: routePaths.about,
         element: <LoadableAbout />,
       },
       {
-        path: routePaths.about,
+        path: routePaths.howToSubmit,
         element: <LoadableHowToSubmit />,
       },
       {
-        path: routePaths.about,
+        path: routePaths.higherLevelChart,
         element: <LoadableHigherLevelChart />,
       },
       { path: '*', element: <LoadableNotFound /> },

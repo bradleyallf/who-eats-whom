@@ -1,0 +1,9 @@
+@import '$scss/local';
+
+.p {
+  font-size: 1.2rem;
+
+  &__italic {
+    font-style: italic;
+  }
+}

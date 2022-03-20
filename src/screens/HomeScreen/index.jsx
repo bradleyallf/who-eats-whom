@@ -1,12 +1,19 @@
-import React, { Suspense, useRef } from 'react';
+import React from 'react';
 import styles from './index.scss';
 
-import Title from '$components/typography/Title';
+import P from '$components/typography/P';
+import A from '$components/typography/A';
 
+
+// P was breaking
 const HomeScreen = () => {
   return (
     <div>
-      This is home
+
+        <A href="https://www.inaturalist.org/projects/who-eats-whom">
+          Who Eats Whom
+        </A>
+
     </div>
   );
 };
