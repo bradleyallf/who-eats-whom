@@ -2,4 +2,9 @@
 
 .section {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: $page-width;
+  padding: 30px $header-gutter;
 }

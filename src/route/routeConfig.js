@@ -7,6 +7,9 @@ import Main from '$components/layouts/Main';
 
 const fallback = <p>Loading...</p>;
 const LoadableHome = loadable(() => import('$screens/HomeScreen'), { fallback });
+const LoadableAbout = loadable(() => import('$screens/About'), { fallback });
+const LoadableHowToSubmit = loadable(() => import('$screens/HowToSubmit'), { fallback });
+const LoadableHigherLevelChart = loadable(() => import('$screens/HigherLevelChart'), { fallback });
 const LoadableNotFound = loadable(() => import('$screens/NotFoundScreen'), { fallback });
 
 export const routes = [
@@ -18,6 +21,18 @@ export const routes = [
       {
         path: routePaths.about,
         element: <LoadableHome />,
+      },
+      {
+        path: routePaths.about,
+        element: <LoadableAbout />,
+      },
+      {
+        path: routePaths.about,
+        element: <LoadableHowToSubmit />,
+      },
+      {
+        path: routePaths.about,
+        element: <LoadableHigherLevelChart />,
       },
       { path: '*', element: <LoadableNotFound /> },
     ],

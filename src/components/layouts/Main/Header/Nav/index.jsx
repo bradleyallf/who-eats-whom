@@ -4,6 +4,7 @@ import {
   Outlet,
   Link,
 } from 'react-router-dom';
+import styles from './index.scss';
 
 import { routePaths } from '$route/routePaths';
 
@@ -12,12 +13,11 @@ const Nav = () => {
   //  RENDER
   // ---------------------
   return (
-    <nav className="navbar">
-      <ul className="navbar-nav me-auto mb-2 mb-lg-0">
-        <li className="nav-item">
-          <Link className="nav-link" to={routePaths.home}>HOMEE</Link>
-        </li>
-      </ul>
+    <nav className={styles.nav}>
+      <Link className={styles.link} to={routePaths.home}>Home</Link>
+      <Link className={styles.link} to={routePaths.about}>About</Link>
+      <Link className={styles.link} to={routePaths.howToSubmit}>How to Submit</Link>
+      <Link className={styles.link} to={routePaths.higherLevelChart}>Higher Level Chart</Link>
     </nav>
   );
 };

@@ -1,0 +1,17 @@
+@import '$scss/local';
+
+.nav {
+  position: relative;
+}
+
+.link {
+  text-decoration: none;
+  padding: 5px 10px;
+  color: map-get($colors-text, 'black');
+  font-weight: $font-weight-bold;
+
+  &:hover {
+    text-decoration: underline;
+    color: map-get($colors-text, 'black');
+  }
+}

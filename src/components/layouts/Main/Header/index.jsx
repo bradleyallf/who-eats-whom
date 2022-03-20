@@ -1,7 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import H1 from '$components/typography/H1';
-import H2 from '$components/typography/H2';
+import Title from '$components/typography/Title';
+import Subtitle from '$components/typography/Subtitle';
 import Nav from './Nav';
 
 import styles from './index.scss';
@@ -14,8 +14,8 @@ const Header = () => {
     <header>
       <section className={styles.section}>
         <div>
-          <H1>Who Eats Who</H1>
-          <H2>A planetary food web</H2>
+          <Title>Who Eats Whom</Title>
+          <Subtitle>A planetary food web</Subtitle>
         </div>
         <Nav />
       </section>

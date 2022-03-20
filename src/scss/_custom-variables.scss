@@ -1,14 +1,8 @@
 /* --------------------- ===
-  SITE SCALE RATIO
---------------------------- */
-$scale-ratio: 1.2; //based on 1.2 minor 3rd scale
-
-/* --------------------- ===
   TYPOGRAPHY
 --------------------------- */
-$font-family-sans-serif: 'Lato', 'Helvetica Neue', Arial, Helvetica, sans-serif;
+$font-family-sans-serif: -apple-system, "system-ui", Roboto, 'Helvetica Neue', Arial, Helvetica, sans-serif;
 $font-family-small: Arial, Helvetica, sans-serif;
-$font-family-font-awesome: 'Font Awesome 5 Free';
 
 $base-font-family: $font-family-sans-serif;
 $base-font-weight: 300;
@@ -51,6 +45,14 @@ $check-box-sizes: (
   'left': 3px,
 );
 $sidebar-icon-width: 20px;
+
+/* --------------------- ===
+  SITE SIZING
+--------------------------- */
+$page-gutter: 15px;
+$page-width: 1570px;
+$header-gutter: 10px;
+
 
 /* --------------------- ===
   Z-INDEX
