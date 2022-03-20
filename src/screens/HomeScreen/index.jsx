@@ -6,7 +6,7 @@ import Title from '$components/typography/Title';
 const HomeScreen = () => {
   return (
     <div>
-      <Title>Who Eats Whom</Title>
+      This is home
     </div>
   );
 };

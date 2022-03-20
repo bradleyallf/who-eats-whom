@@ -2,7 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import styles from './index.scss';
 
-const Title = (props) => {
+const Subtitle = ({ children }) => {
   // --------------------- ===
   //  PROPS
   // ---------------------
@@ -15,23 +15,23 @@ const Title = (props) => {
   //  RENDER
   // ---------------------
   return (
-    <Tag className={styles.title}>
-      { children }
+    <Tag className={styles.subtitle}>
+      {children}
     </Tag>
   );
 };
 
-Title.defaultProps = {
-  tag: 'h1',
+Subtitle.defaultProps = {
+  tag: 'h2',
 };
 
-Title.propTypes = {
+Subtitle.propTypes = {
   tag: PropTypes.oneOf([
-    'h1',
     'h2',
+    'h3',
     'p',
   ]),
   children: PropTypes.string.isRequired,
 };
 
-export default Title;
+export default Subtitle;
