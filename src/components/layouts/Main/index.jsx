@@ -13,7 +13,7 @@ const Main = () => {
   return (
     <>
       <Header />
-      <main className={styles.main}>
+      <main className="container">
         <Outlet />
       </main>
       <Footer />
