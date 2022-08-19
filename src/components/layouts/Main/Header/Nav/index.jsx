@@ -18,6 +18,7 @@ const Nav = () => {
       <Link className={styles.link} to={routePaths.about}>About</Link>
       <Link className={styles.link} to={routePaths.howToSubmit}>How to Submit</Link>
       <Link className={styles.link} to={routePaths.higherLevelChart}>Higher Level Chart</Link>
+      <Link className={styles.link} to={routePaths.whoSearch}>Who Search</Link>
     </nav>
   );
 };

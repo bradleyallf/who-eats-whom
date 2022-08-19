@@ -1,20 +1,18 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import A from '$components/typography/A';
 
 const HowToSubmit = () => {
   // --------------------- ===
   //  RENDER
   // ---------------------
   return (
-    <div className="row">
-      <div className="col-12">
-        <p>
-          this is a paragraph. I'm writing in html
-        </p>
-      </div>
-      normal text. good to line up the tags i.e. greater than less than symbols. Turned on line-wrap. 
-      tab and shift-tab 
-
+    <div>
+      <header className="entry-header alignwide">
+        <h1 className="entry-title">How to Submit</h1>
+      </header>
+      To add your own observations to Who Eats Whom, first sign up for iNaturalist, then
+      <A href="https://www.inaturalist.org/projects/who-eats-whom"> join our project here. </A>
     </div>
   );
 };
