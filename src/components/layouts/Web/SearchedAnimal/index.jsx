@@ -18,11 +18,12 @@ const SearchedAnimal = (props) => {
             <p>{result.taxon.preferred_common_name}</p>
             {result.photos &&
               result.photos.map((photo, j) => {
+                const i = photo.url.lastIndexOf('.')
+                const suffix = photo.url.substring(i, photo.url.length)
                 const url = `${photo.url.substring(
                   0,
                   photo.url.length - 10
-                )}original.jpg`
-                console.log('urll', url)
+                )}original${suffix}`
                 return <img src={url} key={j} alt="" />
               })}
           </div>
