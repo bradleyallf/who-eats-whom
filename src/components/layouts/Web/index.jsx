@@ -8,6 +8,7 @@ const Web = () => {
   //  STATE
   // ---------------------
   const [data, setData] = useState()
+  const [eatenByData, setEatenByData] = useState()
   const [search, setSearch] = useState('')
 
   // --------------------- ===
@@ -17,16 +18,41 @@ const Web = () => {
     const d = await apiClient.get(
       `/observations?project_id=41347&taxon_name=${search}`
     )
-    setData(d)
+    setData(d.data.results)
 
     // taxon.preferred_common_name
     // field_id: 12796
   }
 
+  const getPartnerData = async (ids) => {
+    const d = await apiClient.get(`/observations?id=41347&id=${ids}`)
+    setEatenByData(d.data.results)
+  }
+
+  // --------------------- ===
+  //  EFFECTS
+  // ---------------------
+  useEffect(() => {
+    if (data) {
+      const observationIds = []
+      data.forEach((result) => {
+        result.ofvs.forEach((ofv) => {
+          if (ofv.field_id === 12796) {
+            const i = ofv.value.lastIndexOf('/')
+            const observationId = ofv.value.substring(i + 1, ofv.value.length)
+            observationIds.push(observationId)
+          }
+        })
+      })
+      getPartnerData(observationIds)
+    }
+  }, [data])
+
   // --------------------- ===
   //  RENDER
   // ---------------------
   console.log('Data', data)
+  console.log('Eaten data', eatenByData)
   return (
     <div>
       <input
@@ -38,7 +64,10 @@ const Web = () => {
       <button type="button" onClick={getData}>
         Search
       </button>
-      <SearchedAnimal results={data ? data.data.results : []} />
+      <p>Animal</p>
+      <SearchedAnimal results={data || []} />
+      <p>Eats</p>
+      <SearchedAnimal results={eatenByData || []} />
     </div>
   )
 }
