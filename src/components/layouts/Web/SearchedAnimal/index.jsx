@@ -2,12 +2,13 @@ import React, { Fragment } from 'react'
 import PropTypes from 'prop-types'
 
 const square = 'square'
+const partnerFieldId = 12796
 
 const SearchedAnimal = (props) => {
   // --------------------- ===
   //  PROPS
   // ---------------------
-  const { results } = props
+  const { results, type, partnerData } = props
 
   // --------------------- ===
   //  RENDER
@@ -37,7 +38,15 @@ const SearchedAnimal = (props) => {
           results.map((result, i) => (
             <Fragment key={i}>
               <div className="col-12">
-                <p>{result.taxon.preferred_common_name}</p>
+                <p>
+                  {type === 'eaten'
+                    ? `${result.taxon.preferred_common_name} eats ${
+                        partnerData[result.id]
+                      }`
+                    : `${result.taxon.preferred_common_name} is eaten by ${
+                        partnerData[result.id]
+                      }`}
+                </p>
               </div>
               {result.photos &&
                 result.photos.map((photo, j) => {

@@ -15,6 +15,7 @@ const types = {
     key: 'eater',
   },
 }
+const partnerFieldId = 12796
 const projectId = 41347
 const eaterEatenFieldId = 12795 // in the ofvs array
 
@@ -23,6 +24,7 @@ const Web = () => {
   //  STATE
   // ---------------------
   const [data, setData] = useState()
+  const [partnerData, setPartnerData] = useState({})
   const [eatenByData, setEatenByData] = useState()
   const [search, setSearch] = useState('')
 
@@ -42,12 +44,9 @@ const Web = () => {
   }
 
   const getPartnerData = async (ids) => {
-    console.log('iDSS', ids)
     const d = await apiClient.get(
-      // `/observations?id=41347&id=${ids}&quality_grade=research`
       `/observations?id=${ids}&quality_grade=research`
     )
-    console.log('DDDDDDDD', d)
     setEatenByData(d.data.results)
   }
 
@@ -66,16 +65,21 @@ const Web = () => {
       }
     })
 
+    console.log('FILTER', filteredData)
+
     const observationIds = []
+    const partnerD = {}
     filteredData.forEach((result) => {
       result.ofvs.forEach((ofv) => {
-        if (ofv.field_id === 12796) {
+        if (ofv.field_id === partnerFieldId) {
           const i = ofv.value.lastIndexOf('/')
           const observationId = ofv.value.substring(i + 1, ofv.value.length)
+          partnerD[observationId] = result.taxon.preferred_common_name
           observationIds.push(observationId)
         }
       })
     })
+    setPartnerData(partnerD)
     getPartnerData(observationIds)
   }, [data])
 
@@ -101,7 +105,7 @@ const Web = () => {
             ))}
           </select>
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex gap-2 mb-4">
           <input
             className="form-control form-control-lg"
             type="text"
@@ -120,10 +124,11 @@ const Web = () => {
         </div>
       </div>
       <div className="col-12">
-        <p>Animal</p>
-        {/* <SearchedAnimal results={filteredData || []} /> */}
-        <p>Eats</p>
-        <SearchedAnimal results={eatenByData || []} />
+        <SearchedAnimal
+          results={eatenByData || []}
+          partnerData={partnerData}
+          type={type}
+        />
       </div>
     </>
   )
