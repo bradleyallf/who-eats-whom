@@ -1,10 +1,10 @@
-import React from 'react';
-import PropTypes from 'prop-types';
-import { Outlet } from 'react-router-dom';
-import styles from './index.scss';
+import React from 'react'
+import PropTypes from 'prop-types'
+import { Outlet } from 'react-router-dom'
+import styles from './index.scss'
 
-import Header from '$components/layouts/Main/Header';
-import Footer from '$components/layouts/Main/Footer';
+import Header from '$components/layouts/Main/Header'
+import Footer from '$components/layouts/Main/Footer'
 
 const Main = () => {
   // --------------------- ===
@@ -16,17 +16,12 @@ const Main = () => {
       <main className="container">
         <Outlet />
       </main>
-      <Footer />
     </>
-  );
-};
+  )
+}
 
-Main.defaultProps = {
+Main.defaultProps = {}
 
-};
+Main.propTypes = {}
 
-Main.propTypes = {
-
-};
-
-export default Main;
+export default Main
