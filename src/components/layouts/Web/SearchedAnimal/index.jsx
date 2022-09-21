@@ -1,6 +1,8 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 
+const square = 'square'
+
 const SearchedAnimal = (props) => {
   // --------------------- ===
   //  PROPS
@@ -22,7 +24,7 @@ const SearchedAnimal = (props) => {
                 const suffix = photo.url.substring(i, photo.url.length)
                 const url = `${photo.url.substring(
                   0,
-                  photo.url.length - 10
+                  photo.url.length - (square.length + suffix.length)
                 )}original${suffix}`
                 return <img src={url} key={j} alt="" />
               })}

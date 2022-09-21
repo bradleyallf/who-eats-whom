@@ -3,7 +3,20 @@ import PropTypes from 'prop-types'
 import { apiClient } from '$common/api'
 import SearchedAnimal from './SearchedAnimal'
 
-const types = ['Who is eaten by...', 'Who eats...']
+const types = {
+  eaten: {
+    label: 'Who eats...',
+    value: 'thing being eaten',
+    key: 'eaten',
+  },
+  eater: {
+    label: 'Who is eaten by...',
+    value: 'eater',
+    key: 'eater',
+  },
+}
+const projectId = 41347
+const eaterEatenFieldId = 12795 // in the ofvs array
 
 const Web = () => {
   // --------------------- ===
@@ -13,14 +26,14 @@ const Web = () => {
   const [eatenByData, setEatenByData] = useState()
   const [search, setSearch] = useState('')
 
-  const [typeIndex, setTypeIndex] = useState(0)
+  const [type, setType] = useState(types.eaten.key)
 
   // --------------------- ===
   //  FUNCS
   // ---------------------
   const getData = async () => {
     const d = await apiClient.get(
-      `/observations?project_id=41347&taxon_name=${search}`
+      `/observations?project_id=41347&taxon_name=${search}&quality_grade=research`
     )
     setData(d.data.results)
 
@@ -29,7 +42,9 @@ const Web = () => {
   }
 
   const getPartnerData = async (ids) => {
-    const d = await apiClient.get(`/observations?id=41347&id=${ids}`)
+    const d = await apiClient.get(
+      `/observations?id=41347&id=${ids}&quality_grade=research`
+    )
     setEatenByData(d.data.results)
   }
 
@@ -57,18 +72,31 @@ const Web = () => {
   // ---------------------
   console.log('Data', data)
   console.log('Eaten data', eatenByData)
+
+  const filteredData = []
+  if (data) {
+    data.forEach((d) => {
+      const typeObj = d.ofvs.find((o) => o.field_id === eaterEatenFieldId)
+      if (typeObj?.value === types[type].value) {
+        filteredData.push(d)
+      }
+    })
+  }
+
+  console.log('FDD', filteredData)
+
   return (
     <>
       <div className="col-12 d-flex gap-2 justify-content-center mt-4">
         <div className="dropdown">
           <select
             className="form-select form-select-lg"
-            value={typeIndex}
-            onChange={(evt) => setTypeIndex(evt.target.value)}
+            value={type}
+            onChange={(evt) => setType(evt.target.value)}
           >
-            {types.map((t, i) => (
-              <option value={i} key={i}>
-                {types[i]}
+            {Object.keys(types).map((key) => (
+              <option value={key} key={key}>
+                {types[key].label}
               </option>
             ))}
           </select>
@@ -91,12 +119,12 @@ const Web = () => {
           </button>
         </div>
       </div>
-      {/* <div className="col-12">
+      <div className="col-12">
         <p>Animal</p>
-        <SearchedAnimal results={data || []} />
+        <SearchedAnimal results={filteredData || []} />
         <p>Eats</p>
         <SearchedAnimal results={eatenByData || []} />
-      </div> */}
+      </div>
     </>
   )
 }
