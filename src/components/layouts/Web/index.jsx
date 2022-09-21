@@ -42,9 +42,12 @@ const Web = () => {
   }
 
   const getPartnerData = async (ids) => {
+    console.log('iDSS', ids)
     const d = await apiClient.get(
-      `/observations?id=41347&id=${ids}&quality_grade=research`
+      // `/observations?id=41347&id=${ids}&quality_grade=research`
+      `/observations?id=${ids}&quality_grade=research`
     )
+    console.log('DDDDDDDD', d)
     setEatenByData(d.data.results)
   }
 
@@ -52,19 +55,28 @@ const Web = () => {
   //  EFFECTS
   // ---------------------
   useEffect(() => {
-    if (data) {
-      const observationIds = []
-      data.forEach((result) => {
-        result.ofvs.forEach((ofv) => {
-          if (ofv.field_id === 12796) {
-            const i = ofv.value.lastIndexOf('/')
-            const observationId = ofv.value.substring(i + 1, ofv.value.length)
-            observationIds.push(observationId)
-          }
-        })
+    if (!data) return
+
+    // FILTER DATA
+    const filteredData = []
+    data.forEach((d) => {
+      const typeObj = d.ofvs.find((o) => o.field_id === eaterEatenFieldId)
+      if (typeObj?.value === types[type].value) {
+        filteredData.push(d)
+      }
+    })
+
+    const observationIds = []
+    filteredData.forEach((result) => {
+      result.ofvs.forEach((ofv) => {
+        if (ofv.field_id === 12796) {
+          const i = ofv.value.lastIndexOf('/')
+          const observationId = ofv.value.substring(i + 1, ofv.value.length)
+          observationIds.push(observationId)
+        }
       })
-      getPartnerData(observationIds)
-    }
+    })
+    getPartnerData(observationIds)
   }, [data])
 
   // --------------------- ===
@@ -72,18 +84,6 @@ const Web = () => {
   // ---------------------
   console.log('Data', data)
   console.log('Eaten data', eatenByData)
-
-  const filteredData = []
-  if (data) {
-    data.forEach((d) => {
-      const typeObj = d.ofvs.find((o) => o.field_id === eaterEatenFieldId)
-      if (typeObj?.value === types[type].value) {
-        filteredData.push(d)
-      }
-    })
-  }
-
-  console.log('FDD', filteredData)
 
   return (
     <>
@@ -121,7 +121,7 @@ const Web = () => {
       </div>
       <div className="col-12">
         <p>Animal</p>
-        <SearchedAnimal results={filteredData || []} />
+        {/* <SearchedAnimal results={filteredData || []} /> */}
         <p>Eats</p>
         <SearchedAnimal results={eatenByData || []} />
       </div>
