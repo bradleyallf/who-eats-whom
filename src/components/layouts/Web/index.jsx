@@ -11,6 +11,8 @@ const Web = () => {
   const [eatenByData, setEatenByData] = useState()
   const [search, setSearch] = useState('')
 
+  const [isDown, setIsDown] = useState(false)
+
   // --------------------- ===
   //  FUNCS
   // ---------------------
@@ -54,21 +56,56 @@ const Web = () => {
   console.log('Data', data)
   console.log('Eaten data', eatenByData)
   return (
-    <div>
-      <input
-        type="text"
-        onChange={(evt) => setSearch(evt.target.value)}
-        value={search}
-        onSubmit={getData}
-      />
-      <button type="button" onClick={getData}>
-        Search
-      </button>
-      <p>Animal</p>
-      <SearchedAnimal results={data || []} />
-      <p>Eats</p>
-      <SearchedAnimal results={eatenByData || []} />
-    </div>
+    <>
+      <div className="col-12 d-flex gap-2 justify-content-center mt-4">
+        <div className="dropdown">
+          <button
+            className="btn btn-secondary dropdown-toggle"
+            type="button"
+            data-bs-toggle="dropdown"
+            aria-expanded={isDown}
+            onClick={() => setIsDown((prev) => !prev)}
+          >
+            Dropdown button
+          </button>
+          <ul className={`dropdown-menu ${isDown ? 'show' : ''}`}>
+            <li>
+              <a className="dropdown-item" href="#">
+                Action
+              </a>
+            </li>
+            <li>
+              <a className="dropdown-item" href="#">
+                Another action
+              </a>
+            </li>
+            <li>
+              <a className="dropdown-item" href="#">
+                Something else here
+              </a>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <input
+            className="form-control"
+            type="text"
+            onChange={(evt) => setSearch(evt.target.value)}
+            value={search}
+            onSubmit={getData}
+          />
+          <button type="button" onClick={getData}>
+            Search
+          </button>
+        </div>
+      </div>
+      {/* <div className="col-12">
+        <p>Animal</p>
+        <SearchedAnimal results={data || []} />
+        <p>Eats</p>
+        <SearchedAnimal results={eatenByData || []} />
+      </div> */}
+    </>
   )
 }
 

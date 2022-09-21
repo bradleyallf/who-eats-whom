@@ -14,12 +14,18 @@ const HomeScreen = () => {
   //  const favoriteColor = someFunc("red")
   //  console.log("someString", favoriteColor)
   return (
-    <div>
-      <A href="https://www.inaturalist.org/projects/who-eats-whom">
-        Who Eats Whom
-      </A>
+    <>
+      <div className="col-12 text-center">
+        <h1 className="h1">Who Eats Whom</h1>
+        <h2 className="h2">
+          Enter the name of a plant, animal or fungus to see what it eats.
+        </h2>
+        <A href="https://www.inaturalist.org/projects/who-eats-whom">
+          See the project on iNaturlist
+        </A>
+      </div>
       <Web />
-    </div>
+    </>
   )
 }
 
