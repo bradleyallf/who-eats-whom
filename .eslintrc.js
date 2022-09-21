@@ -1,32 +1,24 @@
 module.exports = {
-  extends: [
-    'airbnb',
-    'plugin:cypress/recommended',
-  ],
+  extends: ['airbnb', 'plugin:cypress/recommended'],
   parser: 'babel-eslint',
   env: {
     browser: true,
     es6: true,
     mocha: true,
     node: true,
-    atomtest: true
+    atomtest: true,
   },
-  plugins: [
-    'react',
-    'jsx-a11y',
-    'react-hooks',
-    'import'
-  ],
+  plugins: ['react', 'jsx-a11y', 'react-hooks', 'import'],
   parserOptions: {
     ecmaVersion: 6,
     sourceType: 'module',
     ecmaFeatures: {
-      jsx: true
-    }
+      jsx: true,
+    },
   },
   rules: {
     'arrow-body-style': 'off',
-    'semi': 'error',
+    semi: 'off',
     'max-len': ['warn', 120],
     'class-methods-use-this': 'off',
     'react/button-has-type': 'off',
@@ -42,14 +34,14 @@ module.exports = {
     'import/prefer-default-export': 'off',
     'react/sort-comp': 'off',
     'react-hooks/rules-of-hooks': 'error',
-    'react-hooks/exhaustive-deps': 'warn'
+    'react-hooks/exhaustive-deps': 'warn',
   },
   settings: {
     'import/resolver': {
       node: {}, // https://github.com/benmosher/eslint-plugin-import/issues/1396#issuecomment-509384041
       webpack: {
-        config: './webpack.config.resolve.js'
+        config: './webpack.config.resolve.js',
       },
-    }
-  }
+    },
+  },
 }

@@ -6,4 +6,5 @@ export const routePaths = {
   about: '/about',
   howToSubmit: '/how-to-submit',
   higherLevelChart: '/fine-chart',
+  whoSearch: '/who-search',
 };
