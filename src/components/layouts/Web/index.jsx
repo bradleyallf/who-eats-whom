@@ -3,6 +3,8 @@ import PropTypes from 'prop-types'
 import { apiClient } from '$common/api'
 import SearchedAnimal from './SearchedAnimal'
 
+const types = ['Who is eaten by...', 'Who eats...']
+
 const Web = () => {
   // --------------------- ===
   //  STATE
@@ -11,7 +13,7 @@ const Web = () => {
   const [eatenByData, setEatenByData] = useState()
   const [search, setSearch] = useState('')
 
-  const [isDown, setIsDown] = useState(false)
+  const [typeIndex, setTypeIndex] = useState(0)
 
   // --------------------- ===
   //  FUNCS
@@ -59,42 +61,32 @@ const Web = () => {
     <>
       <div className="col-12 d-flex gap-2 justify-content-center mt-4">
         <div className="dropdown">
-          <button
-            className="btn btn-secondary dropdown-toggle"
-            type="button"
-            data-bs-toggle="dropdown"
-            aria-expanded={isDown}
-            onClick={() => setIsDown((prev) => !prev)}
+          <select
+            className="form-select form-select-lg"
+            value={typeIndex}
+            onChange={(evt) => setTypeIndex(evt.target.value)}
           >
-            Dropdown button
-          </button>
-          <ul className={`dropdown-menu ${isDown ? 'show' : ''}`}>
-            <li>
-              <a className="dropdown-item" href="#">
-                Action
-              </a>
-            </li>
-            <li>
-              <a className="dropdown-item" href="#">
-                Another action
-              </a>
-            </li>
-            <li>
-              <a className="dropdown-item" href="#">
-                Something else here
-              </a>
-            </li>
-          </ul>
+            {types.map((t, i) => (
+              <option value={i} key={i}>
+                {types[i]}
+              </option>
+            ))}
+          </select>
         </div>
-        <div>
+        <div className="d-flex gap-2">
           <input
-            className="form-control"
+            className="form-control form-control-lg"
             type="text"
             onChange={(evt) => setSearch(evt.target.value)}
             value={search}
             onSubmit={getData}
+            placeholder="Search..."
           />
-          <button type="button" onClick={getData}>
+          <button
+            className="btn btn-primary btn-lg"
+            type="button"
+            onClick={getData}
+          >
             Search
           </button>
         </div>
