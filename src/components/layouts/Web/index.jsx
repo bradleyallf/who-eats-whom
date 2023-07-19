@@ -105,15 +105,29 @@ const Web = () => {
             ))}
           </select>
         </div>
-        <div className="d-flex gap-2 mb-4">
-          <input
-            className="form-control form-control-lg"
-            type="text"
-            onChange={(evt) => setSearch(evt.target.value)}
-            value={search}
-            onSubmit={getData}
-            placeholder="Search..."
-          />
+        <form className="d-flex gap-2 mb-4" onSubmit={getData}>
+          <div className="position-relative">
+            <input
+              className="form-control form-control-lg"
+              type="text"
+              onChange={(evt) => setSearch(evt.target.value)}
+              value={search}
+              onSubmit={getData}
+              placeholder="Search..."
+            />
+            <div
+              className="position-absolute p-4 d-flex flex-column gap-2 bg-white"
+              style={{
+                top: '100%',
+                left: 0,
+                right: 0,
+                border: '1px solid #ced4da',
+              }}
+            >
+              <span>Suggestion 1</span>
+              <span>Suggestion 2</span>
+            </div>
+          </div>
           <button
             className="btn btn-primary btn-lg"
             type="button"
@@ -121,7 +135,7 @@ const Web = () => {
           >
             Search
           </button>
-        </div>
+        </form>
       </div>
       <div className="col-12">
         <SearchedAnimal
