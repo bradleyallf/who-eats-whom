@@ -33,7 +33,7 @@ const Web = () => {
   // --------------------- ===
   //  FUNCS
   // ---------------------
-  const getData = async () => {
+  const getData = async (canceled) => {
     const d = await apiClient.get(
       `/observations?project_id=41347&taxon_name=${search}&quality_grade=research`
     )
@@ -83,11 +83,31 @@ const Web = () => {
     getPartnerData(observationIds)
   }, [data])
 
+  useEffect(() => {
+    let canceled = false
+    if (search.length < 3) return
+    apiClient
+      .get(
+        `/observations?project_id=41347&taxon_name=${search}&quality_grade=research`
+      )
+      .then((d) => {
+        if (!canceled) setData(d.data.results)
+      })
+    return () => {
+      canceled = true
+    }
+  }, [search])
+
   // --------------------- ===
   //  RENDER
   // ---------------------
   console.log('Data', data)
   console.log('Eaten data', eatenByData)
+
+  const suggestions = [
+    ...new Set(data?.map((d) => d.taxon.preferred_common_name)),
+  ]
+  console.log('suggestions :>> ', suggestions)
 
   return (
     <>
@@ -105,15 +125,42 @@ const Web = () => {
             ))}
           </select>
         </div>
-        <div className="d-flex gap-2 mb-4">
-          <input
-            className="form-control form-control-lg"
-            type="text"
-            onChange={(evt) => setSearch(evt.target.value)}
-            value={search}
-            onSubmit={getData}
-            placeholder="Search..."
-          />
+        <form className="d-flex gap-2 mb-4" onSubmit={getData}>
+          <div className="position-relative" style={{ zIndex: 2 }}>
+            <input
+              className="form-control form-control-lg"
+              type="text"
+              onChange={(evt) => setSearch(evt.target.value)}
+              value={search}
+              onSubmit={getData}
+              placeholder="Search..."
+            />
+            {suggestions.length > 0 && (
+              <div
+                className="position-absolute p-4 d-flex flex-column gap-2 bg-white"
+                style={{
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  border: '1px solid #ced4da',
+                  textAlign: 'left',
+                }}
+              >
+                {suggestions?.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => {
+                      setSearch(s)
+                    }}
+                    type="button"
+                    className="text-start"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             className="btn btn-primary btn-lg"
             type="button"
@@ -121,7 +168,7 @@ const Web = () => {
           >
             Search
           </button>
-        </div>
+        </form>
       </div>
       <div className="col-12">
         <SearchedAnimal
