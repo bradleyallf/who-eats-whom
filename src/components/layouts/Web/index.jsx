@@ -33,9 +33,9 @@ const Web = () => {
   // --------------------- ===
   //  FUNCS
   // ---------------------
-  const getData = async (canceled) => {
+  const getData = async () => {
     const d = await apiClient.get(
-      `/observations?project_id=41347&taxon_name=${search}&quality_grade=research`
+      `/observations?project_id=${projectId}&taxon_name=${search}&quality_grade=research`
     )
     setData(d.data.results)
 
@@ -101,13 +101,12 @@ const Web = () => {
   // --------------------- ===
   //  RENDER
   // ---------------------
-  console.log('Data', data)
+  console.log('data from search', data)
   console.log('Eaten data', eatenByData)
 
   const suggestions = [
     ...new Set(data?.map((d) => d.taxon.preferred_common_name)),
   ]
-  console.log('suggestions :>> ', suggestions)
 
   return (
     <>
