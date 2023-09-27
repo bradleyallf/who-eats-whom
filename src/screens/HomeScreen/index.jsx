@@ -21,7 +21,7 @@ const HomeScreen = () => {
           Enter the name of a plant, animal or fungus to see what it eats.
         </h2>
         <A href="https://www.inaturalist.org/projects/who-eats-whom">
-          See the project on iNaturlist
+          See the project on iNaturalist
         </A>
       </div>
       <Web />
