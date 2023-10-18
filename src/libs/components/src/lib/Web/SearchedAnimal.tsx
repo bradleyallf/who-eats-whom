@@ -1,7 +1,15 @@
+import { Observation, Ofv } from './types'
+
+interface Props {
+  results: Observation[]
+  type: Ofv['value']
+  partnerData: any
+}
+
 const square = 'square'
 const partnerFieldId = 12796
 
-export const SearchedAnimal = (props) => {
+export const SearchedAnimal = (props: Props) => {
   // --------------------- ===
   //  PROPS
   // ---------------------
