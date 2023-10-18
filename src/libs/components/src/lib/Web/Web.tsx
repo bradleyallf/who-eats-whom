@@ -33,7 +33,7 @@ export const Web = () => {
   // ---------------------
   const [data, setData] = useState<Observation[]>([])
   const [partnerData, setPartnerData] = useState({})
-  const [eatenByData, setEatenByData] = useState()
+  const [eatenByData, setEatenByData] = useState<Observation[]>()
   const [search, setSearch] = useState('')
 
   const [type, setType] = useState(types.eaten.key)

@@ -1,3 +1,4 @@
+// Note: many of these are not a complete list of fields
 export interface User {
   created_at: string
   id: number
@@ -5,6 +6,16 @@ export interface User {
   spam: boolean
   suspended: boolean
   uuid: string
+}
+
+export interface Photo {
+  attribution: string
+  flags: string[]
+  hidden: boolean
+  id: number
+  license_code: string
+  original_dimensions: { width: number; height: number }
+  url: string
 }
 
 export interface Ofv {
@@ -28,12 +39,14 @@ export interface Taxon {
   preferred_common_name: string
 }
 
-// Note: this is not a complete list of fields
 export interface Observation {
   community_taxon_id: number
   created_at: string
   description?: string
   ofvs: Ofv[]
   taxon: Taxon
+  id: number
+  uri: string
+  photos: Photo[]
   uuid: string
 }
