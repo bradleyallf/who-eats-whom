@@ -9,7 +9,8 @@ export const Home = () => {
       <div className="col-12 text-center">
         <h1 className="text-xl font-bold">Who Eats Whom</h1>
         <h2 className="text-sm">
-          Enter the name of a plant, animal or fungus to see what it eats.
+          Enter the name of a plant, animal or fungus to see what it eats. For 
+          example, try "Who is eaten by" "Osprey."
         </h2>
         <a
           href="https://www.inaturalist.org/projects/who-eats-whom"
