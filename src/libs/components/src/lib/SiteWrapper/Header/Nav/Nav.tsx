@@ -13,14 +13,6 @@ const routes = [
     to: '/how-to-submit',
     label: 'How to Submit',
   },
-  {
-    to: '/higher-level-chart',
-    label: 'Higher Level Chart',
-  },
-  {
-    to: '/who-search',
-    label: 'Who Search',
-  },
 ]
 
 export const Nav = () => {
