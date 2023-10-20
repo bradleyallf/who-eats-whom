@@ -8,6 +8,10 @@ export const About = () => {
     <div className="row">
       <div className="col-12">
 
+        <p>
+        <em>“When we try to pick out anything by itself, we find it hitched to everything else in the universe.”</em> – John Muir
+        </p>
+
         <p style={{ margin: '20px 0' }}>
           How organisms in an ecosystem are connected to one another is one of the 
           most fundamental questions in ecology. The goal of Who Eats Whom 
