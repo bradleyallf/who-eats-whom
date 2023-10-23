@@ -9,7 +9,7 @@ export const Home = () => {
       <div className="col-12 text-center">
         <h1 className="text-xl font-bold">Who Eats Whom</h1>
         <h2 className="text-sm">
-          Enter the name of a plant, animal or fungus to see what it eats. For 
+          Enter the common name of a species to see who it eats, or who eats it. For 
           example, try "Who is eaten by" "Osprey."
         </h2>
         <a
