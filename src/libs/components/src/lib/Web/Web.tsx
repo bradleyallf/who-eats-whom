@@ -4,6 +4,8 @@ import { apiClient } from '@utils'
 import { SearchedAnimal } from './SearchedAnimal'
 import { Observation, Ofv } from './types'
 
+const getLastLetter = (str: string) => str[str.length - 1]
+
 const types: Record<
   Ofv['value'],
   {
@@ -38,7 +40,6 @@ export const Web = () => {
 
   const [type, setType] = useState(types.eaten.key)
 
-  console.log('data :>> ', data)
   // --------------------- ===
   //  FUNCS
   // ---------------------
@@ -69,7 +70,9 @@ export const Web = () => {
     const filteredData: Observation[] = []
     data.forEach((d) => {
       const typeObj = d.ofvs.find((o) => o.field_id === eaterEatenFieldId)
-      if (typeObj?.value === types[type].value) {
+      // "eater" or "organism being eaten" (previously "thing being eaten")
+      if (!typeObj) return
+      if (getLastLetter(typeObj.value) === getLastLetter(types[type].value)) {
         filteredData.push(d)
       }
     })
@@ -90,7 +93,7 @@ export const Web = () => {
     })
     setPartnerData(partnerD)
     getPartnerData(observationIds)
-  }, [data])
+  }, [data, type])
 
   useEffect(() => {
     let canceled = false
@@ -110,9 +113,6 @@ export const Web = () => {
   // --------------------- ===
   //  RENDER
   // ---------------------
-  console.log('data from search', data)
-  console.log('Eaten data', eatenByData)
-
   const suggestions = [
     ...new Set(data?.map((d) => d.taxon.preferred_common_name)),
   ]
