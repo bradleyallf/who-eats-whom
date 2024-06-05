@@ -3,6 +3,7 @@ import { apiClient } from '@utils'
 
 import { SearchedAnimal } from './SearchedAnimal'
 import { Observation, Ofv } from './types'
+import { Dropdown } from './Dropdown'
 
 const getLastLetter = (str: string) => str[str.length - 1]
 
@@ -77,8 +78,6 @@ export const Web = () => {
       }
     })
 
-    console.log('FILTER', filteredData)
-
     const observationIds: string[] = []
     const partnerD: Record<string, string> = {}
     filteredData.forEach((result) => {
@@ -149,31 +148,7 @@ export const Web = () => {
               onSubmit={getData}
               placeholder="Search..."
             />
-            {suggestions.length > 0 && (
-              <div
-                className="absolute p-4 flex flex-col gap-2 bg-white"
-                style={{
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  border: '1px solid #ced4da',
-                  textAlign: 'left',
-                }}
-              >
-                {suggestions?.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => {
-                      setSearch(s)
-                    }}
-                    type="button"
-                    className="text-start"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            )}
+            <Dropdown suggestions={suggestions} setSearch={setSearch} />
           </div>
           <button
             className="btn btn-primary btn-lg"

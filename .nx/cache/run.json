@@ -1,0 +1,21 @@
+{
+  "run": {
+    "command": "nx serve",
+    "startTime": "2024-06-05T19:01:46.987Z",
+    "endTime": "2024-06-05T19:01:47.073Z",
+    "inner": false
+  },
+  "tasks": [
+    {
+      "taskId": "who-eats-whom:serve:development",
+      "target": "serve",
+      "projectName": "who-eats-whom",
+      "hash": "16676783527734727464",
+      "startTime": "2024-06-05T19:01:46.989Z",
+      "endTime": "2024-06-05T19:01:47.073Z",
+      "params": "",
+      "cacheStatus": "cache-miss",
+      "status": 1
+    }
+  ]
+}
