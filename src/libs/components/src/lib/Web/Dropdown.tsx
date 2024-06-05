@@ -1,19 +1,21 @@
 interface Props {
+  isLoading: boolean
+  isOpen: boolean
   suggestions: string[]
-  setSearch: (s: string) => void
+  onClick: (s: string) => void
 }
 
 export const Dropdown = (props: Props) => {
   // --------------------- ===
   //  PROPS
   // ---------------------
-  const { suggestions, setSearch } = props
+  const { isLoading, isOpen, suggestions, onClick } = props
 
   // --------------------- ===
   //  RENDER
   // ---------------------
   return (
-    suggestions.length > 0 && (
+    (isOpen || isLoading) && (
       <div
         className="absolute p-4 flex flex-col gap-2 bg-white"
         style={{
@@ -24,11 +26,17 @@ export const Dropdown = (props: Props) => {
           textAlign: 'left',
         }}
       >
+        {isLoading && (
+          <p className="text-sm text-gray-500 italic">Loading...</p>
+        )}
+        {!isLoading && !suggestions?.length && (
+          <p className="text-sm text-gray-500 italic">No suggestions</p>
+        )}
         {suggestions?.map((s) => (
           <button
             key={s}
             onClick={() => {
-              setSearch(s)
+              onClick(s)
             }}
             type="button"
             className="text-start"

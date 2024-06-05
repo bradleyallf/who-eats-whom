@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { ChangeEvent, useEffect, useState } from 'react'
 import { apiClient } from '@utils'
 
 import { SearchedAnimal } from './SearchedAnimal'
@@ -37,7 +37,10 @@ export const Web = () => {
   const [data, setData] = useState<Observation[]>([])
   const [partnerData, setPartnerData] = useState({})
   const [eatenByData, setEatenByData] = useState<Observation[]>()
+
   const [search, setSearch] = useState('')
+  const [isSearchLoading, setIsSearchLoading] = useState(false)
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
 
   const [type, setType] = useState(types.eaten.key)
 
@@ -97,6 +100,7 @@ export const Web = () => {
   useEffect(() => {
     let canceled = false
     if (search.length < 3) return
+    setIsSearchLoading(true)
     apiClient
       .get(
         `/observations?project_id=41347&taxon_name=${search}&quality_grade=research`
@@ -104,10 +108,26 @@ export const Web = () => {
       .then((d) => {
         if (!canceled) setData(d.data.results)
       })
+      .finally(() => {
+        setIsSearchLoading(false)
+      })
     return () => {
       canceled = true
     }
   }, [search])
+
+  // --------------------- ===
+  //  HANDLERS
+  // ---------------------
+  const handleClick = (s: string) => {
+    setSearch(s)
+    setIsDropdownOpen(false)
+  }
+
+  const handleInputChange = (evt: ChangeEvent<HTMLInputElement>) => {
+    setSearch(evt.target.value)
+    setIsDropdownOpen(true)
+  }
 
   // --------------------- ===
   //  RENDER
@@ -143,12 +163,17 @@ export const Web = () => {
             <input
               className=""
               type="text"
-              onChange={(evt) => setSearch(evt.target.value)}
+              onChange={handleInputChange}
               value={search}
               onSubmit={getData}
               placeholder="Search..."
             />
-            <Dropdown suggestions={suggestions} setSearch={setSearch} />
+            <Dropdown
+              isLoading={isSearchLoading}
+              isOpen={isDropdownOpen}
+              suggestions={suggestions}
+              onClick={handleClick}
+            />
           </div>
           <button
             className="btn btn-primary btn-lg"

@@ -168,6 +168,87 @@
         "implicitDependencies": []
       }
     },
+    "hooks": {
+      "name": "hooks",
+      "type": "lib",
+      "data": {
+        "name": "hooks",
+        "root": "src/libs/hooks",
+        "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+        "sourceRoot": "src/libs/hooks/src",
+        "projectType": "library",
+        "tags": [],
+        "targets": {
+          "nx-release-publish": {
+            "dependsOn": [
+              "^nx-release-publish"
+            ],
+            "executor": "@nx/js:release-publish",
+            "options": {},
+            "configurations": {}
+          },
+          "lint": {
+            "inputs": [
+              "default",
+              "{workspaceRoot}/.eslintrc.json",
+              "{workspaceRoot}/.eslintignore",
+              "{workspaceRoot}/eslint.config.js"
+            ],
+            "executor": "@nx/linter:eslint",
+            "outputs": [
+              "{options.outputFile}"
+            ],
+            "options": {
+              "lintFilePatterns": [
+                "src/libs/hooks/**/*.{ts,tsx,js,jsx}"
+              ]
+            },
+            "configurations": {}
+          },
+          "build": {
+            "dependsOn": [
+              "^build"
+            ],
+            "inputs": [
+              "production",
+              "^production"
+            ],
+            "executor": "@nx/vite:build",
+            "outputs": [
+              "{options.outputPath}"
+            ],
+            "defaultConfiguration": "production",
+            "options": {
+              "outputPath": "dist/src/libs/hooks"
+            },
+            "configurations": {
+              "development": {
+                "mode": "development"
+              },
+              "production": {
+                "mode": "production"
+              }
+            }
+          },
+          "test": {
+            "inputs": [
+              "default",
+              "^production"
+            ],
+            "executor": "@nx/vite:test",
+            "outputs": [
+              "{options.reportsDirectory}"
+            ],
+            "options": {
+              "passWithNoTests": true,
+              "reportsDirectory": "../../../coverage/src/libs/hooks"
+            },
+            "configurations": {}
+          }
+        },
+        "implicitDependencies": []
+      }
+    },
     "pages": {
       "name": "pages",
       "type": "lib",
@@ -245,87 +326,6 @@
             "options": {
               "passWithNoTests": true,
               "reportsDirectory": "../../../coverage/src/libs/pages"
-            },
-            "configurations": {}
-          }
-        },
-        "implicitDependencies": []
-      }
-    },
-    "hooks": {
-      "name": "hooks",
-      "type": "lib",
-      "data": {
-        "name": "hooks",
-        "root": "src/libs/hooks",
-        "$schema": "../../../node_modules/nx/schemas/project-schema.json",
-        "sourceRoot": "src/libs/hooks/src",
-        "projectType": "library",
-        "tags": [],
-        "targets": {
-          "nx-release-publish": {
-            "dependsOn": [
-              "^nx-release-publish"
-            ],
-            "executor": "@nx/js:release-publish",
-            "options": {},
-            "configurations": {}
-          },
-          "lint": {
-            "inputs": [
-              "default",
-              "{workspaceRoot}/.eslintrc.json",
-              "{workspaceRoot}/.eslintignore",
-              "{workspaceRoot}/eslint.config.js"
-            ],
-            "executor": "@nx/linter:eslint",
-            "outputs": [
-              "{options.outputFile}"
-            ],
-            "options": {
-              "lintFilePatterns": [
-                "src/libs/hooks/**/*.{ts,tsx,js,jsx}"
-              ]
-            },
-            "configurations": {}
-          },
-          "build": {
-            "dependsOn": [
-              "^build"
-            ],
-            "inputs": [
-              "production",
-              "^production"
-            ],
-            "executor": "@nx/vite:build",
-            "outputs": [
-              "{options.outputPath}"
-            ],
-            "defaultConfiguration": "production",
-            "options": {
-              "outputPath": "dist/src/libs/hooks"
-            },
-            "configurations": {
-              "development": {
-                "mode": "development"
-              },
-              "production": {
-                "mode": "production"
-              }
-            }
-          },
-          "test": {
-            "inputs": [
-              "default",
-              "^production"
-            ],
-            "executor": "@nx/vite:test",
-            "outputs": [
-              "{options.reportsDirectory}"
-            ],
-            "options": {
-              "passWithNoTests": true,
-              "reportsDirectory": "../../../coverage/src/libs/hooks"
             },
             "configurations": {}
           }
@@ -10168,33 +10168,6 @@
         "type": "static"
       }
     ],
-    "pages": [
-      {
-        "source": "pages",
-        "target": "components",
-        "type": "static"
-      },
-      {
-        "source": "pages",
-        "target": "npm:vitest",
-        "type": "static"
-      },
-      {
-        "source": "pages",
-        "target": "npm:@vitejs/plugin-react",
-        "type": "static"
-      },
-      {
-        "source": "pages",
-        "target": "npm:vite-plugin-dts",
-        "type": "static"
-      },
-      {
-        "source": "pages",
-        "target": "npm:@nx/vite",
-        "type": "static"
-      }
-    ],
     "hooks": [
       {
         "source": "hooks",
@@ -10218,6 +10191,33 @@
       },
       {
         "source": "hooks",
+        "target": "npm:@nx/vite",
+        "type": "static"
+      }
+    ],
+    "pages": [
+      {
+        "source": "pages",
+        "target": "components",
+        "type": "static"
+      },
+      {
+        "source": "pages",
+        "target": "npm:vitest",
+        "type": "static"
+      },
+      {
+        "source": "pages",
+        "target": "npm:@vitejs/plugin-react",
+        "type": "static"
+      },
+      {
+        "source": "pages",
+        "target": "npm:vite-plugin-dts",
+        "type": "static"
+      },
+      {
+        "source": "pages",
         "target": "npm:@nx/vite",
         "type": "static"
       }
