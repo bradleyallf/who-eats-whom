@@ -47,19 +47,6 @@ export const Web = () => {
   // --------------------- ===
   //  FUNCS
   // ---------------------
-  const getData = async (
-    evt: ChangeEvent<HTMLInputElement> | React.MouseEvent<HTMLButtonElement>
-  ) => {
-    evt.preventDefault()
-    const d = await apiClient.get(
-      `/observations?project_id=${projectId}&taxon_name=${search}&quality_grade=research`
-    )
-    setData(d.data.results)
-
-    // taxon.preferred_common_name
-    // field_id: 12796
-  }
-
   const getPartnerData = async (ids: string[]) => {
     const d = await apiClient.get(
       `/observations?id=${ids}&quality_grade=research`
@@ -106,7 +93,7 @@ export const Web = () => {
     setIsSearchLoading(true)
     apiClient
       .get(
-        `/observations?project_id=41347&taxon_name=${search}&quality_grade=research`
+        `/observations?project_id=${projectId}&taxon_name=${search}&quality_grade=research`
       )
       .then((d) => {
         if (!canceled) setData(d.data.results)
@@ -154,10 +141,10 @@ export const Web = () => {
 
   return (
     <>
-      <div className="flex gap-2 justify-center mt-4">
-        <div className="dropdown">
+      <div className="mt-12">
+        <div className="flex justify-center gap-2 w-full">
           <select
-            className="form-select form-select-lg"
+            className="form-select form-select-lg w-full max-w-[12rem]"
             value={type}
             onChange={(evt) => {
               const { value } = evt.target
@@ -173,34 +160,26 @@ export const Web = () => {
               </option>
             ))}
           </select>
+          <form className="w-full max-w-md">
+            <div className="relative w-full" style={{ zIndex: 2 }}>
+              <input
+                className="w-full"
+                type="text"
+                onChange={handleInputChange}
+                value={search}
+                placeholder="Search..."
+              />
+              <Dropdown
+                isLoading={isSearchLoading}
+                isOpen={isDropdownOpen}
+                suggestions={suggestions}
+                onClick={(s: string) => {
+                  setSearch(s)
+                }}
+              />
+            </div>
+          </form>
         </div>
-        <form className="flex gap-2 mb-4" onSubmit={getData}>
-          <div className="relative" style={{ zIndex: 2 }}>
-            <input
-              className=""
-              type="text"
-              onChange={handleInputChange}
-              value={search}
-              onSubmit={getData}
-              placeholder="Search..."
-            />
-            <Dropdown
-              isLoading={isSearchLoading}
-              isOpen={isDropdownOpen}
-              suggestions={suggestions}
-              onClick={(s: string) => {
-                setSearch(s)
-              }}
-            />
-          </div>
-          <button
-            className="btn btn-primary btn-lg"
-            type="button"
-            onClick={getData}
-          >
-            Search
-          </button>
-        </form>
       </div>
       <div className="col-12">
         <SearchedAnimal
