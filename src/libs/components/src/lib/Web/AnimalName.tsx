@@ -16,7 +16,9 @@ export const AnimalName = (props: Props) => {
     <span>
       {commonName}
       {sciName && (
-        <span className="text-gray-600 text-sm italic">({sciName})</span>
+        <span className="text-gray-600 italic">
+          &nbsp;{commonName ? `(${sciName})` : sciName}
+        </span>
       )}
     </span>
   )

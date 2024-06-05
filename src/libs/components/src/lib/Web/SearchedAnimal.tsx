@@ -4,7 +4,7 @@ import { Observation, Ofv } from './types'
 interface Props {
   results: Observation[]
   type: Ofv['value']
-  partnerData: any
+  partnerData: Record<string, Observation>
 }
 
 const square = 'square'
@@ -19,8 +19,6 @@ export const SearchedAnimal = (props: Props) => {
   //  PROPS
   // ---------------------
   const { results, type, partnerData } = props
-
-  console.log('partnerData :>> ', partnerData)
 
   // --------------------- ===
   //  RENDER
@@ -51,7 +49,12 @@ export const SearchedAnimal = (props: Props) => {
                     sciName={sciName(result)}
                   />{' '}
                   {type === 'eaten' ? 'eats' : 'is eaten by'}{' '}
-                  <AnimalName commonName={partnerData[result.id]} />
+                  <AnimalName
+                    commonName={
+                      partnerData[result.id].taxon.preferred_common_name
+                    }
+                    sciName={partnerData[result.id].taxon.name}
+                  />
                 </span>
               </a>
             )

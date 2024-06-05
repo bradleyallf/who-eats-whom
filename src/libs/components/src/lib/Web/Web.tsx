@@ -35,7 +35,9 @@ export const Web = () => {
   //  STATE
   // ---------------------
   const [data, setData] = useState<Observation[]>([])
-  const [partnerData, setPartnerData] = useState({})
+  const [partnerData, setPartnerData] = useState<Record<string, Observation>>(
+    {}
+  )
   const [eatenByData, setEatenByData] = useState<Observation[]>()
 
   const [search, setSearch] = useState('')
@@ -54,15 +56,11 @@ export const Web = () => {
     setEatenByData(d.data.results)
   }
 
-  console.log('eatenByData :>> ', eatenByData)
-
   // --------------------- ===
   //  EFFECTS
   // ---------------------
   useEffect(() => {
     if (!data.length) return
-
-    console.log('data :>> ', data)
 
     // FILTER DATA
     const filteredData: Observation[] = []
@@ -75,16 +73,15 @@ export const Web = () => {
       }
     })
 
-    console.log('filteredData :>> ', filteredData)
-
     const observationIds: string[] = []
-    const partnerD: Record<string, string> = {}
+    const partnerD: Record<string, Observation> = {}
     filteredData.forEach((result) => {
       result.ofvs.forEach((ofv) => {
         if (ofv.field_id === partnerFieldId) {
           const i = ofv.value.lastIndexOf('/')
           const observationId = ofv.value.substring(i + 1, ofv.value.length)
-          partnerD[observationId] = result.taxon.preferred_common_name
+          partnerD[observationId] = result
+          // partnerD[observationId] = result.taxon.preferred_common_name
           observationIds.push(observationId)
         }
       })
@@ -170,7 +167,12 @@ export const Web = () => {
               </option>
             ))}
           </select>
-          <form className="w-full max-w-md">
+          <form
+            className="w-full max-w-md"
+            onSubmit={(e) => {
+              e.preventDefault()
+            }}
+          >
             <div className="relative w-full" style={{ zIndex: 2 }}>
               <input
                 className="w-full"
@@ -191,7 +193,7 @@ export const Web = () => {
           </form>
         </div>
       </div>
-      <div className="col-12">
+      <div className="col-12 mt-20">
         <SearchedAnimal
           results={eatenByData || []}
           partnerData={partnerData}
