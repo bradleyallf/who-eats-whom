@@ -70,196 +70,134 @@
   "fileMap": {
     "nonProjectFiles": [],
     "projectFileMap": {
-      "pages": [
+      "e2e": [
         {
-          "file": "src/libs/pages/.babelrc",
-          "hash": "2946678488919325452"
+          "file": "e2e/.eslintrc.json",
+          "hash": "3091309458834660434"
         },
         {
-          "file": "src/libs/pages/.eslintrc.json",
-          "hash": "18132053918848999080"
-        },
-        {
-          "file": "src/libs/pages/README.md",
-          "hash": "2491727987330857556"
-        },
-        {
-          "file": "src/libs/pages/package.json",
-          "hash": "8135740454410742761"
-        },
-        {
-          "file": "src/libs/pages/project.json",
-          "hash": "13631506643274512287"
-        },
-        {
-          "file": "src/libs/pages/src/index.ts",
-          "hash": "8301252005682711637"
-        },
-        {
-          "file": "src/libs/pages/src/lib/About/About.tsx",
-          "hash": "12721343220878278282"
-        },
-        {
-          "file": "src/libs/pages/src/lib/About/NRG-bradley.jpg",
-          "hash": "8938745095302926614"
-        },
-        {
-          "file": "src/libs/pages/src/lib/HigherLevelChart/HigherLevelChart.tsx",
-          "hash": "14174734014490687942"
-        },
-        {
-          "file": "src/libs/pages/src/lib/Home/Home.tsx",
-          "hash": "12105992590515624866",
+          "file": "e2e/cypress.config.ts",
+          "hash": "3631011454240625899",
           "deps": [
-            "components"
+            "npm:cypress",
+            "npm:@nx/cypress"
           ]
         },
         {
-          "file": "src/libs/pages/src/lib/HowToSubmit/HowToSubmit.tsx",
-          "hash": "5036346385049960889"
+          "file": "e2e/project.json",
+          "hash": "5924015677832716413"
         },
         {
-          "file": "src/libs/pages/src/lib/NotFound/NotFound.tsx",
-          "hash": "12757949686027752453"
+          "file": "e2e/src/e2e/app.cy.ts",
+          "hash": "16610426905613066605"
         },
         {
-          "file": "src/libs/pages/src/lib/WhoSearch/WhoSearch.tsx",
-          "hash": "8895496343508085793"
+          "file": "e2e/src/fixtures/example.json",
+          "hash": "11614668686582597233"
         },
         {
-          "file": "src/libs/pages/tsconfig.json",
-          "hash": "8945200214589149969"
+          "file": "e2e/src/support/app.po.ts",
+          "hash": "11157016311132186162"
         },
         {
-          "file": "src/libs/pages/tsconfig.lib.json",
-          "hash": "920925512994609163"
+          "file": "e2e/src/support/commands.ts",
+          "hash": "7314691991044890572"
         },
         {
-          "file": "src/libs/pages/tsconfig.spec.json",
-          "hash": "5677392422502041953"
+          "file": "e2e/src/support/e2e.ts",
+          "hash": "3666078656922506009"
         },
         {
-          "file": "src/libs/pages/vite.config.ts",
-          "hash": "4548454154733216416",
-          "deps": [
-            "npm:vitest",
-            "npm:@vitejs/plugin-react",
-            "npm:vite-plugin-dts",
-            "npm:path",
-            "npm:@nx/vite"
-          ]
+          "file": "e2e/tsconfig.json",
+          "hash": "3213783022078611433"
         }
       ],
-      "utils": [
+      "components": [
         {
-          "file": "src/libs/utils/.babelrc",
+          "file": "src/libs/components/.babelrc",
           "hash": "2946678488919325452"
         },
         {
-          "file": "src/libs/utils/.eslintrc.json",
+          "file": "src/libs/components/.eslintrc.json",
           "hash": "18132053918848999080"
         },
         {
-          "file": "src/libs/utils/README.md",
-          "hash": "17034218750445164374"
+          "file": "src/libs/components/README.md",
+          "hash": "7579566876095758834"
         },
         {
-          "file": "src/libs/utils/package.json",
-          "hash": "14658365458807799475"
+          "file": "src/libs/components/package.json",
+          "hash": "10492924943983194064"
         },
         {
-          "file": "src/libs/utils/project.json",
-          "hash": "7775344462471385942"
+          "file": "src/libs/components/project.json",
+          "hash": "3476269464056782585"
         },
         {
-          "file": "src/libs/utils/src/index.ts",
-          "hash": "8786245995802170806"
+          "file": "src/libs/components/src/index.ts",
+          "hash": "12472837285663791745"
         },
         {
-          "file": "src/libs/utils/src/lib/api.ts",
-          "hash": "13407614793284396267",
+          "file": "src/libs/components/src/lib/SiteWrapper/Footer/Footer.tsx",
+          "hash": "13947149484313072433"
+        },
+        {
+          "file": "src/libs/components/src/lib/SiteWrapper/Header/Header.tsx",
+          "hash": "5178076010050581981"
+        },
+        {
+          "file": "src/libs/components/src/lib/SiteWrapper/Header/Nav/Item.tsx",
+          "hash": "4708579072344557400",
           "deps": [
-            "npm:axios"
+            "npm:react-router-dom"
           ]
         },
         {
-          "file": "src/libs/utils/tsconfig.json",
-          "hash": "8945200214589149969"
+          "file": "src/libs/components/src/lib/SiteWrapper/Header/Nav/Nav.tsx",
+          "hash": "2900055480713257912"
         },
         {
-          "file": "src/libs/utils/tsconfig.lib.json",
-          "hash": "920925512994609163"
-        },
-        {
-          "file": "src/libs/utils/tsconfig.spec.json",
-          "hash": "5677392422502041953"
-        },
-        {
-          "file": "src/libs/utils/vite.config.ts",
-          "hash": "13778721345966323638",
-          "deps": [
-            "npm:vitest",
-            "npm:@vitejs/plugin-react",
-            "npm:vite-plugin-dts",
-            "npm:path",
-            "npm:@nx/vite"
-          ]
-        }
-      ],
-      "hooks": [
-        {
-          "file": "src/libs/hooks/.babelrc",
-          "hash": "2946678488919325452"
-        },
-        {
-          "file": "src/libs/hooks/.eslintrc.json",
-          "hash": "18132053918848999080"
-        },
-        {
-          "file": "src/libs/hooks/README.md",
-          "hash": "16706396778943613665"
-        },
-        {
-          "file": "src/libs/hooks/package.json",
-          "hash": "7405816802570991778"
-        },
-        {
-          "file": "src/libs/hooks/project.json",
-          "hash": "13777374301288236845"
-        },
-        {
-          "file": "src/libs/hooks/src/index.ts",
-          "hash": "16081711421511255807"
-        },
-        {
-          "file": "src/libs/hooks/src/lib/react.ts",
-          "hash": "3168237939074525826",
+          "file": "src/libs/components/src/lib/SiteWrapper/SiteWrapper.tsx",
+          "hash": "489124163562454799",
           "deps": [
             "npm:react"
           ]
         },
         {
-          "file": "src/libs/hooks/src/lib/screen.ts",
-          "hash": "9660759478841806515",
+          "file": "src/libs/components/src/lib/Web/Dropdown.tsx",
+          "hash": "14512618243849661295"
+        },
+        {
+          "file": "src/libs/components/src/lib/Web/SearchedAnimal.tsx",
+          "hash": "18191202716006671731"
+        },
+        {
+          "file": "src/libs/components/src/lib/Web/Web.tsx",
+          "hash": "1654367932870852776",
           "deps": [
-            "npm:react"
+            "npm:react",
+            "utils"
           ]
         },
         {
-          "file": "src/libs/hooks/tsconfig.json",
-          "hash": "8945200214589149969"
+          "file": "src/libs/components/src/lib/Web/types.ts",
+          "hash": "8628284688095490517"
         },
         {
-          "file": "src/libs/hooks/tsconfig.lib.json",
+          "file": "src/libs/components/tsconfig.json",
+          "hash": "14372498561559254159"
+        },
+        {
+          "file": "src/libs/components/tsconfig.lib.json",
           "hash": "920925512994609163"
         },
         {
-          "file": "src/libs/hooks/tsconfig.spec.json",
+          "file": "src/libs/components/tsconfig.spec.json",
           "hash": "5677392422502041953"
         },
         {
-          "file": "src/libs/hooks/vite.config.ts",
-          "hash": "6402098039331048456",
+          "file": "src/libs/components/vite.config.ts",
+          "hash": "8649504715311773179",
           "deps": [
             "npm:vitest",
             "npm:@vitejs/plugin-react",
@@ -284,27 +222,7 @@
         },
         {
           "file": ".gitignore",
-          "hash": "11608181557323256120"
-        },
-        {
-          "file": ".nx/cache/18.3.2-nx.darwin-arm64.node",
-          "hash": "8471083489870746412"
-        },
-        {
-          "file": ".nx/cache/d/daemon.log",
-          "hash": "6987787335678563103"
-        },
-        {
-          "file": ".nx/cache/d/server-process.json",
-          "hash": "7701584348529973345"
-        },
-        {
-          "file": ".nx/cache/run.json",
-          "hash": "4548779842937484540"
-        },
-        {
-          "file": ".nx/cache/terminalOutputs/16676783527734727464",
-          "hash": "3993628752405299817"
+          "hash": "5017403069351656166"
         },
         {
           "file": ".prettierignore",
@@ -472,152 +390,62 @@
             "npm:@vitejs/plugin-react",
             "npm:@nx/vite"
           ]
-        },
-        {
-          "file": ".nx/cache/project-graph.json",
-          "hash": "10076930458931903331"
-        },
-        {
-          "file": ".nx/cache/file-map.json",
-          "hash": "12442801365885095456"
-        },
-        {
-          "file": ".nx/cache/parsed-lock-file.json",
-          "hash": "4668671825884878869"
-        },
-        {
-          "file": ".nx/cache/lockfile.hash",
-          "hash": "7667315238855647692"
-        },
-        {
-          "file": ".nx/cache/terminalOutputs/3241808698141389427",
-          "hash": "3244421341483603138"
         }
       ],
-      "e2e": [
+      "hooks": [
         {
-          "file": "e2e/.eslintrc.json",
-          "hash": "3091309458834660434"
-        },
-        {
-          "file": "e2e/cypress.config.ts",
-          "hash": "3631011454240625899",
-          "deps": [
-            "npm:cypress",
-            "npm:@nx/cypress"
-          ]
-        },
-        {
-          "file": "e2e/project.json",
-          "hash": "5924015677832716413"
-        },
-        {
-          "file": "e2e/src/e2e/app.cy.ts",
-          "hash": "16610426905613066605"
-        },
-        {
-          "file": "e2e/src/fixtures/example.json",
-          "hash": "11614668686582597233"
-        },
-        {
-          "file": "e2e/src/support/app.po.ts",
-          "hash": "11157016311132186162"
-        },
-        {
-          "file": "e2e/src/support/commands.ts",
-          "hash": "7314691991044890572"
-        },
-        {
-          "file": "e2e/src/support/e2e.ts",
-          "hash": "3666078656922506009"
-        },
-        {
-          "file": "e2e/tsconfig.json",
-          "hash": "3213783022078611433"
-        }
-      ],
-      "components": [
-        {
-          "file": "src/libs/components/.babelrc",
+          "file": "src/libs/hooks/.babelrc",
           "hash": "2946678488919325452"
         },
         {
-          "file": "src/libs/components/.eslintrc.json",
+          "file": "src/libs/hooks/.eslintrc.json",
           "hash": "18132053918848999080"
         },
         {
-          "file": "src/libs/components/README.md",
-          "hash": "7579566876095758834"
+          "file": "src/libs/hooks/README.md",
+          "hash": "16706396778943613665"
         },
         {
-          "file": "src/libs/components/package.json",
-          "hash": "10492924943983194064"
+          "file": "src/libs/hooks/package.json",
+          "hash": "7405816802570991778"
         },
         {
-          "file": "src/libs/components/project.json",
-          "hash": "3476269464056782585"
+          "file": "src/libs/hooks/project.json",
+          "hash": "13777374301288236845"
         },
         {
-          "file": "src/libs/components/src/index.ts",
-          "hash": "12472837285663791745"
+          "file": "src/libs/hooks/src/index.ts",
+          "hash": "16081711421511255807"
         },
         {
-          "file": "src/libs/components/src/lib/SiteWrapper/Footer/Footer.tsx",
-          "hash": "13947149484313072433"
-        },
-        {
-          "file": "src/libs/components/src/lib/SiteWrapper/Header/Header.tsx",
-          "hash": "5178076010050581981"
-        },
-        {
-          "file": "src/libs/components/src/lib/SiteWrapper/Header/Nav/Item.tsx",
-          "hash": "4708579072344557400",
-          "deps": [
-            "npm:react-router-dom"
-          ]
-        },
-        {
-          "file": "src/libs/components/src/lib/SiteWrapper/Header/Nav/Nav.tsx",
-          "hash": "2900055480713257912"
-        },
-        {
-          "file": "src/libs/components/src/lib/SiteWrapper/SiteWrapper.tsx",
-          "hash": "489124163562454799",
+          "file": "src/libs/hooks/src/lib/react.ts",
+          "hash": "3168237939074525826",
           "deps": [
             "npm:react"
           ]
         },
         {
-          "file": "src/libs/components/src/lib/Web/SearchedAnimal.tsx",
-          "hash": "18191202716006671731"
-        },
-        {
-          "file": "src/libs/components/src/lib/Web/Web.tsx",
-          "hash": "1654367932870852776",
+          "file": "src/libs/hooks/src/lib/screen.ts",
+          "hash": "9660759478841806515",
           "deps": [
-            "npm:react",
-            "utils"
+            "npm:react"
           ]
         },
         {
-          "file": "src/libs/components/src/lib/Web/types.ts",
-          "hash": "8628284688095490517"
+          "file": "src/libs/hooks/tsconfig.json",
+          "hash": "8945200214589149969"
         },
         {
-          "file": "src/libs/components/tsconfig.json",
-          "hash": "14372498561559254159"
-        },
-        {
-          "file": "src/libs/components/tsconfig.lib.json",
+          "file": "src/libs/hooks/tsconfig.lib.json",
           "hash": "920925512994609163"
         },
         {
-          "file": "src/libs/components/tsconfig.spec.json",
+          "file": "src/libs/hooks/tsconfig.spec.json",
           "hash": "5677392422502041953"
         },
         {
-          "file": "src/libs/components/vite.config.ts",
-          "hash": "8649504715311773179",
+          "file": "src/libs/hooks/vite.config.ts",
+          "hash": "6402098039331048456",
           "deps": [
             "npm:vitest",
             "npm:@vitejs/plugin-react",
@@ -625,10 +453,142 @@
             "npm:path",
             "npm:@nx/vite"
           ]
+        }
+      ],
+      "utils": [
+        {
+          "file": "src/libs/utils/.babelrc",
+          "hash": "2946678488919325452"
         },
         {
-          "file": "src/libs/components/src/lib/Web/Dropdown.tsx",
-          "hash": "14512618243849661295"
+          "file": "src/libs/utils/.eslintrc.json",
+          "hash": "18132053918848999080"
+        },
+        {
+          "file": "src/libs/utils/README.md",
+          "hash": "17034218750445164374"
+        },
+        {
+          "file": "src/libs/utils/package.json",
+          "hash": "14658365458807799475"
+        },
+        {
+          "file": "src/libs/utils/project.json",
+          "hash": "7775344462471385942"
+        },
+        {
+          "file": "src/libs/utils/src/index.ts",
+          "hash": "8786245995802170806"
+        },
+        {
+          "file": "src/libs/utils/src/lib/api.ts",
+          "hash": "13407614793284396267",
+          "deps": [
+            "npm:axios"
+          ]
+        },
+        {
+          "file": "src/libs/utils/tsconfig.json",
+          "hash": "8945200214589149969"
+        },
+        {
+          "file": "src/libs/utils/tsconfig.lib.json",
+          "hash": "920925512994609163"
+        },
+        {
+          "file": "src/libs/utils/tsconfig.spec.json",
+          "hash": "5677392422502041953"
+        },
+        {
+          "file": "src/libs/utils/vite.config.ts",
+          "hash": "13778721345966323638",
+          "deps": [
+            "npm:vitest",
+            "npm:@vitejs/plugin-react",
+            "npm:vite-plugin-dts",
+            "npm:path",
+            "npm:@nx/vite"
+          ]
+        }
+      ],
+      "pages": [
+        {
+          "file": "src/libs/pages/.babelrc",
+          "hash": "2946678488919325452"
+        },
+        {
+          "file": "src/libs/pages/.eslintrc.json",
+          "hash": "18132053918848999080"
+        },
+        {
+          "file": "src/libs/pages/README.md",
+          "hash": "2491727987330857556"
+        },
+        {
+          "file": "src/libs/pages/package.json",
+          "hash": "8135740454410742761"
+        },
+        {
+          "file": "src/libs/pages/project.json",
+          "hash": "13631506643274512287"
+        },
+        {
+          "file": "src/libs/pages/src/index.ts",
+          "hash": "8301252005682711637"
+        },
+        {
+          "file": "src/libs/pages/src/lib/About/About.tsx",
+          "hash": "12721343220878278282"
+        },
+        {
+          "file": "src/libs/pages/src/lib/About/NRG-bradley.jpg",
+          "hash": "8938745095302926614"
+        },
+        {
+          "file": "src/libs/pages/src/lib/HigherLevelChart/HigherLevelChart.tsx",
+          "hash": "14174734014490687942"
+        },
+        {
+          "file": "src/libs/pages/src/lib/Home/Home.tsx",
+          "hash": "12105992590515624866",
+          "deps": [
+            "components"
+          ]
+        },
+        {
+          "file": "src/libs/pages/src/lib/HowToSubmit/HowToSubmit.tsx",
+          "hash": "5036346385049960889"
+        },
+        {
+          "file": "src/libs/pages/src/lib/NotFound/NotFound.tsx",
+          "hash": "12757949686027752453"
+        },
+        {
+          "file": "src/libs/pages/src/lib/WhoSearch/WhoSearch.tsx",
+          "hash": "8895496343508085793"
+        },
+        {
+          "file": "src/libs/pages/tsconfig.json",
+          "hash": "8945200214589149969"
+        },
+        {
+          "file": "src/libs/pages/tsconfig.lib.json",
+          "hash": "920925512994609163"
+        },
+        {
+          "file": "src/libs/pages/tsconfig.spec.json",
+          "hash": "5677392422502041953"
+        },
+        {
+          "file": "src/libs/pages/vite.config.ts",
+          "hash": "4548454154733216416",
+          "deps": [
+            "npm:vitest",
+            "npm:@vitejs/plugin-react",
+            "npm:vite-plugin-dts",
+            "npm:path",
+            "npm:@nx/vite"
+          ]
         }
       ]
     }
