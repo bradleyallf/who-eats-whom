@@ -89,17 +89,20 @@ export const Web = () => {
 
   useEffect(() => {
     let canceled = false
-    if (search.length < 3) return
+    if (search.length < 3) {
+      setIsDropdownOpen(false)
+      return
+    }
     setIsSearchLoading(true)
     apiClient
       .get(
         `/observations?project_id=${projectId}&taxon_name=${search}&quality_grade=research`
       )
       .then((d) => {
-        if (!canceled) setData(d.data.results)
-      })
-      .finally(() => {
-        setIsSearchLoading(false)
+        if (!canceled) {
+          setData(d.data.results)
+          setIsSearchLoading(false)
+        }
       })
     return () => {
       canceled = true
