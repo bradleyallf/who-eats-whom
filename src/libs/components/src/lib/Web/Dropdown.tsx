@@ -26,24 +26,27 @@ export const Dropdown = (props: Props) => {
           textAlign: 'left',
         }}
       >
-        {isLoading && (
+        {isLoading ? (
           <p className="text-sm text-gray-500 italic">Loading...</p>
+        ) : (
+          <>
+            {!suggestions?.length && (
+              <p className="text-sm text-gray-500 italic">No suggestions</p>
+            )}
+            {suggestions?.map((s) => (
+              <button
+                key={s}
+                onClick={() => {
+                  onClick(s)
+                }}
+                type="button"
+                className="text-start"
+              >
+                {s}
+              </button>
+            ))}
+          </>
         )}
-        {!isLoading && !suggestions?.length && (
-          <p className="text-sm text-gray-500 italic">No suggestions</p>
-        )}
-        {suggestions?.map((s) => (
-          <button
-            key={s}
-            onClick={() => {
-              onClick(s)
-            }}
-            type="button"
-            className="text-start"
-          >
-            {s}
-          </button>
-        ))}
       </div>
     )
   )
