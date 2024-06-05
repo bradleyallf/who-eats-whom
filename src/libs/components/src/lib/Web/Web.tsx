@@ -47,7 +47,10 @@ export const Web = () => {
   // --------------------- ===
   //  FUNCS
   // ---------------------
-  const getData = async () => {
+  const getData = async (
+    evt: ChangeEvent<HTMLInputElement> | React.MouseEvent<HTMLButtonElement>
+  ) => {
+    evt.preventDefault()
     const d = await apiClient.get(
       `/observations?project_id=${projectId}&taxon_name=${search}&quality_grade=research`
     )
@@ -120,6 +123,11 @@ export const Web = () => {
     if (isDropdownOpen) {
       document.addEventListener('click', () => {
         setIsDropdownOpen(false)
+      })
+      document.addEventListener('keydown', (evt) => {
+        if (evt.key === 'Escape' || evt.key === 'Enter') {
+          setIsDropdownOpen(false)
+        }
       })
     }
     return () => {
