@@ -116,14 +116,22 @@ export const Web = () => {
     }
   }, [search])
 
+  useEffect(() => {
+    if (isDropdownOpen) {
+      document.addEventListener('click', () => {
+        setIsDropdownOpen(false)
+      })
+    }
+    return () => {
+      document.removeEventListener('click', () => {
+        setIsDropdownOpen(false)
+      })
+    }
+  }, [isDropdownOpen])
+
   // --------------------- ===
   //  HANDLERS
   // ---------------------
-  const handleClick = (s: string) => {
-    setSearch(s)
-    setIsDropdownOpen(false)
-  }
-
   const handleInputChange = (evt: ChangeEvent<HTMLInputElement>) => {
     setSearch(evt.target.value)
     setIsDropdownOpen(true)
@@ -172,7 +180,9 @@ export const Web = () => {
               isLoading={isSearchLoading}
               isOpen={isDropdownOpen}
               suggestions={suggestions}
-              onClick={handleClick}
+              onClick={(s: string) => {
+                setSearch(s)
+              }}
             />
           </div>
           <button
