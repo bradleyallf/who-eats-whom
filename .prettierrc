@@ -2,7 +2,7 @@
   "singleQuote": true,
   "semi": false,
   "endOfLine": "auto",
-  "importOrder": ["^@pgl-apps/(.*)$", "^[./]"],
+  "importOrder": ["^@odyn/(.*)$", "^[./]"],
   "importOrderSeparation": true,
   "importOrderSortSpecifiers": true
 }
