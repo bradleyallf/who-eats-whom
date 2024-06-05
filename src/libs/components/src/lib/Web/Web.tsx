@@ -54,11 +54,15 @@ export const Web = () => {
     setEatenByData(d.data.results)
   }
 
+  console.log('eatenByData :>> ', eatenByData)
+
   // --------------------- ===
   //  EFFECTS
   // ---------------------
   useEffect(() => {
-    if (!data) return
+    if (!data.length) return
+
+    console.log('data :>> ', data)
 
     // FILTER DATA
     const filteredData: Observation[] = []
@@ -70,6 +74,8 @@ export const Web = () => {
         filteredData.push(d)
       }
     })
+
+    console.log('filteredData :>> ', filteredData)
 
     const observationIds: string[] = []
     const partnerD: Record<string, string> = {}
@@ -97,6 +103,7 @@ export const Web = () => {
     apiClient
       .get(
         `/observations?project_id=${projectId}&taxon_name=${search}&quality_grade=research`
+        // `/search?project_id=${projectId}&q=${search}&quality_grade=research` // this is what inaturalist uses - could work?
       )
       .then((d) => {
         if (!canceled) {
