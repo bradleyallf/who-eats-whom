@@ -3,7 +3,7 @@ import { apiClient } from '@utils'
 
 import { SearchedAnimal } from './SearchedAnimal'
 import { Observation, Ofv } from './types'
-import { Dropdown } from './Dropdown'
+import { Dropdown, Suggestion } from './Dropdown'
 
 const getLastLetter = (str: string) => str[str.length - 1]
 
@@ -26,6 +26,7 @@ const types: Record<
     key: 'eater',
   },
 }
+
 const partnerFieldId = 12796
 const projectId = 41347
 const eaterEatenFieldId = 12795 // in the ofvs array
@@ -35,9 +36,7 @@ export const Web = () => {
   //  STATE
   // ---------------------
   const [data, setData] = useState<Observation[]>([])
-  const [partnerData, setPartnerData] = useState<Record<string, Observation>>(
-    {}
-  )
+  const [partnerData, setPartnerData] = useState<Record<string, Observation>>({})
   const [eatenByData, setEatenByData] = useState<Observation[]>()
 
   const [search, setSearch] = useState('')
@@ -81,7 +80,6 @@ export const Web = () => {
           const i = ofv.value.lastIndexOf('/')
           const observationId = ofv.value.substring(i + 1, ofv.value.length)
           partnerD[observationId] = result
-          // partnerD[observationId] = result.taxon.preferred_common_name
           observationIds.push(observationId)
         }
       })
@@ -100,7 +98,6 @@ export const Web = () => {
     apiClient
       .get(
         `/observations?project_id=${projectId}&taxon_name=${search}&quality_grade=research`
-        // `/search?project_id=${projectId}&q=${search}&quality_grade=research` // this is what inaturalist uses - could work?
       )
       .then((d) => {
         if (!canceled) {
@@ -115,19 +112,14 @@ export const Web = () => {
 
   useEffect(() => {
     if (isDropdownOpen) {
-      document.addEventListener('click', () => {
-        setIsDropdownOpen(false)
-      })
+      const close = () => setIsDropdownOpen(false)
+      document.addEventListener('click', close)
       document.addEventListener('keydown', (evt) => {
-        if (evt.key === 'Escape' || evt.key === 'Enter') {
-          setIsDropdownOpen(false)
-        }
+        if (evt.key === 'Escape' || evt.key === 'Enter') close()
       })
-    }
-    return () => {
-      document.removeEventListener('click', () => {
-        setIsDropdownOpen(false)
-      })
+      return () => {
+        document.removeEventListener('click', close)
+      }
     }
   }, [isDropdownOpen])
 
@@ -139,26 +131,37 @@ export const Web = () => {
     setIsDropdownOpen(true)
   }
 
+  const suggestions: Suggestion[] = Array.from(
+    data.reduce((map, d) => {
+      const name = d.taxon.preferred_common_name
+      if (!name) return map
+      if (!map.has(name)) {
+        map.set(name, {
+          label: name,
+          thumbnail:
+            d.taxon.default_photo?.square_url ||
+            d.taxon.default_photo?.url ||
+            undefined,
+        })
+      }
+      return map
+    }, new Map<string, Suggestion>())
+  ).map(([, v]) => v)
+
   // --------------------- ===
   //  RENDER
   // ---------------------
-  const suggestions = [
-    ...new Set(data?.map((d) => d.taxon.preferred_common_name)),
-  ]
-
   return (
     <>
       <div className="mt-12">
         <div className="flex justify-center gap-2 w-full">
+          {/* type selector */}
           <select
             className="form-select form-select-lg w-full max-w-[12rem]"
             value={type}
             onChange={(evt) => {
               const { value } = evt.target
-              // extra ts protection
-              if (value === 'eaten' || value === 'eater') {
-                setType(value)
-              }
+              if (value === 'eaten' || value === 'eater') setType(value)
             }}
           >
             {(Object.keys(types) as Array<Ofv['value']>).map((key) => (
@@ -167,6 +170,8 @@ export const Web = () => {
               </option>
             ))}
           </select>
+
+          {/* search box + dropdown */}
           <form
             className="w-full max-w-md"
             onSubmit={(e) => {
@@ -181,18 +186,22 @@ export const Web = () => {
                 value={search}
                 placeholder="Search..."
               />
+
               <Dropdown
                 isLoading={isSearchLoading}
                 isOpen={isDropdownOpen}
                 suggestions={suggestions}
-                onClick={(s: string) => {
-                  setSearch(s)
+                onClick={(s) => {
+                  setSearch(s.label)      // put the text in the box
+                  setIsDropdownOpen(false)
                 }}
               />
             </div>
           </form>
         </div>
       </div>
+      
+
       <div className="col-12 mt-20">
         <SearchedAnimal
           results={eatenByData || []}

@@ -32,11 +32,18 @@ export interface Ofv {
 }
 
 export interface Taxon {
-  ancestry: string
-  created_at: string
   id: number
   name: string
-  preferred_common_name: string
+  preferred_common_name?: string
+
+  /** thumbnail / full-size photos that iNaturalist includes */
+  default_photo?: {
+    id: number
+    square_url?: string
+    url?: string
+    medium_url?: string
+    small_url?: string
+  }
 }
 
 export interface Observation {
