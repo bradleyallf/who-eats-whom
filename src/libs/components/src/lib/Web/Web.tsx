@@ -76,7 +76,7 @@ export const Web = () => {
     const partnerD: Record<string, Observation> = {}
     filteredData.forEach((result) => {
       result.ofvs.forEach((ofv) => {
-        if (ofv.field_id === partnerFieldId) {
+        if (ofv.field_id === partnerFieldId && ofv.value.includes('/observations/')) {
           const i = ofv.value.lastIndexOf('/')
           const observationId = ofv.value.substring(i + 1, ofv.value.length)
           partnerD[observationId] = result

@@ -1,5 +1,5 @@
 interface Props {
-  commonName: string
+  commonName?: string
   sciName?: string
 }
 
