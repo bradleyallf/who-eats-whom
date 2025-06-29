@@ -1,6 +1,7 @@
 import pandas as pd
 from pyvis.network import Network
 from collections import Counter
+import math
 
 # This CSV has come from the who-eats-whom iNaturalist project itself as an export
 # https://www.inaturalist.org/projects/who-eats-whom
@@ -75,12 +76,22 @@ for _, row in df.iterrows():
     role_lc = role.strip().lower()
     if role_lc == "eater":
         predator, prey = this_name, partner_name
-    else:
-        continue
+    
 
     edge_list.append((predator, prey))
 # Make edge list unique only. Sometimes there is multiple observations of a predator eating a prey
 # This was another reason for duplicate edges
+edge_counts = Counter(edge_list)  
+#print(edge_counts)
+#edge = pd.DataFrame(edge_list, columns=["predator", "prey"])
+#counts = edge[["predator", "prey"]].value_counts()
+#edge.to_csv("example1.csv")
+
+#value_counts_df = counts.to_frame(name='Count').reset_index()
+
+#value_counts_df.rename(columns={'index': 'Category'}, inplace=True) # Rename the index column
+#value_counts_df.to_csv("example2.csv")
+
 edge_list = list(set(edge_list))
 
 print(f"Using {len(edge_list)} predator→prey edges for visualization.")
@@ -107,6 +118,7 @@ meta = (
 # More information below
 predator_set = {p for p, _ in edge_list}
 prey_set     = {q for _, q in edge_list}
+unique_edges = list(edge_counts.keys())
 
 net = Network(height="700px", width="100%", directed=True)
 added_nodes = set()
@@ -151,7 +163,16 @@ for predator, prey in edge_list:
             # Make sure we put this in our set so we don't have duplicate nodes
             added_nodes.add(taxon)
 
-    net.add_edge(source=predator, to=prey, color="#333333")
+for predator, prey in unique_edges:
+    count = edge_counts[(predator, prey)]
+    net.add_edge(
+        source=predator,
+        to=prey,
+        color="#333333",
+        width=.03 + count  
+    )
+
+
 
 net.write_html("predator_prey.html")
 

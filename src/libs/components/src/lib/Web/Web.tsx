@@ -50,7 +50,7 @@ export const Web = () => {
   // ---------------------
   const getPartnerData = async (ids: string[]) => {
     const d = await apiClient.get(
-      `/observations?id=${ids}&quality_grade=research`
+      `/observations?id=${ids}&quality_grade=research&per_page=200`
     )
     setEatenByData(d.data.results)
   }
@@ -67,6 +67,8 @@ export const Web = () => {
       const typeObj = d.ofvs.find((o) => o.field_id === eaterEatenFieldId)
       // "eater" or "organism being eaten" (previously "thing being eaten")
       if (!typeObj) return
+      //console.log('id:',d.id, 'typeObj:', typeObj.value, 'type:', type, 'typeValue:', types[type].value)
+
       if (getLastLetter(typeObj.value) === getLastLetter(types[type].value)) {
         filteredData.push(d)
       }
@@ -76,11 +78,26 @@ export const Web = () => {
     const partnerD: Record<string, Observation> = {}
     filteredData.forEach((result) => {
       result.ofvs.forEach((ofv) => {
+        
         if (ofv.field_id === partnerFieldId && ofv.value.includes('/observations/')) {
+          /*
+          console.log("...--->" + ofv.value)
           const i = ofv.value.lastIndexOf('/')
           const observationId = ofv.value.substring(i + 1, ofv.value.length)
           partnerD[observationId] = result
+          console.log(observationId)
           observationIds.push(observationId)
+          */
+        
+         const matches = ofv.value.match(/\/observations\/(\d+)/g)
+          if (matches) {
+            matches.forEach((match) => {
+              const observationId = match.split('/').pop()!
+              partnerD[observationId] = result
+              observationIds.push(observationId)
+            })
+          }
+          
         }
       })
     })
@@ -92,12 +109,13 @@ export const Web = () => {
     let canceled = false
     if (search.length < 3) {
       setIsDropdownOpen(false)
-      return
+      
     }
     setIsSearchLoading(true)
     apiClient
+      //#&per_page=200
       .get(
-        `/observations?project_id=${projectId}&taxon_name=${search}&quality_grade=research`
+        `/observations?project_id=${projectId}&taxon_name=${search}&quality_grade=research&per_page=200`
       )
       .then((d) => {
         if (!canceled) {
@@ -192,7 +210,7 @@ export const Web = () => {
                 isOpen={isDropdownOpen}
                 suggestions={suggestions}
                 onClick={(s) => {
-                  setSearch(s.label)      // put the text in the box
+                  setSearch(s.label)
                   setIsDropdownOpen(false)
                 }}
               />
