@@ -1,6 +1,5 @@
 import React from 'react'
 
-/** One suggestion = label + optional thumbnail URL */
 export interface Suggestion {
   label: string
   thumbnail?: string
@@ -10,7 +9,6 @@ interface Props {
   isLoading: boolean
   isOpen: boolean
   suggestions: Suggestion[]
-  /** Pass back the whole suggestion object so caller can decide what to do */
   onClick: (s: Suggestion) => void
 }
 
@@ -57,7 +55,7 @@ export const Dropdown = (props: Props) => {
                     className="w-6 h-6 object-cover rounded"
                   />
                 )}
-                <span>{s.label}</span>
+                {s.label}
               </button>
             ))}
           </>

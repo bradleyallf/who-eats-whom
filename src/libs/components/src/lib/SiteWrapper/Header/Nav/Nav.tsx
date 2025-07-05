@@ -13,6 +13,10 @@ const routes = [
     to: '/how-to-submit',
     label: 'How to Submit',
   },
+  {
+    to: '/interactive-food-web',
+    label: 'Interactive Food Web'
+  }
 ]
 
 export const Nav = () => {

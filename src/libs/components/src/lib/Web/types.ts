@@ -36,7 +36,6 @@ export interface Taxon {
   name: string
   preferred_common_name?: string
 
-  /** thumbnail / full-size photos that iNaturalist includes */
   default_photo?: {
     id: number
     square_url?: string

@@ -9,6 +9,8 @@ import math
 
 df = pd.read_csv("observations.csv", low_memory=False)
 print(df.shape)
+print((df['place_country_name']).nunique())
+
 
 # This prints out ['eater' 'thing being eaten' nan 'organism being eaten']
 # This is actually supposed to be the OFV field value ids that are hardcoded on the frontend
@@ -173,7 +175,7 @@ for predator, prey in unique_edges:
     )
 
 
-
+print(len(added_nodes))
 net.write_html("predator_prey.html")
 
 
@@ -202,4 +204,4 @@ injected = """
 </script>
 """
 html = html.replace("<body>", "<body>\n" + injected)
-open("predator_prey.html", "w").write(html)
+open("public/predator_prey.html", "w").write(html)
