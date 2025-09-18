@@ -9,7 +9,7 @@ interface Props {
 export const SiteWrapper = (props: Props) => {
   // --------------------- ===
   //  PROPS
-  // ---------------------
+  // -------------------
   const { children } = props
 
   // --------------------- ===
