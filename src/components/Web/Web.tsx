@@ -1,5 +1,5 @@
 import { ChangeEvent, useEffect, useState } from 'react'
-import { apiClient } from '@utils'
+import { apiClient } from '../../utils'
 
 import { SearchedAnimal } from './SearchedAnimal'
 import { Observation, Ofv } from './types'

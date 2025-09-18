@@ -9,7 +9,7 @@ import {
   NotFound,
   WhoSearch,
   InteractiveFoodWeb
-} from '@pages'
+} from './pages'
 
 export const routes: RouteObject[] = [
   {

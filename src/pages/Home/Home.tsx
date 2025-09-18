@@ -1,4 +1,4 @@
-import { Web } from '@components'
+import { Web } from '../../components'
 
 export const Home = () => {
   // --------------------- ===
