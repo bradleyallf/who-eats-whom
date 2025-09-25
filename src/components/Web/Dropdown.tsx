@@ -2,6 +2,7 @@ import React from 'react'
 
 export interface Suggestion {
   label: string
+  sciName?: string
   thumbnail?: string
 }
 
@@ -55,7 +56,15 @@ export const Dropdown = (props: Props) => {
                     className="w-6 h-6 object-cover rounded"
                   />
                 )}
-                {s.label}
+                <span>
+                  {s.label}
+                  {s.sciName && (
+                    <span className="text-gray-600 italic">
+                      {' '}
+                      ({s.sciName})
+                    </span>
+                  )}
+                </span>
               </button>
             ))}
           </>

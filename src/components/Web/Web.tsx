@@ -1,4 +1,4 @@
-import { ChangeEvent, useEffect, useState } from 'react'
+import { ChangeEvent, FormEvent, useEffect, useState } from 'react'
 import { apiClient } from '../../utils'
 
 import { SearchedAnimal } from './SearchedAnimal'
@@ -30,6 +30,17 @@ const types: Record<
 const partnerFieldId = 12796
 const projectId = 41347
 const eaterEatenFieldId = 12795 // in the ofvs array
+const observationFieldsParam = [
+  'id',
+  'uri',
+  'ofvs',
+  'taxon',
+  'photos',
+  'place_country_name',
+  'place_state_name',
+  'place_county_name',
+  'place_town_name',
+].join(',')
 
 export const Web = () => {
   // --------------------- ===
@@ -40,17 +51,23 @@ export const Web = () => {
   const [eatenByData, setEatenByData] = useState<Observation[]>()
 
   const [search, setSearch] = useState('')
+  const [locationInput, setLocationInput] = useState('')
+  const [locationFilter, setLocationFilter] = useState('')
   const [isSearchLoading, setIsSearchLoading] = useState(false)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [shouldDisplayResults, setShouldDisplayResults] = useState(false)
 
   const [type, setType] = useState(types.eaten.key)
 
   // --------------------- ===
   //  FUNCS
   // ---------------------
+  const getCountry = (observation: Observation | undefined) =>
+    observation?.place_country_name?.trim().toLowerCase()
+
   const getPartnerData = async (ids: string[]) => {
     const d = await apiClient.get(
-      `/observations?id=${ids}&quality_grade=research&per_page=200`
+      `/observations?id=${ids}&quality_grade=research&per_page=200&fields=${observationFieldsParam}`
     )
     setEatenByData(d.data.results)
   }
@@ -59,7 +76,7 @@ export const Web = () => {
   //  EFFECTS
   // ---------------------
   useEffect(() => {
-    if (!data.length) return
+    if (!shouldDisplayResults || !data.length) return
 
     // FILTER DATA
     const filteredData: Observation[] = []
@@ -103,7 +120,7 @@ export const Web = () => {
     })
     setPartnerData(partnerD)
     getPartnerData(observationIds)
-  }, [data, type])
+  }, [data, type, shouldDisplayResults])
 
   useEffect(() => {
     let canceled = false
@@ -115,7 +132,7 @@ export const Web = () => {
     apiClient
       //#&per_page=200
       .get(
-        `/observations?project_id=${projectId}&taxon_name=${search}&quality_grade=research&per_page=200`
+        `/observations?project_id=${projectId}&taxon_name=${search}&quality_grade=research&per_page=200&fields=${observationFieldsParam}`
       )
       .then((d) => {
         if (!canceled) {
@@ -147,6 +164,19 @@ export const Web = () => {
   const handleInputChange = (evt: ChangeEvent<HTMLInputElement>) => {
     setSearch(evt.target.value)
     setIsDropdownOpen(true)
+    setShouldDisplayResults(false)
+  }
+
+  const handleLocationChange = (evt: ChangeEvent<HTMLInputElement>) => {
+    setLocationInput(evt.target.value)
+    setShouldDisplayResults(false)
+  }
+
+  const handleSubmit = (evt: FormEvent<HTMLFormElement>) => {
+    evt.preventDefault()
+    setLocationFilter(locationInput.trim().toLowerCase())
+    setIsDropdownOpen(false)
+    setShouldDisplayResults(true)
   }
 
   const suggestions: Suggestion[] = Array.from(
@@ -156,6 +186,7 @@ export const Web = () => {
       if (!map.has(name)) {
         map.set(name, {
           label: name,
+          sciName: d.taxon.name,
           thumbnail:
             d.taxon.default_photo?.square_url ||
             d.taxon.default_photo?.url ||
@@ -165,6 +196,25 @@ export const Web = () => {
       return map
     }, new Map<string, Suggestion>())
   ).map(([, v]) => v)
+
+  const filteredResults = shouldDisplayResults
+    ? (eatenByData || []).filter((result) => {
+        if (!locationFilter) return true
+
+        const primaryObservation =
+          type === 'eater' ? result : partnerData[result.id]
+
+        const primaryCountry = getCountry(primaryObservation)
+        if (primaryCountry) {
+          return primaryCountry.includes(locationFilter)
+        }
+
+        const secondaryObservation =
+          type === 'eater' ? partnerData[result.id] : result
+        const secondaryCountry = getCountry(secondaryObservation)
+        return secondaryCountry ? secondaryCountry.includes(locationFilter) : false
+      })
+    : []
 
   // --------------------- ===
   //  RENDER
@@ -191,12 +241,10 @@ export const Web = () => {
 
           {/* search box + dropdown */}
           <form
-            className="w-full max-w-md"
-            onSubmit={(e) => {
-              e.preventDefault()
-            }}
+            className="w-full max-w-3xl flex items-stretch gap-2"
+            onSubmit={handleSubmit}
           >
-            <div className="relative w-full" style={{ zIndex: 2 }}>
+            <div className="relative flex-1" style={{ zIndex: 2 }}>
               <input
                 className="w-full"
                 type="text"
@@ -212,21 +260,37 @@ export const Web = () => {
                 onClick={(s) => {
                   setSearch(s.label)
                   setIsDropdownOpen(false)
+                  setShouldDisplayResults(false)
                 }}
               />
             </div>
+            <input
+              className="w-full max-w-xs"
+              type="text"
+              value={locationInput}
+              onChange={handleLocationChange}
+              placeholder="Location"
+            />
+            <button
+              type="submit"
+              className="px-4 bg-orange-500 text-white font-semibold rounded"
+            >
+              Go
+            </button>
           </form>
         </div>
       </div>
-      
 
-      <div className="col-12 mt-20">
-        <SearchedAnimal
-          results={eatenByData || []}
-          partnerData={partnerData}
-          type={type}
-        />
-      </div>
+
+      {shouldDisplayResults && (
+        <div className="col-12 mt-20">
+          <SearchedAnimal
+            results={filteredResults}
+            partnerData={partnerData}
+            type={type}
+          />
+        </div>
+      )}
     </>
   )
 }

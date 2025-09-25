@@ -55,4 +55,8 @@ export interface Observation {
   uri: string
   photos: Photo[]
   uuid: string
+  place_country_name?: string
+  place_state_name?: string
+  place_county_name?: string
+  place_town_name?: string
 }
