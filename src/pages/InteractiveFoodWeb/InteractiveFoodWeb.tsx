@@ -1,29 +1,81 @@
-// src/pages/InteractiveFoodWeb.tsx
-import React from 'react';
+import { useEffect, useState } from 'react';
 
-export const InteractiveFoodWeb: React.FC = () => {
+interface StatsSummary {
+  observations: number
+  edges: number
+  taxa: number
+  locations: number
+}
+
+export const InteractiveFoodWeb = () => {
   const src = `${import.meta.env.BASE_URL}predator_prey.html`;
+  const statsUrl = `${import.meta.env.BASE_URL}predator_prey_stats.json`;
+
+  const [stats, setStats] = useState<StatsSummary | null>(null);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetch(statsUrl)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Failed to load stats');
+        }
+        return response.json();
+      })
+      .then((data: StatsSummary) => {
+        if (isMounted) {
+          setStats(data);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setHasError(true);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [statsUrl]);
+
+  const metrics = [
+    {
+      label: 'Observations available',
+      value: stats?.observations,
+    },
+    {
+      label: 'Species connected',
+      value: stats?.edges,
+    },
+    {
+      label: 'Taxons connected',
+      value: stats?.taxa,
+    },
+    {
+      label: 'Locations',
+      value: stats?.locations,
+    },
+  ];
 
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="p-4 bg-white rounded-lg shadow text-center">
-          <p className="text-3xl font-bold">10,330</p>
-          <p className="text-sm text-gray-600">Observations available</p>
-        </div>
-        <div className="p-4 bg-white rounded-lg shadow text-center">
-          <p className="text-3xl font-bold">1,088</p>
-          <p className="text-sm text-gray-600">Species connected</p>
-        </div>
-        <div className="p-4 bg-white rounded-lg shadow text-center">
-          <p className="text-3xl font-bold">1,346</p>
-          <p className="text-sm text-gray-600">Taxons connected</p>
-        </div>
-        <div className="p-4 bg-white rounded-lg shadow text-center">
-          <p className="text-3xl font-bold">122</p>
-          <p className="text-sm text-gray-600">Locations</p>
-        </div>
+        {metrics.map(({ label, value }) => (
+          <div key={label} className="p-4 bg-white rounded-lg shadow text-center">
+            <p className="text-3xl font-bold">
+              {value !== undefined && value !== null ? value.toLocaleString() : '—'}
+            </p>
+            <p className="text-sm text-gray-600">{label}</p>
+          </div>
+        ))}
       </div>
+
+      {hasError && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+          Unable to load the latest network statistics.
+        </div>
+      )}
 
       <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
         <p className="text-red-600 italic">

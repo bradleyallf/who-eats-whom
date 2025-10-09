@@ -1,9 +1,10 @@
-import { ChangeEvent, FormEvent, useEffect, useState } from 'react'
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
 import { apiClient } from '../../utils'
 
-import { SearchedAnimal } from './SearchedAnimal'
+import { SearchResultGrid } from './SearchedAnimal'
 import { Observation, Ofv } from './types'
 import { Dropdown, Suggestion } from './Dropdown'
+import { SearchResultNetwork } from './SearchResultNetwork'
 
 const getLastLetter = (str: string) => str[str.length - 1]
 
@@ -42,6 +43,13 @@ const observationFieldsParam = [
   'place_town_name',
 ].join(',')
 
+interface PlaceResult {
+  id: number
+  name: string
+  display_name?: string
+  place_type_name?: string
+}
+
 export const Web = () => {
   // --------------------- ===
   //  STATE
@@ -52,31 +60,110 @@ export const Web = () => {
 
   const [search, setSearch] = useState('')
   const [locationInput, setLocationInput] = useState('')
-  const [locationFilter, setLocationFilter] = useState('')
+  const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null)
+  const [placeLookupError, setPlaceLookupError] = useState<string | null>(null)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [isResolvingPlace, setIsResolvingPlace] = useState(false)
   const [isSearchLoading, setIsSearchLoading] = useState(false)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [shouldDisplayResults, setShouldDisplayResults] = useState(false)
 
   const [type, setType] = useState(types.eaten.key)
+  const [selectedView, setSelectedView] = useState<
+    'grid' | 'graph' | 'network' | 'map' | null
+  >(null)
 
   // --------------------- ===
   //  FUNCS
   // ---------------------
-  const getCountry = (observation: Observation | undefined) =>
-    observation?.place_country_name?.trim().toLowerCase()
-
   const getPartnerData = async (ids: string[]) => {
-    const d = await apiClient.get(
-      `/observations?id=${ids}&quality_grade=research&per_page=200&fields=${observationFieldsParam}`
-    )
+    const uniqueIds = Array.from(new Set(ids))
+    if (!uniqueIds.length) {
+      setEatenByData([])
+      return
+    }
+
+    const params = new URLSearchParams({
+      id: uniqueIds.join(','),
+      quality_grade: 'research',
+      per_page: '200',
+      fields: observationFieldsParam,
+    })
+    if (selectedPlaceId) {
+      params.append('place_id', String(selectedPlaceId))
+    }
+
+    const d = await apiClient.get(`/observations?${params.toString()}`)
     setEatenByData(d.data.results)
+  }
+
+  const fetchPlaceCandidates = async (query: string): Promise<PlaceResult[]> => {
+    const params = new URLSearchParams({ q: query, per_page: '10' })
+
+    try {
+      const response = await apiClient.get(`/places/autocomplete?${params.toString()}`)
+      if (response.data?.results?.length) {
+        return response.data.results
+      }
+    } catch (error) {
+      console.error('Place autocomplete failed, falling back to /places', error)
+    }
+
+    try {
+      const response = await apiClient.get(`/places?${params.toString()}`)
+      return response.data?.results || []
+    } catch (error) {
+      console.error('Fallback place lookup failed', error)
+      throw error
+    }
+  }
+
+  const resolvePlace = async (query: string): Promise<PlaceResult | null> => {
+    const results = await fetchPlaceCandidates(query)
+    if (!results.length) return null
+
+    const normalized = query.trim().toLowerCase()
+    const exact = results.find(
+      (place) =>
+        place.display_name?.toLowerCase() === normalized ||
+        place.name?.toLowerCase() === normalized
+    )
+    if (exact) return exact
+
+    const priorities = [
+      'Country',
+      'State',
+      'Province',
+      'County',
+      'Region',
+      'Local Administrative Area',
+    ]
+
+    const prioritized = results
+      .slice()
+      .sort((a, b) => {
+        const priorityIndex = (place?: PlaceResult) => {
+          if (!place?.place_type_name) return priorities.length
+          const idx = priorities.findIndex(
+            (label) => label.toLowerCase() === place.place_type_name?.toLowerCase()
+          )
+          return idx === -1 ? priorities.length : idx
+        }
+        return priorityIndex(a) - priorityIndex(b)
+      })
+
+    return (
+      prioritized.find((place) =>
+        place.display_name?.toLowerCase().includes(normalized)
+      ) || prioritized[0] || null
+    )
   }
 
   // --------------------- ===
   //  EFFECTS
   // ---------------------
   useEffect(() => {
-    if (!shouldDisplayResults || !data.length) return
+    if (!shouldDisplayResults || !data.length || isSearchLoading) return
 
     // FILTER DATA
     const filteredData: Observation[] = []
@@ -120,30 +207,52 @@ export const Web = () => {
     })
     setPartnerData(partnerD)
     getPartnerData(observationIds)
-  }, [data, type, shouldDisplayResults])
+  }, [data, type, shouldDisplayResults, selectedPlaceId, isSearchLoading])
 
   useEffect(() => {
     let canceled = false
+
     if (search.length < 3) {
+      setIsSearchLoading(false)
       setIsDropdownOpen(false)
-      
+      setData([])
+      return () => {
+        canceled = true
+      }
     }
+
     setIsSearchLoading(true)
+
+    const params = new URLSearchParams({
+      project_id: String(projectId),
+      taxon_name: search,
+      quality_grade: 'research',
+      per_page: '200',
+      fields: observationFieldsParam,
+    })
+    if (selectedPlaceId) {
+      params.append('place_id', String(selectedPlaceId))
+    }
+
     apiClient
-      //#&per_page=200
-      .get(
-        `/observations?project_id=${projectId}&taxon_name=${search}&quality_grade=research&per_page=200&fields=${observationFieldsParam}`
-      )
+      .get(`/observations?${params.toString()}`)
       .then((d) => {
         if (!canceled) {
           setData(d.data.results)
           setIsSearchLoading(false)
         }
       })
+      .catch(() => {
+        if (!canceled) {
+          setData([])
+          setIsSearchLoading(false)
+        }
+      })
+
     return () => {
       canceled = true
     }
-  }, [search])
+  }, [search, selectedPlaceId])
 
   useEffect(() => {
     if (isDropdownOpen) {
@@ -164,18 +273,54 @@ export const Web = () => {
   const handleInputChange = (evt: ChangeEvent<HTMLInputElement>) => {
     setSearch(evt.target.value)
     setIsDropdownOpen(true)
+    setSearchError(null)
     setShouldDisplayResults(false)
   }
 
   const handleLocationChange = (evt: ChangeEvent<HTMLInputElement>) => {
     setLocationInput(evt.target.value)
+    setPlaceLookupError(null)
     setShouldDisplayResults(false)
   }
 
-  const handleSubmit = (evt: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (evt: FormEvent<HTMLFormElement>) => {
     evt.preventDefault()
-    setLocationFilter(locationInput.trim().toLowerCase())
     setIsDropdownOpen(false)
+    setPlaceLookupError(null)
+
+    if (search.trim().length < 3) {
+      setSearchError('Please enter a species name.')
+      setShouldDisplayResults(false)
+      return
+    }
+
+    const trimmedLocation = locationInput.trim()
+    let resolvedId: number | null = null
+
+    if (trimmedLocation) {
+      setIsResolvingPlace(true)
+      try {
+        const place = await resolvePlace(trimmedLocation)
+        resolvedId = place?.id ?? null
+      } catch (error) {
+        setIsResolvingPlace(false)
+        setShouldDisplayResults(false)
+        return
+      } finally {
+        setIsResolvingPlace(false)
+      }
+    }
+
+    if (trimmedLocation && resolvedId === null) {
+      setSelectedPlaceId(null)
+      setData([])
+      setEatenByData([])
+      setPartnerData({})
+      setShouldDisplayResults(true)
+      return
+    }
+
+    setSelectedPlaceId(resolvedId)
     setShouldDisplayResults(true)
   }
 
@@ -197,24 +342,29 @@ export const Web = () => {
     }, new Map<string, Suggestion>())
   ).map(([, v]) => v)
 
-  const filteredResults = shouldDisplayResults
-    ? (eatenByData || []).filter((result) => {
-        if (!locationFilter) return true
+  const filteredResults = shouldDisplayResults ? eatenByData || [] : []
 
-        const primaryObservation =
-          type === 'eater' ? result : partnerData[result.id]
+  const hasResults = filteredResults.length > 0
 
-        const primaryCountry = getCountry(primaryObservation)
-        if (primaryCountry) {
-          return primaryCountry.includes(locationFilter)
-        }
+  useEffect(() => {
+    if (shouldDisplayResults && hasResults) {
+      setSearchError(null)
+    }
+    setSelectedView(hasResults ? 'grid' : null)
+  }, [hasResults, shouldDisplayResults])
 
-        const secondaryObservation =
-          type === 'eater' ? partnerData[result.id] : result
-        const secondaryCountry = getCountry(secondaryObservation)
-        return secondaryCountry ? secondaryCountry.includes(locationFilter) : false
-      })
-    : []
+  const getObservationLabel = (observation?: Observation) =>
+    observation?.taxon.preferred_common_name || observation?.taxon.name || ''
+
+  const focalName = useMemo(() => {
+    if (!hasResults) return search.trim()
+    for (const result of filteredResults) {
+      const partner = partnerData[result.id]
+      const label = getObservationLabel(partner)
+      if (label) return label
+    }
+    return search.trim()
+  }, [filteredResults, partnerData, hasResults, search])
 
   // --------------------- ===
   //  RENDER
@@ -246,11 +396,11 @@ export const Web = () => {
           >
             <div className="relative flex-1" style={{ zIndex: 2 }}>
               <input
-                className="w-full"
+                className={`w-full ${searchError ? 'border-red-500 text-red-600 placeholder:text-red-500' : ''}`}
                 type="text"
                 onChange={handleInputChange}
                 value={search}
-                placeholder="Search..."
+                placeholder={searchError || 'Search...'}
               />
 
               <Dropdown
@@ -264,31 +414,98 @@ export const Web = () => {
                 }}
               />
             </div>
-            <input
-              className="w-full max-w-xs"
-              type="text"
-              value={locationInput}
-              onChange={handleLocationChange}
-              placeholder="Location"
-            />
-            <button
-              type="submit"
-              className="px-4 bg-orange-500 text-white font-semibold rounded"
-            >
-              Go
-            </button>
+            <div className="flex flex-col gap-1 items-start">
+              {placeLookupError && (
+                <p className="text-sm text-red-600 max-w-[16rem] leading-snug">
+                  {placeLookupError}
+                </p>
+              )}
+              <div className="flex items-stretch gap-2">
+                <input
+                  className="w-full max-w-xs"
+                  type="text"
+                  value={locationInput}
+                  onChange={handleLocationChange}
+                  placeholder="Location"
+                />
+                <button
+                  type="submit"
+                  disabled={isResolvingPlace}
+                  className={`px-4 bg-orange-500 text-white font-semibold rounded ${
+                    isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {isResolvingPlace ? 'Loading...' : 'Go'}
+                </button>
+              </div>
+            </div>
           </form>
         </div>
       </div>
 
 
       {shouldDisplayResults && (
-        <div className="col-12 mt-20">
-          <SearchedAnimal
-            results={filteredResults}
-            partnerData={partnerData}
-            type={type}
-          />
+        <div className="col-12 mt-20 space-y-6">
+          {hasResults ? (
+            <>
+              <div className="flex flex-wrap gap-2 text-sm">
+                {(
+                  [
+                    { key: 'grid', label: 'Grid', disabled: false },
+                    { key: 'graph', label: 'Graph', disabled: true },
+                    { key: 'network', label: 'Network', disabled: false },
+                    { key: 'map', label: 'Map', disabled: true },
+                  ] as const
+                ).map(({ key, label, disabled }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={disabled}
+                    title={disabled ? 'Coming soon' : undefined}
+                    onClick={() => {
+                      if (!disabled) setSelectedView(key)
+                    }}
+                    className={`flex items-center gap-2 rounded-md border px-4 py-2 transition-colors ${
+                      selectedView === key
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-slate-700 border-slate-200'
+                    } ${disabled ? 'cursor-not-allowed opacity-70' : ''}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {selectedView === 'grid' && (
+                <SearchResultGrid
+                  results={filteredResults}
+                  partnerData={partnerData}
+                  type={type}
+                />
+              )}
+
+              {selectedView === 'network' && (
+                <SearchResultNetwork
+                  results={filteredResults}
+                  partnerData={partnerData}
+                  type={type}
+                  focalName={focalName}
+                />
+              )}
+
+              {selectedView && selectedView !== 'grid' && selectedView !== 'network' && (
+                <div className="p-4 border border-dashed border-slate-200 rounded text-sm text-slate-600">
+                  {selectedView.charAt(0).toUpperCase() +
+                    selectedView.slice(1)}{' '}
+                  view coming soon.
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="p-4 border border-slate-200 rounded text-sm text-slate-600">
+              No results were found for this search.
+            </div>
+          )}
         </div>
       )}
     </>

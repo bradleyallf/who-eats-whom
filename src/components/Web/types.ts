@@ -35,6 +35,7 @@ export interface Taxon {
   id: number
   name: string
   preferred_common_name?: string
+  iconic_taxon_name?: string
 
   default_photo?: {
     id: number
