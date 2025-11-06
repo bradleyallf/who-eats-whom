@@ -1,7 +1,7 @@
-// @ts-nocheck
 import { useEffect, useMemo, useRef } from 'react'
 import * as d3 from 'd3'
 import { Observation, Ofv } from './types'
+import { NETWORK_LEGEND, getCategoryColor, getTaxonCategory } from './networkColors'
 
 interface Props {
   results: Observation[]
@@ -10,37 +10,24 @@ interface Props {
   focalName: string
 }
 
-const COLOR_PALETTE = [
-  '#1f77b4',
-  '#ff7f0e',
-  '#2ca02c',
-  '#d62728',
-  '#9467bd',
-  '#8c564b',
-  '#e377c2',
-  '#7f7f7f',
-  '#bcbd22',
-  '#17becf',
-  '#393b79',
-  '#637939',
-  '#8c6d31',
-  '#843c39',
-  '#7b4173',
-  '#3182bd',
-  '#e6550d',
-  '#31a354',
-  '#756bb1',
-  '#636363',
-]
-
-interface NodeDatum extends d3.SimulationNodeDatum {
+interface NodeDatum {
   id: string
   label: string
   isFocal: boolean
   iconicTaxon: string
+  category: string
+  labelWidth?: number
+  x?: number
+  y?: number
+  vx?: number
+  vy?: number
+  fx?: number | null
+  fy?: number | null
 }
 
-interface LinkDatum extends d3.SimulationLinkDatum<NodeDatum> {
+interface LinkDatum {
+  source: string | NodeDatum
+  target: string | NodeDatum
   count: number
 }
 
@@ -63,7 +50,15 @@ export const SearchResultNetwork = (props: Props) => {
   const { results, partnerData, type, focalName } = props
   const svgRef = useRef<SVGSVGElement | null>(null)
 
-  const graph = useMemo(() => {
+  const categoryLabelMap = useMemo(() => {
+    const map = new Map<string, string>()
+    NETWORK_LEGEND.forEach((entry) => {
+      map.set(entry.key, entry.label)
+    })
+    return map
+  }, [])
+
+  const graph = useMemo<{ nodes: NodeDatum[]; links: LinkDatum[] }>(() => {
     const nodesMap = new Map<string, NodeDatum>()
     const linkCounts = new Map<string, LinkDatum>()
 
@@ -75,12 +70,14 @@ export const SearchResultNetwork = (props: Props) => {
       if (!label) return
       const existing = nodesMap.get(label)
       const iconicTaxon = getIconicTaxon(observation)
+      const category = getTaxonCategory(iconicTaxon)
       if (!existing) {
         nodesMap.set(label, {
           id: label,
           label,
           isFocal,
           iconicTaxon,
+          category,
         })
         return
       }
@@ -89,8 +86,9 @@ export const SearchResultNetwork = (props: Props) => {
         existing.isFocal = true
       }
 
-      if (existing.iconicTaxon === 'Unidentified' && iconicTaxon !== 'Unidentified') {
+      if (iconicTaxon !== 'Unidentified' && existing.iconicTaxon === 'Unidentified') {
         existing.iconicTaxon = iconicTaxon
+        existing.category = category
       }
     }
 
@@ -149,14 +147,32 @@ export const SearchResultNetwork = (props: Props) => {
 
     const width = svgElement.clientWidth || 500
     const height = svgElement.clientHeight || 360
-
-    const uniqueTaxa = Array.from(
-      new Set(nodes.map((node) => node.iconicTaxon))
-    ).sort((a, b) => a.localeCompare(b))
-
-    const colorMap = new Map<string, string>()
-    uniqueTaxa.forEach((taxon, index) => {
-      colorMap.set(taxon, COLOR_PALETTE[index % COLOR_PALETTE.length])
+    const labelFont = '12px "Inter", system-ui, sans-serif'
+    const measureContext = document.createElement('canvas').getContext('2d')
+    if (measureContext) {
+      measureContext.font = labelFont
+    }
+    nodes.forEach((node: NodeDatum) => {
+      const measured =
+        measureContext?.measureText(node.label).width ||
+        node.label.length * 7
+      node.labelWidth = measured
+    })
+    const focalNode = nodes.find((node) => node.isFocal) || nodes[0]
+    const centerX = width / 2
+    const centerY = height / 2
+    if (focalNode) {
+      focalNode.x = centerX
+      focalNode.y = centerY
+    }
+    const peripheralNodes = nodes.filter((node) => node !== focalNode)
+    const baseRadius = Math.min(width, height) / 3
+    peripheralNodes.forEach((node: NodeDatum, index: number) => {
+      const angle = (index / Math.max(peripheralNodes.length, 1)) * Math.PI * 2
+      const labelRadius = (node.labelWidth ?? 0) * 0.6
+      const radius = baseRadius + labelRadius
+      node.x = centerX + Math.cos(angle) * radius
+      node.y = centerY + Math.sin(angle) * radius
     })
 
     const defs = svg.append('defs')
@@ -179,62 +195,72 @@ export const SearchResultNetwork = (props: Props) => {
       .append('g')
       .attr('stroke', '#94a3b8')
       .attr('stroke-opacity', 0.85)
-      .selectAll<SVGLineElement, LinkDatum>('line')
+      .selectAll('line')
       .data(links)
       .join('line')
-      .attr('stroke-width', (d) => 1 + d.count)
+      .attr('stroke-width', (d: LinkDatum) => 1 + d.count)
       .attr('marker-end', 'url(#mini-arrow)')
 
     const node = zoomLayer
       .append('g')
       .attr('stroke-width', 1.5)
-      .selectAll<SVGGElement, NodeDatum>('g')
+      .selectAll('g')
       .data(nodes)
       .join('g')
 
     node
       .append('circle')
-      .attr('r', (d) => (d.isFocal ? 12 : 9))
-      .attr('fill', (d) => colorMap.get(d.iconicTaxon) || '#0ea5e9')
-      .attr('stroke', (d) => (d.isFocal ? '#f97316' : '#ffffff'))
-      .attr('stroke-width', (d) => (d.isFocal ? 3 : 1.5))
+      .attr('r', (d: NodeDatum) => (d.isFocal ? 12 : 9))
+      .attr('fill', (d: NodeDatum) => getCategoryColor(d.iconicTaxon))
+      .attr('stroke', (d: NodeDatum) => (d.isFocal ? '#1f2937' : '#ffffff'))
+      .attr('stroke-width', (d: NodeDatum) => (d.isFocal ? 4 : 1.5))
 
-    node
+    const labels = node
       .append('text')
-      .attr('x', 14)
-      .attr('y', 4)
-      .attr('font-size', 12)
+      .style('font', labelFont)
       .attr('fill', '#0f172a')
-      .text((d) => d.label)
+      .attr('dy', '0.35em')
+      .text((d: NodeDatum) => d.label)
 
-    node.append('title').text((d) => d.label)
+    node.append('title').text((d: NodeDatum) => `${d.label}\nGroup: ${categoryLabelMap.get(d.category) || 'Other'}`)
 
     const simulation = d3
-      .forceSimulation<NodeDatum>(nodes)
+      .forceSimulation(nodes as NodeDatum[])
       .force(
         'link',
         d3
-          .forceLink<NodeDatum, LinkDatum>(links)
+          .forceLink(links as any)
           .id((d: any) => d.id)
-          .distance(90)
+          .distance(110)
       )
-      .force('charge', d3.forceManyBody().strength(-120))
+      .force('charge', d3.forceManyBody().strength(-220))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collide', d3.forceCollide(24))
+      .force(
+        'collide',
+        d3
+          .forceCollide((d: NodeDatum) => {
+            const circleRadius = d.isFocal ? 12 : 9
+            const labelRadius = (d.labelWidth ?? 0) / 2
+            const padding = 14
+            return circleRadius + padding + labelRadius
+          })
+          .iterations(2)
+      )
+      .alpha(0.6)
 
     node.call(
       d3
-        .drag<any, NodeDatum>()
-        .on('start', (event, d) => {
+        .drag()
+        .on('start', (event: any, d: NodeDatum) => {
           if (!event.active) simulation.alphaTarget(0.3).restart()
           d.fx = d.x
           d.fy = d.y
         })
-        .on('drag', (event, d) => {
+        .on('drag', (event: any, d: NodeDatum) => {
           d.fx = event.x
           d.fy = event.y
         })
-        .on('end', (event, d) => {
+        .on('end', (event: any, d: NodeDatum) => {
           if (!event.active) simulation.alphaTarget(0)
           d.fx = null
           d.fy = null
@@ -243,18 +269,26 @@ export const SearchResultNetwork = (props: Props) => {
 
     simulation.on('tick', () => {
       link
-        .attr('x1', (d) => (d.source as NodeDatum).x || 0)
-        .attr('y1', (d) => (d.source as NodeDatum).y || 0)
-        .attr('x2', (d) => (d.target as NodeDatum).x || 0)
-        .attr('y2', (d) => (d.target as NodeDatum).y || 0)
+        .attr('x1', (d: LinkDatum) => (typeof d.source === 'object' ? d.source.x || 0 : 0))
+        .attr('y1', (d: LinkDatum) => (typeof d.source === 'object' ? d.source.y || 0 : 0))
+        .attr('x2', (d: LinkDatum) => (typeof d.target === 'object' ? d.target.x || 0 : 0))
+        .attr('y2', (d: LinkDatum) => (typeof d.target === 'object' ? d.target.y || 0 : 0))
 
-      node.attr('transform', (d) => `translate(${d.x || 0},${d.y || 0})`)
+      node.attr('transform', (d: NodeDatum) => `translate(${d.x || 0},${d.y || 0})`)
+
+      labels
+        .attr('x', (d: NodeDatum) => {
+          const radius = d.isFocal ? 12 : 9
+          const offset = radius + 10
+          return (d.x || 0) >= width / 2 ? offset : -offset
+        })
+        .attr('text-anchor', (d: NodeDatum) => ((d.x || 0) >= width / 2 ? 'start' : 'end'))
     })
 
     const zoomBehaviour = d3
-      .zoom<SVGSVGElement, unknown>()
+      .zoom()
       .scaleExtent([0.5, 5])
-      .on('zoom', (event) => {
+      .on('zoom', (event: any) => {
         zoomLayer.attr('transform', event.transform)
       })
 
@@ -274,8 +308,8 @@ export const SearchResultNetwork = (props: Props) => {
     const resetStyles = () => {
       node
         .select('circle')
-        .attr('stroke', (d) => (d.isFocal ? '#f97316' : '#ffffff'))
-        .attr('stroke-width', (d) => (d.isFocal ? 3 : 1.5))
+        .attr('stroke', (d: NodeDatum) => (d.isFocal ? '#1f2937' : '#ffffff'))
+        .attr('stroke-width', (d: NodeDatum) => (d.isFocal ? 4 : 1.5))
 
       link.attr('stroke', '#94a3b8').attr('stroke-opacity', 0.85)
     }
@@ -300,19 +334,23 @@ export const SearchResultNetwork = (props: Props) => {
       }
 
       node
-        .filter((d) => d.id === match.id)
+        .filter((d: NodeDatum) => d.id === match.id)
         .select('circle')
-        .attr('stroke', '#f97316')
-        .attr('stroke-width', 4)
+        .attr('stroke', '#0f172a')
+        .attr('stroke-width', 5)
 
       link
         .filter(
-          (d) =>
-            (d.source as NodeDatum).id === match.id ||
-            (d.target as NodeDatum).id === match.id
+          (d: LinkDatum) => {
+            const sourceId =
+              typeof d.source === 'object' ? d.source.id : d.source
+            const targetId =
+              typeof d.target === 'object' ? d.target.id : d.target
+            return sourceId === match.id || targetId === match.id
+          }
         )
-        .attr('stroke', '#f97316')
-        .attr('stroke-opacity', 1)
+        .attr('stroke', '#1f2937')
+        .attr('stroke-opacity', 0.9)
 
       focusNode(match)
     }
@@ -353,8 +391,21 @@ export const SearchResultNetwork = (props: Props) => {
   }
 
   return (
-    <div className="w-full h-80 bg-white border border-slate-200 rounded-lg shadow-sm">
-      <svg ref={svgRef} className="w-full h-full" role="img" aria-label="Search result network" />
+    <div className="space-y-4">
+      <div className="w-full h-80 bg-white border border-slate-200 rounded-lg shadow-sm">
+        <svg ref={svgRef} className="w-full h-full" role="img" aria-label="Search result network" />
+      </div>
+      <div className="flex flex-wrap gap-4 text-sm text-slate-700">
+        {NETWORK_LEGEND.map((entry) => (
+          <div key={entry.key} className="flex items-center gap-2">
+            <span
+              className="inline-block h-3 w-3 rounded"
+              style={{ backgroundColor: entry.color }}
+            />
+            <span>{entry.label}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

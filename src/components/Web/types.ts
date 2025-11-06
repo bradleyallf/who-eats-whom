@@ -60,4 +60,12 @@ export interface Observation {
   place_state_name?: string
   place_county_name?: string
   place_town_name?: string
+  geojson?: {
+    type: string
+    coordinates: [number, number]
+  }
+  location?: string
+  latitude?: number
+  longitude?: number
+  positional_accuracy?: number | null
 }

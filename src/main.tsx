@@ -5,6 +5,7 @@ import {
   createBrowserRouter,
 } from 'react-router-dom';
 import { routes } from './routes';
+import 'leaflet/dist/leaflet.css';
 
 const router = createBrowserRouter(routes, {
   basename: '/who-eats-whom',

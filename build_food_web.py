@@ -16,11 +16,29 @@ EDGE_BASE_WIDTH = 0.03
 ZOOM_EXTENT = [0.1, 5]
 
 # Extended qualitative palette (20 distinct colors)
-COLOR_PALETTE = [
-    '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2',
-    '#7f7f7f', '#bcbd22', '#17becf', '#393b79', '#637939', '#8c6d31', '#843c39',
-    '#7b4173', '#3182bd', '#e6550d', '#31a354', '#756bb1', '#636363'
-]
+CATEGORY_DEFINITIONS = {
+    'plants': {
+        'label': 'Plants & Fungi',
+        'color': '#9BD6A5',
+        'iconic_taxa': ['Plantae', 'Fungi', 'Chromista'],
+    },
+    'vertebrates': {
+        'label': 'Vertebrates',
+        'color': '#8FBCEA',
+        'iconic_taxa': ['Actinopterygii', 'Amphibia', 'Reptilia', 'Aves', 'Mammalia'],
+    },
+    'invertebrates': {
+        'label': 'Invertebrates',
+        'color': '#F5B97B',
+        'iconic_taxa': ['Insecta', 'Arachnida', 'Mollusca', 'Protozoa', 'Animalia'],
+    },
+    'unknown': {
+        'label': 'Other',
+        'color': '#C8C8C8',
+        'iconic_taxa': [],
+    },
+}
+UNKNOWN_COLOR = CATEGORY_DEFINITIONS['unknown']['color']
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang=\"en\">
@@ -100,24 +118,37 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         cursor: pointer;
       }
       .legend {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
-        gap: 0.35rem 0.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
         font-size: 0.75rem;
-        max-height: 12rem;
+        max-height: 14rem;
         overflow-y: auto;
       }
       .legend-item {
         display: flex;
-        align-items: center;
-        gap: 0.35rem;
-        white-space: nowrap;
+        align-items: flex-start;
+        gap: 0.5rem;
       }
       .legend-color {
         width: 0.75rem;
         height: 0.75rem;
         border-radius: 0.25rem;
         border: 1px solid rgba(15, 23, 42, 0.15);
+      }
+      .legend-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+      }
+      .legend-label {
+        font-weight: 600;
+        color: #0f172a;
+      }
+      .legend-taxa {
+        color: #475569;
+        font-size: 0.68rem;
+        line-height: 1.3;
       }
       .legend::-webkit-scrollbar {
         width: 0.4rem;
@@ -179,7 +210,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
     <script>
       const graphData = __GRAPH_DATA__;
-      const colorMap = __COLOR_MAP__;
+      const categoryColors = __CATEGORY_COLORS__;
+      const legendItems = __LEGEND_ITEMS__;
       const dpr = window.devicePixelRatio || 1;
 
       const svg = d3.select('#network');
@@ -226,16 +258,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       node.append('circle')
         .attr('r', {node_radius})
-        .attr('fill', d => colorMap[d.iconicTaxon] || '#94a3b8');
+        .attr('fill', d => (categoryColors[d.category]?.color) || '{unknown_color}');
 
-      node.append('text')
-        .attr('x', {node_radius} + 3)
-        .attr('y', 3)
+      const labels = node.append('text')
         .attr('fill', '#0f172a')
+        .attr('dy', '0.35em')
         .text(d => d.label);
 
       node.append('title')
-        .text(d => `${d.label}\nIconic taxon: ${d.iconicTaxon}`);
+        .text(d => {
+          const group = categoryColors[d.category];
+          const groupLabel = group?.label || 'Other';
+          const taxaList = group?.taxa?.join(', ') || '—';
+          return `${d.label}\nIconic taxon: ${d.iconicTaxon}\nGroup: ${groupLabel}\nIconic taxa in group: ${taxaList}`;
+        });
 
       node.on('mouseenter', (event, d) => {
         tooltip.style('opacity', 1)
@@ -244,6 +280,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             Iconic taxon: ${d.iconicTaxon}<br/>
             Kingdom: ${d.kingdom}<br/>
             Class: ${d.className}<br/>
+            Group: ${categoryColors[d.category]?.label || 'Other'}<br/>
+            Iconic taxa in group: ${categoryColors[d.category]?.taxa?.join(', ') || '—'}<br/>
             ${d.description !== 'Unidentified' ? `Description: ${d.description}<br/>` : ''}
             ${d.url !== 'Unidentified' ? `<a href="${d.url}" target="_blank" rel="noopener noreferrer">View observation</a>` : ''}
           `);
@@ -269,6 +307,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         node
           .attr('transform', d => `translate(${d.x},${d.y})`);
+
+        labels
+          .attr('x', d => (d.x >= width / 2 ? {node_radius} + 4 : -({node_radius} + 4)))
+          .attr('text-anchor', d => (d.x >= width / 2 ? 'start' : 'end'));
       });
 
       const zoomBehaviour = d3.zoom()
@@ -328,10 +370,28 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       });
 
       const legend = document.getElementById('legend');
-      Object.entries(colorMap).forEach(([taxon, color]) => {
+      legendItems.forEach((entry) => {
         const item = document.createElement('div');
         item.className = 'legend-item';
-        item.innerHTML = `<span class=\"legend-color\" style=\"background:${color}\"></span> ${taxon}`;
+        const swatch = document.createElement('span');
+        swatch.className = 'legend-color';
+        swatch.style.background = entry.color;
+
+        const info = document.createElement('div');
+        info.className = 'legend-info';
+
+        const label = document.createElement('div');
+        label.className = 'legend-label';
+        label.textContent = entry.label;
+
+        const taxa = document.createElement('div');
+        taxa.className = 'legend-taxa';
+        taxa.textContent = entry.taxa.join(', ');
+
+        info.appendChild(label);
+        info.appendChild(taxa);
+        item.appendChild(swatch);
+        item.appendChild(info);
         legend.appendChild(item);
       });
 
@@ -366,13 +426,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 """
 
 
-def build_color_map(unique_iconic_taxa):
-    """Assign a deterministic color to each iconic taxon name."""
-    mapping = {}
-    for idx, taxon in enumerate(sorted(unique_iconic_taxa)):
-        color = COLOR_PALETTE[idx % len(COLOR_PALETTE)]
-        mapping[taxon] = color
-    return mapping
+PLANT_TAXA = set(CATEGORY_DEFINITIONS['plants']['iconic_taxa'])
+VERTEBRATE_TAXA = set(CATEGORY_DEFINITIONS['vertebrates']['iconic_taxa'])
+INVERTEBRATE_TAXA = set(CATEGORY_DEFINITIONS['invertebrates']['iconic_taxa'])
+
+
+def map_iconic_to_category(iconic_taxon: str) -> str:
+    """Map an iconic taxon name into one of the high-level categories."""
+    if iconic_taxon in PLANT_TAXA:
+        return 'plants'
+    if iconic_taxon in VERTEBRATE_TAXA:
+        return 'vertebrates'
+    if iconic_taxon in INVERTEBRATE_TAXA:
+        return 'invertebrates'
+    return 'unknown'
 
 
 def create_graph(df: pd.DataFrame):
@@ -428,6 +495,8 @@ def create_graph(df: pd.DataFrame):
     nodes = []
     for name in sorted(nodes_in_edges):
         details = meta.get(name, {})
+        iconic_taxon = details.get('iconic_taxon_name', 'Unidentified')
+        category = map_iconic_to_category(iconic_taxon)
         nodes.append({
             'id': name,
             'label': name,
@@ -435,7 +504,8 @@ def create_graph(df: pd.DataFrame):
             'className': details.get('taxon_class_name', 'Unidentified'),
             'url': details.get('url', 'Unidentified'),
             'description': details.get('description', 'Unidentified'),
-            'iconicTaxon': details.get('iconic_taxon_name', 'Unidentified'),
+            'iconicTaxon': iconic_taxon,
+            'category': category,
         })
 
     links = []
@@ -491,8 +561,28 @@ def main():
     graph = create_graph(df)
     graph_json = {'nodes': graph['nodes'], 'links': graph['links']}
 
-    unique_taxa = {node['iconicTaxon'] for node in graph['nodes']}
-    color_map = build_color_map(unique_taxa)
+    category_taxa_map = {}
+    for node in graph['nodes']:
+        category_taxa_map.setdefault(node['category'], set()).add(node['iconicTaxon'])
+
+    category_colors = {}
+    legend_items = []
+    category_order = ['plants', 'vertebrates', 'invertebrates', 'unknown']
+    for category_key in category_order:
+        taxa_for_category = sorted(category_taxa_map.get(category_key, []))
+        if not taxa_for_category:
+            continue
+        config = CATEGORY_DEFINITIONS[category_key]
+        category_colors[category_key] = {
+            'color': config['color'],
+            'label': config['label'],
+            'taxa': taxa_for_category,
+        }
+        legend_items.append({
+            'label': config['label'],
+            'color': config['color'],
+            'taxa': taxa_for_category,
+        })
 
     stats = {
         'observations': len(df),
@@ -504,10 +594,12 @@ def main():
     html_content = (
         HTML_TEMPLATE
         .replace('__GRAPH_DATA__', json.dumps(graph_json))
-        .replace('__COLOR_MAP__', json.dumps(color_map))
+        .replace('__CATEGORY_COLORS__', json.dumps(category_colors))
+        .replace('__LEGEND_ITEMS__', json.dumps(legend_items))
         .replace('{node_radius}', str(NODE_RADIUS))
         .replace('{edge_base_width}', str(EDGE_BASE_WIDTH))
         .replace('{zoom_extent}', json.dumps(ZOOM_EXTENT))
+        .replace('{unknown_color}', UNKNOWN_COLOR)
     )
 
     OUTPUT_HTML.write_text(html_content, encoding='utf-8')
