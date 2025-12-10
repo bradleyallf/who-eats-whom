@@ -1,9 +1,10 @@
 import {
   ChangeEvent,
   FormEvent,
-  MouseEvent,
+  MouseEvent as ReactMouseEvent,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import { apiClient } from '../../utils'
@@ -114,6 +115,9 @@ const observationFieldsParam = [
   'place_town_name',
 ].join(',')
 
+const buildQueryKey = (searchValue: string, placeId: number | null, placeLabel: string | null) =>
+  `${searchValue.toLowerCase()}|${placeId ?? ''}|${(placeLabel || '').toLowerCase()}`
+
 interface PlaceResult {
   id: number
   name: string
@@ -150,23 +154,41 @@ export const Web = () => {
   const [searchError, setSearchError] = useState<string | null>(null)
   const [isResolvingPlace, setIsResolvingPlace] = useState(false)
   const [isSearchLoading, setIsSearchLoading] = useState(false)
+  const [isPartnerLoading, setIsPartnerLoading] = useState(false)
   const [isSuggestionLoading, setIsSuggestionLoading] = useState(false)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [isLocationSuggestionLoading, setIsLocationSuggestionLoading] = useState(false)
+  const [isLocationDropdownOpen, setIsLocationDropdownOpen] = useState(false)
+  const [locationSuggestions, setLocationSuggestions] = useState<PlaceResult[]>([])
   const [shouldDisplayResults, setShouldDisplayResults] = useState(false)
   const [selectedThumbnail, setSelectedThumbnail] = useState<string | null>(null)
+  const [lastQueryKey, setLastQueryKey] = useState<string | null>(null)
 
   const [type, setType] = useState(types.eaten.key)
   const [selectedView, setSelectedView] = useState<
     'grid' | 'graph' | 'network' | 'map' | null
   >(null)
 
+  const locationDropdownRef = useRef<HTMLDivElement | null>(null)
+  const speciesInputReady = useMemo(
+    () => search.trim().length >= 3 || submittedSearch.length >= 3,
+    [search, submittedSearch]
+  )
+
   // --------------------- ===
   //  FUNCS
   // ---------------------
+  const setPartnerLoadingFailed = () => {
+    setIsPartnerLoading(false)
+    setEatenByData([])
+  }
+
   const getPartnerData = async (ids: string[]) => {
     const uniqueIds = Array.from(new Set(ids))
+    setIsPartnerLoading(true)
     if (!uniqueIds.length) {
       setEatenByData([])
+      setIsPartnerLoading(false)
       return
     }
 
@@ -180,8 +202,14 @@ export const Web = () => {
       params.append('place_id', String(selectedPlaceId))
     }
 
-    const d = await apiClient.get(`/observations?${params.toString()}`)
-    setEatenByData(d.data.results)
+    try {
+      const d = await apiClient.get(`/observations?${params.toString()}`)
+      setEatenByData(d.data.results)
+    } catch (error) {
+      setPartnerLoadingFailed()
+      return
+    }
+    setIsPartnerLoading(false)
   }
 
   const fetchPlaceCandidates = async (query: string): Promise<PlaceResult[]> => {
@@ -292,6 +320,51 @@ export const Web = () => {
   }, [search, selectedPlaceId])
 
   useEffect(() => {
+    let canceled = false
+    const query = locationInput.trim()
+
+    if (!speciesInputReady || query.length < 3) {
+      setLocationSuggestions([])
+      setIsLocationSuggestionLoading(false)
+      setIsLocationDropdownOpen(false)
+      return () => {
+        canceled = true
+      }
+    }
+
+    if (selectedPlaceLabel && query.toLowerCase() === selectedPlaceLabel.toLowerCase()) {
+      setLocationSuggestions([])
+      setIsLocationSuggestionLoading(false)
+      setIsLocationDropdownOpen(false)
+      return () => {
+        canceled = true
+      }
+    }
+
+    setIsLocationSuggestionLoading(true)
+
+    fetchPlaceCandidates(query)
+      .then((results) => {
+        if (!canceled) {
+          setLocationSuggestions(results)
+          setIsLocationSuggestionLoading(false)
+          setIsLocationDropdownOpen(true)
+        }
+      })
+      .catch(() => {
+        if (!canceled) {
+          setLocationSuggestions([])
+          setIsLocationSuggestionLoading(false)
+          setIsLocationDropdownOpen(false)
+        }
+      })
+
+    return () => {
+      canceled = true
+    }
+  }, [locationInput, speciesInputReady])
+
+  useEffect(() => {
     if (!shouldDisplayResults || !data.length || isSearchLoading) return
 
     // FILTER DATA
@@ -400,6 +473,33 @@ export const Web = () => {
     }
   }, [isDropdownOpen])
 
+  useEffect(() => {
+    if (!isLocationDropdownOpen) return
+
+    const handleClick = (event: MouseEvent) => {
+      if (
+        locationDropdownRef.current &&
+        !locationDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsLocationDropdownOpen(false)
+      }
+    }
+
+    const handleKey = (evt: KeyboardEvent) => {
+      if (evt.key === 'Escape') {
+        setIsLocationDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKey)
+
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [isLocationDropdownOpen])
+
   // --------------------- ===
   //  HANDLERS
   // ---------------------
@@ -417,22 +517,32 @@ export const Web = () => {
   }
 
   const handleLocationChange = (evt: ChangeEvent<HTMLInputElement>) => {
-    setLocationInput(evt.target.value)
+    const { value } = evt.target
+    setLocationInput(value)
     setSelectedPlaceLabel(null)
+    setSelectedPlaceId(null)
     setPlaceLookupError(null)
     setShouldDisplayResults(false)
+    const trimmed = value.trim()
+    if (trimmed.length < 3) {
+      setLocationSuggestions([])
+      setIsLocationSuggestionLoading(false)
+    }
+    setIsLocationDropdownOpen(speciesInputReady && trimmed.length >= 3)
   }
 
   const handleSubmit = async (
     evt?:
       | FormEvent<HTMLFormElement>
-      | MouseEvent<HTMLButtonElement>
+      | ReactMouseEvent<HTMLButtonElement>
       | undefined,
     explicitSearch?: string,
-    explicitThumbnail?: string | null
+    explicitThumbnail?: string | null,
+    explicitLocation?: { id: number | null; label: string | null }
   ) => {
     evt?.preventDefault()
     setIsDropdownOpen(false)
+    setIsLocationDropdownOpen(false)
     setPlaceLookupError(null)
 
     const rawSearch = explicitSearch ?? search
@@ -455,45 +565,75 @@ export const Web = () => {
     }
 
     setSearchError(null)
+    setIsSearchLoading(true)
 
-    const trimmedLocation = locationInput.trim()
-    let resolvedId: number | null = null
-    let resolvedLabel: string | null = null
+    const trimmedLocation = (explicitLocation?.label ?? locationInput).trim()
+    let resolvedId: number | null = explicitLocation?.id ?? null
+    let resolvedLabel: string | null = explicitLocation?.label ?? null
 
-    if (trimmedLocation) {
-      setIsResolvingPlace(true)
-      try {
+    try {
+      if (trimmedLocation && explicitLocation === undefined) {
+        setIsResolvingPlace(true)
         const place = await resolvePlace(trimmedLocation)
         resolvedId = place?.id ?? null
-        resolvedLabel =
-          place?.display_name || place?.name || trimmedLocation
-      } catch (error) {
-        setIsResolvingPlace(false)
-        setShouldDisplayResults(false)
-        return
-      } finally {
-        setIsResolvingPlace(false)
+        resolvedLabel = place?.display_name || place?.name || trimmedLocation
       }
+
+      if (trimmedLocation && resolvedId === null) {
+        setIsSearchLoading(false)
+        setIsPartnerLoading(false)
+        setSelectedPlaceId(null)
+        setSelectedPlaceLabel(null)
+        setData([])
+        setEatenByData([])
+        setPartnerData({})
+        setShouldDisplayResults(true)
+        setSubmittedSearch('')
+        return
+      }
+    } catch (error) {
+      setIsSearchLoading(false)
+      setIsPartnerLoading(false)
+      setIsResolvingPlace(false)
+      setPlaceLookupError('Unable to resolve that location. Please try another.')
+      setShouldDisplayResults(false)
+      return
+    } finally {
+      setIsResolvingPlace(false)
     }
 
-    if (trimmedLocation && resolvedId === null) {
-      setSelectedPlaceId(null)
-      setSelectedPlaceLabel(null)
-      setData([])
-      setEatenByData([])
-      setPartnerData({})
+    const currentQueryKey = buildQueryKey(trimmedSearch, resolvedId, resolvedLabel)
+    if (currentQueryKey === lastQueryKey && shouldDisplayResults) {
+      setIsSearchLoading(false)
+      setIsPartnerLoading(false)
       setShouldDisplayResults(true)
-      setSubmittedSearch('')
       return
     }
 
     setSelectedPlaceId(resolvedId)
     setSelectedPlaceLabel(resolvedLabel)
+    setLastQueryKey(currentQueryKey)
     setSubmittedSearch(trimmedSearch)
-    setShouldDisplayResults(false)
+    setShouldDisplayResults(true)
     setData([])
     setEatenByData([])
     setPartnerData({})
+  }
+
+  const handleLocationSuggestionClick = (place: PlaceResult) => {
+    const label = place.display_name || place.name
+    setLocationInput(label || '')
+    setSelectedPlaceId(place.id)
+    setSelectedPlaceLabel(label || null)
+    setPlaceLookupError(null)
+    setIsLocationDropdownOpen(false)
+    setShouldDisplayResults(false)
+    void handleSubmit(
+      undefined,
+      search,
+      selectedThumbnail,
+      { id: place.id, label: label || null }
+    )
   }
 
   const suggestionLookup = useMemo(() => {
@@ -526,6 +666,7 @@ export const Web = () => {
   const filteredResults = shouldDisplayResults ? eatenByData || [] : []
 
   const hasResults = filteredResults.length > 0
+  const isResultsLoading = isSearchLoading || isPartnerLoading
 
   useEffect(() => {
     if (shouldDisplayResults && hasResults) {
@@ -536,6 +677,9 @@ export const Web = () => {
 
   const getObservationLabel = (observation?: Observation) =>
     observation?.taxon.preferred_common_name || observation?.taxon.name || ''
+
+  const getScientificName = (observation?: Observation) =>
+    observation?.taxon.name || ''
 
   const focalName = useMemo(() => {
     const fallback = submittedSearch || search.trim()
@@ -549,13 +693,36 @@ export const Web = () => {
   }, [filteredResults, partnerData, hasResults, submittedSearch, search])
 
   const aggregatedCounterparts = useMemo(() => {
-    const counts = new Map<string, number>()
+    const map = new Map<
+      string,
+      { count: number; scientificName?: string; urls: Set<string> }
+    >()
+
     filteredResults.forEach((observation) => {
       const label = getObservationLabel(observation) || 'Unknown'
-      counts.set(label, (counts.get(label) || 0) + 1)
+      const current = map.get(label) || {
+        count: 0,
+        scientificName: undefined,
+        urls: new Set<string>(),
+      }
+      current.count += 1
+      const sciName = getScientificName(observation)
+      if (sciName && !current.scientificName) {
+        current.scientificName = sciName
+      }
+      if (observation.uri) {
+        current.urls.add(observation.uri)
+      }
+      map.set(label, current)
     })
-    return Array.from(counts.entries())
-      .map(([label, count]) => ({ label, count }))
+
+    return Array.from(map.entries())
+      .map(([label, value]) => ({
+        label,
+        count: value.count,
+        scientificName: value.scientificName || '',
+        urls: Array.from(value.urls),
+      }))
       .sort((a, b) => {
         if (b.count === a.count) return a.label.localeCompare(b.label)
         return b.count - a.count
@@ -573,13 +740,19 @@ export const Web = () => {
 
   const downloadCsv = () => {
     if (!aggregatedCounterparts.length) return
-    const headerLabel = type === 'eaten' ? 'predator' : 'prey'
+    const roleLabel = type === 'eaten' ? 'Predator' : 'Prey'
 
     const rows = [
-      `${headerLabel},# of Observations`,
-      ...aggregatedCounterparts.map((row) =>
-        `${JSON.stringify(row.label)},${row.count}`
-      ),
+      `${roleLabel} Common Name,${roleLabel} Scientific Name,Observation URLs,# of Observations`,
+      ...aggregatedCounterparts.map((row) => {
+        const urls = row.urls.join(' | ')
+        return [
+          JSON.stringify(row.label),
+          JSON.stringify(row.scientificName || ''),
+          JSON.stringify(urls),
+          row.count,
+        ].join(',')
+      }),
     ]
 
     const csvContent = rows.join('\n')
@@ -592,9 +765,10 @@ export const Web = () => {
     const species = sanitize(submittedSearch || search.trim())
     const location = selectedPlaceLabel ? sanitize(selectedPlaceLabel) : null
     const prefix = type === 'eaten' ? 'Who Eats' : 'Who is Eaten By'
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
     const fileName = `${prefix} ${species}${
       location ? ` - ${location}` : ''
-    }.csv`
+    } ${timestamp}.csv`
 
     const link = document.createElement('a')
     link.href = url
@@ -671,13 +845,47 @@ export const Web = () => {
                 </p>
               )}
               <div className="flex items-stretch gap-2">
-                <input
-                  className="w-full max-w-xs"
-                  type="text"
-                  value={locationInput}
-                  onChange={handleLocationChange}
-                  placeholder="Location"
-                />
+                <div
+                  className="relative w-full max-w-xs"
+                  style={{ zIndex: 1 }}
+                  ref={locationDropdownRef}
+                >
+                  <input
+                    className="w-full"
+                    type="text"
+                    value={locationInput}
+                    onChange={handleLocationChange}
+                    placeholder="Location"
+                    onFocus={() => {
+                      if (speciesInputReady && locationInput.trim().length >= 3) {
+                        setIsLocationDropdownOpen(true)
+                      }
+                    }}
+                  />
+                  {(isLocationDropdownOpen || isLocationSuggestionLoading) && speciesInputReady && (
+                    <div className="absolute mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-60 overflow-y-auto text-sm">
+                      {isLocationSuggestionLoading ? (
+                        <p className="p-2 text-slate-500 italic">Loading...</p>
+                      ) : locationSuggestions.length ? (
+                        locationSuggestions.map((place) => (
+                          <button
+                            type="button"
+                            key={place.id}
+                            onClick={() => handleLocationSuggestionClick(place)}
+                            className="w-full text-left px-3 py-2 hover:bg-slate-100"
+                          >
+                            <span className="block font-medium">{place.display_name || place.name}</span>
+                            {place.place_type_name && (
+                              <span className="text-xs text-slate-500">{place.place_type_name}</span>
+                            )}
+                          </button>
+                        ))
+                      ) : (
+                        <p className="p-2 text-slate-500 italic">No matching locations</p>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <button
                   type="submit"
                   disabled={isResolvingPlace}
@@ -704,9 +912,15 @@ export const Web = () => {
             totalSpecies={totalSpecies}
             onDownload={downloadCsv}
             isDownloadDisabled={!aggregatedCounterparts.length}
+            isLoading={isResultsLoading}
           />
 
-          {hasResults ? (
+          {isResultsLoading ? (
+            <div className="p-4 border border-slate-200 rounded text-sm text-slate-700 flex items-center gap-3">
+              <span className="inline-block h-5 w-5 rounded-full border-2 border-slate-300 border-t-slate-700 animate-spin" aria-label="Loading results" />
+              <span>Loading results…</span>
+            </div>
+          ) : hasResults ? (
             <>
               <div className="flex flex-wrap gap-2 text-sm">
                 {(
@@ -750,6 +964,7 @@ export const Web = () => {
                   results={filteredResults}
                   partnerData={partnerData}
                   type={type}
+                  focalName={speciesLabel}
                 />
               )}
 

@@ -13,14 +13,14 @@ PUBLIC_HTML = PUBLIC_DIR / 'predator_prey.html'
 # Styling constants
 NODE_RADIUS = 8
 EDGE_BASE_WIDTH = 0.03
-ZOOM_EXTENT = [0.1, 5]
+ZOOM_EXTENT = [0.005, 8]
 
 # Extended qualitative palette (20 distinct colors)
 CATEGORY_DEFINITIONS = {
     'plants': {
         'label': 'Plants & Fungi',
         'color': '#9BD6A5',
-        'iconic_taxa': ['Plantae', 'Fungi', 'Chromista'],
+        'iconic_taxa': ['Plantae', 'Fungi'],
     },
     'vertebrates': {
         'label': 'Vertebrates',
@@ -30,7 +30,7 @@ CATEGORY_DEFINITIONS = {
     'invertebrates': {
         'label': 'Invertebrates',
         'color': '#F5B97B',
-        'iconic_taxa': ['Insecta', 'Arachnida', 'Mollusca', 'Protozoa', 'Animalia'],
+        'iconic_taxa': ['Insecta', 'Arachnida', 'Mollusca', 'Protozoa', 'Animalia', 'Chromista'],
     },
     'unknown': {
         'label': 'Other',
@@ -97,6 +97,28 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         line-height: 1.4;
         color: #334155;
       }
+      .zoom-panel {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        z-index: 10;
+      }
+      .zoom-panel button {
+        border: 1px solid rgba(148, 163, 184, 0.6);
+        border-radius: 0.5rem;
+        padding: 0.4rem 0.6rem;
+        background: rgba(255, 255, 255, 0.92);
+        color: #0f172a;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.15);
+      }
+      .zoom-panel button:hover {
+        background: #ffffff;
+      }
       .search {
         display: flex;
         gap: 0.35rem;
@@ -124,6 +146,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         font-size: 0.75rem;
         max-height: 14rem;
         overflow-y: auto;
+      }
+      .label-options {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        margin-top: 0.5rem;
+        font-size: 0.85rem;
+      }
+      .label-options label {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
       }
       .legend-item {
         display: flex;
@@ -157,6 +191,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         background: rgba(100, 116, 139, 0.4);
         border-radius: 1rem;
       }
+      .download-btn {
+        margin-top: 0.5rem;
+        border: 1px solid rgba(148, 163, 184, 0.6);
+        border-radius: 0.5rem;
+        padding: 0.4rem 0.6rem;
+        background: rgba(255, 255, 255, 0.92);
+        color: #0f172a;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 5px 15px rgba(15, 23, 42, 0.12);
+      }
+      .download-btn:hover {
+        background: #ffffff;
+      }
       .tooltip {
         position: absolute;
         pointer-events: none;
@@ -170,6 +218,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         opacity: 0;
         transition: opacity 120ms ease-out;
         z-index: 20;
+      }
+      .tooltip-sci {
+        font-size: 0.68rem;
+        color: #cbd5f5;
+        font-style: italic;
       }
       .node circle {
         stroke: white;
@@ -200,10 +253,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <h1>Predator/Prey Network</h1>
         <p>Arrows run from prey → predator. Edge thickness shows how many observations recorded that interaction.</p>
         <div class=\"search\">
-          <input id=\"searchBox\" placeholder=\"Search by common name\" />
+          <input id=\"searchBox\" placeholder=\"Search by common or scientific name\" />
           <button id=\"searchButton\">Go</button>
         </div>
         <div class=\"legend\" id=\"legend\"></div>
+        <div class=\"label-options\">
+          <label><input type=\"checkbox\" id=\"toggleCommon\" checked /> Common names</label>
+          <label><input type=\"checkbox\" id=\"toggleScientific\" checked /> Scientific names</label>
+        </div>
+        <button id=\"downloadNetworkBtn\" class=\"download-btn\">Download network</button>
+      </div>
+      <div class=\"zoom-panel\">
+        <button id=\"zoomInBtn\" aria-label=\"Zoom in\">+</button>
+        <button id=\"zoomOutBtn\" aria-label=\"Zoom out\">-</button>
+        <button id=\"fullscreenToggle\" aria-label=\"Toggle full screen\"></button>
       </div>
       <svg id=\"network\"></svg>
       <div class=\"tooltip\" id=\"tooltip\"></div>
@@ -216,6 +279,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       const svg = d3.select('#network');
       const tooltip = d3.select('#tooltip');
+      const containerEl = document.getElementById('graph-container');
+      let showCommonNames = true;
+      let showScientificNames = true;
 
       const width = window.innerWidth;
       const height = window.innerHeight;
@@ -226,7 +292,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       defs.append('marker')
         .attr('id', 'arrowhead')
         .attr('viewBox', '0 -5 10 10')
-        .attr('refX', 16)
+        .attr('refX', 12)
         .attr('refY', 0)
         .attr('markerWidth', 8)
         .attr('markerHeight', 8)
@@ -234,6 +300,43 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .append('path')
         .attr('d', 'M0,-5L10,0L0,5')
         .attr('fill', 'rgba(30, 41, 59, 0.65)');
+
+      const projectLink = (source, target) => {
+        if (!source || !target) {
+          return { x1: 0, y1: 0, x2: 0, y2: 0 };
+        }
+        const dx = target.x - source.x;
+        const dy = target.y - source.y;
+        const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+        const offsetX = (dx / distance) * {node_radius};
+        const offsetY = (dy / distance) * {node_radius};
+        return {
+          x1: source.x + offsetX,
+          y1: source.y + offsetY,
+          x2: target.x - offsetX,
+          y2: target.y - offsetY,
+        };
+      };
+
+      const formatLabel = (node) => {
+        const common = node.commonName || node.label;
+        const scientific = node.scientificName;
+        const parts = [];
+        if (showCommonNames && common) {
+          parts.push(common);
+        }
+        if (showScientificNames && scientific) {
+          if (showCommonNames && common) {
+            parts.push(`(${scientific})`);
+          } else {
+            parts.push(scientific);
+          }
+        }
+        if (!parts.length) {
+          return common || scientific || node.label || 'Unknown';
+        }
+        return parts.join(' ');
+      };
 
       const zoomLayer = svg.append('g');
 
@@ -263,7 +366,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const labels = node.append('text')
         .attr('fill', '#0f172a')
         .attr('dy', '0.35em')
-        .text(d => d.label);
+        .text(d => formatLabel(d));
 
       node.append('title')
         .text(d => {
@@ -273,37 +376,59 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           return `${d.label}\nIconic taxon: ${d.iconicTaxon}\nGroup: ${groupLabel}\nIconic taxa in group: ${taxaList}`;
         });
 
+      const updateLabelVisibility = (scale) => {
+        const minScale = 0.15;
+        const maxScale = 0.4;
+        const clamped =
+          scale <= minScale
+            ? 0
+            : scale >= maxScale
+              ? 1
+              : (scale - minScale) / (maxScale - minScale);
+        labels.style('opacity', clamped);
+      };
+
+      const updateLabels = () => {
+        labels.text(d => formatLabel(d));
+      };
+
+      updateLabels();
+      updateLabelVisibility(1);
+
       node.on('mouseenter', (event, d) => {
         tooltip.style('opacity', 1)
           .html(`
-            <strong>${d.label}</strong><br/>
-            Iconic taxon: ${d.iconicTaxon}<br/>
-            Kingdom: ${d.kingdom}<br/>
-            Class: ${d.className}<br/>
-            Group: ${categoryColors[d.category]?.label || 'Other'}<br/>
-            Iconic taxa in group: ${categoryColors[d.category]?.taxa?.join(', ') || '—'}<br/>
-            ${d.description !== 'Unidentified' ? `Description: ${d.description}<br/>` : ''}
-            ${d.url !== 'Unidentified' ? `<a href="${d.url}" target="_blank" rel="noopener noreferrer">View observation</a>` : ''}
+            <strong>${d.commonName || d.label}</strong><br/>
+            <span class="text-xs">${d.scientificName !== 'Unidentified' ? d.scientificName : ''}</span><br/>
+            Class: ${d.className}
           `);
       }).on('mousemove', (event) => {
-        const [x, y] = d3.pointer(event);
+        const bounds = containerEl?.getBoundingClientRect();
+        const baseX = event.clientX - (bounds?.left || 0);
+        const baseY = event.clientY - (bounds?.top || 0);
+        const tooltipWidth = tooltip.node()?.offsetWidth || 0;
+        const tooltipHeight = tooltip.node()?.offsetHeight || 0;
+        const limitX = bounds?.width || width;
+        const limitY = bounds?.height || height;
+        const posX = Math.min(Math.max(baseX + 16, 16), limitX - tooltipWidth - 16);
+        const posY = Math.min(Math.max(baseY + 16, 16), limitY - tooltipHeight - 16);
         tooltip
-          .style('left', `${x + 20}px`)
-          .style('top', `${y + 20}px`);
+          .style('left', `${posX}px`)
+          .style('top', `${posY}px`);
       }).on('mouseleave', () => tooltip.style('opacity', 0));
 
       const simulation = d3.forceSimulation(graphData.nodes)
-        .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(80).strength(0.2))
-        .force('charge', d3.forceManyBody().strength(-80))
+        .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(65).strength(0.25))
+        .force('charge', d3.forceManyBody().strength(-70))
         .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collide', d3.forceCollide({node_radius} * 1.8));
+        .force('collide', d3.forceCollide({node_radius} * 1.6));
 
       simulation.on('tick', () => {
         link
-          .attr('x1', d => d.source.x)
-          .attr('y1', d => d.source.y)
-          .attr('x2', d => d.target.x)
-          .attr('y2', d => d.target.y);
+          .attr('x1', d => projectLink(d.source, d.target).x1)
+          .attr('y1', d => projectLink(d.source, d.target).y1)
+          .attr('x2', d => projectLink(d.source, d.target).x2)
+          .attr('y2', d => projectLink(d.source, d.target).y2);
 
         node
           .attr('transform', d => `translate(${d.x},${d.y})`);
@@ -317,9 +442,103 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .scaleExtent({zoom_extent})
         .on('zoom', (event) => {
           zoomLayer.attr('transform', event.transform);
+          updateLabelVisibility(event.transform.k);
         });
 
       svg.call(zoomBehaviour);
+
+      const zoomBy = (factor) => {
+        svg.transition().duration(250).call(zoomBehaviour.scaleBy, factor);
+      };
+
+      const zoomInBtn = document.getElementById('zoomInBtn');
+      const zoomOutBtn = document.getElementById('zoomOutBtn');
+      zoomInBtn?.addEventListener('click', () => zoomBy(1.2));
+      zoomOutBtn?.addEventListener('click', () => zoomBy(1 / 1.2));
+
+      window.addEventListener('message', (event) => {
+        const { type } = event.data || {};
+        if (type === 'zoomIn') {
+          zoomBy(1.2);
+        }
+        if (type === 'zoomOut') {
+          zoomBy(1 / 1.2);
+        }
+      });
+
+      const fullscreenToggle = document.getElementById('fullscreenToggle');
+      const updateFullscreenButton = () => {
+        if (!fullscreenToggle) return;
+        fullscreenToggle.textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen';
+      };
+      fullscreenToggle?.addEventListener('click', () => {
+        if (!document.fullscreenElement) {
+          containerEl?.requestFullscreen?.();
+        } else {
+          document.exitFullscreen?.();
+        }
+      });
+      document.addEventListener('fullscreenchange', updateFullscreenButton);
+      updateFullscreenButton();
+
+      const toggleCommon = document.getElementById('toggleCommon');
+      const toggleScientific = document.getElementById('toggleScientific');
+      const downloadButton = document.getElementById('downloadNetworkBtn');
+
+      const sanitizeFileName = (value) =>
+        value.replace(/[\\/:*?"<>|]/g, '').trim() || 'who-eats-whom-network';
+
+      const buildStandaloneHtml = () => {
+        const clone = document.documentElement.cloneNode(true);
+        if (!(clone instanceof HTMLElement)) {
+          return document.documentElement.outerHTML;
+        }
+        const svg = clone.querySelector('#network');
+        if (svg) {
+          while (svg.firstChild) {
+            svg.removeChild(svg.firstChild);
+          }
+        }
+        const downloadBtn = clone.querySelector('#downloadNetworkBtn');
+        downloadBtn?.parentElement?.removeChild(downloadBtn);
+        return '<!DOCTYPE html>\\n' + clone.outerHTML;
+      };
+
+      const handleLabelToggle = (type, checked) => {
+        if (type === 'common') {
+          if (!checked && !showScientificNames) {
+            toggleCommon.checked = true;
+            return;
+          }
+          showCommonNames = checked;
+        } else {
+          if (!checked && !showCommonNames) {
+            toggleScientific.checked = true;
+            return;
+          }
+          showScientificNames = checked;
+        }
+        updateLabels();
+      };
+
+      toggleCommon?.addEventListener('change', (event) =>
+        handleLabelToggle('common', event.target.checked)
+      );
+      toggleScientific?.addEventListener('change', (event) =>
+        handleLabelToggle('scientific', event.target.checked)
+      );
+      downloadButton?.addEventListener('click', () => {
+        const html = buildStandaloneHtml();
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${sanitizeFileName('who-eats-whom-network')}.html`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      });
 
       const searchInput = document.getElementById('searchBox');
       const searchButton = document.getElementById('searchButton');
@@ -339,13 +558,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         svg.transition().duration(650).call(zoomBehaviour.transform, transform);
       }
 
-      function highlightNode(value) {
+      const findNodeMatch = (value) => {
         const term = value.trim().toLowerCase();
-        if (!term) {
-          clearHighlights();
-          return;
-        }
-        const match = graphData.nodes.find((n) => n.id.toLowerCase() === term);
+        if (!term) return null;
+        return graphData.nodes.find((n) => {
+          const candidates = [n.id, n.label, n.commonName, n.scientificName];
+          return candidates.some(
+            (entry) => typeof entry === 'string' && entry.toLowerCase() === term
+          );
+        });
+      };
+
+      function highlightNode(value) {
+        const match = findNodeMatch(value);
         clearHighlights();
         if (match) {
           node.filter(d => d.id === match.id).classed('highlight', true);
@@ -370,6 +595,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       });
 
       const legend = document.getElementById('legend');
+      if (legend) {
+        legend.innerHTML = '';
+      }
       legendItems.forEach((entry) => {
         const item = document.createElement('div');
         item.className = 'legend-item';
@@ -478,12 +706,20 @@ def create_graph(df: pd.DataFrame):
 
     nodes_in_edges = {name for edge in edges for name in edge}
 
+    if 'scientific_name' not in df.columns:
+        fallback = df.get('taxon_name')
+        if fallback is not None:
+            df['scientific_name'] = fallback
+        else:
+            df['scientific_name'] = df.get('taxon_species_name', 'Unidentified')
+
     info_columns = [
         'taxon_kingdom_name',
         'taxon_class_name',
         'url',
         'description',
         'iconic_taxon_name',
+        'scientific_name',
     ]
 
     meta = (
@@ -497,9 +733,16 @@ def create_graph(df: pd.DataFrame):
         details = meta.get(name, {})
         iconic_taxon = details.get('iconic_taxon_name', 'Unidentified')
         category = map_iconic_to_category(iconic_taxon)
+        scientific_name = (
+            details.get('scientific_name')
+            or details.get('taxon_name')
+            or 'Unidentified'
+        )
         nodes.append({
             'id': name,
             'label': name,
+             'commonName': name,
+             'scientificName': scientific_name,
             'kingdom': details.get('taxon_kingdom_name', 'Unidentified'),
             'className': details.get('taxon_class_name', 'Unidentified'),
             'url': details.get('url', 'Unidentified'),

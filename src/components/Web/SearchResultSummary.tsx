@@ -6,6 +6,7 @@ interface Props {
   totalSpecies: number
   onDownload: MouseEventHandler<HTMLButtonElement>
   isDownloadDisabled?: boolean
+  isLoading?: boolean
 }
 
 const DownloadIcon = () => (
@@ -26,7 +27,18 @@ export const SearchResultSummary = (props: Props) => {
     totalSpecies,
     onDownload,
     isDownloadDisabled,
+    isLoading,
   } = props
+
+  const StatValue = ({ value }: { value: number }) =>
+    isLoading ? (
+      <span
+        className="inline-block h-5 w-5 rounded-full border-2 border-white/40 border-t-white animate-spin"
+        aria-label="Loading"
+      />
+    ) : (
+      <span className="block text-2xl font-bold leading-none">{value}</span>
+    )
 
   return (
     <div className="sticky top-0 z-30">
@@ -37,13 +49,13 @@ export const SearchResultSummary = (props: Props) => {
           </div>
           <div className="flex items-end gap-6 text-right text-white">
             <div>
-              <span className="block text-2xl font-bold leading-none">{totalObservations}</span>
+              <StatValue value={totalObservations} />
               <span className="text-xs uppercase tracking-wide text-slate-300">
                 Observations
               </span>
             </div>
             <div>
-              <span className="block text-2xl font-bold leading-none">{totalSpecies}</span>
+              <StatValue value={totalSpecies} />
               <span className="text-xs uppercase tracking-wide text-slate-300">
                 Unique species
               </span>
@@ -53,9 +65,9 @@ export const SearchResultSummary = (props: Props) => {
         <button
           type="button"
           onClick={onDownload}
-          disabled={isDownloadDisabled}
+          disabled={isDownloadDisabled || isLoading}
           className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition ${
-            isDownloadDisabled
+            isDownloadDisabled || isLoading
               ? 'bg-white/10 text-white/60 cursor-not-allowed'
               : 'bg-white/10 text-white hover:bg-white/20'
           }`}

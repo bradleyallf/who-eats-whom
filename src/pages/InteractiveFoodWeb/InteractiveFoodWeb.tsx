@@ -45,15 +45,11 @@ export const InteractiveFoodWeb = () => {
       value: stats?.observations,
     },
     {
-      label: 'Species connected',
-      value: stats?.edges,
-    },
-    {
-      label: 'Taxons connected',
+      label: '# of Unique Nodes',
       value: stats?.taxa,
     },
     {
-      label: 'Locations',
+      label: 'Countries',
       value: stats?.locations,
     },
   ];
@@ -77,15 +73,7 @@ export const InteractiveFoodWeb = () => {
         </div>
       )}
 
-      <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-        <p className="text-red-600 italic">
-          The edges are arrows that represent predator prey interactions (predator to prey). The nodes
-          are species coming from the WhoEatWhom iNaturalist page. 
-        </p>
-      </div>
-
-      {/* 4) Full-screen iframe */}
-      <div className="w-full h-[80vh] border rounded overflow-hidden">
+      <div className="w-full h-[80vh] border rounded overflow-hidden shadow">
         <iframe
           src={src}
           className="w-full h-full"

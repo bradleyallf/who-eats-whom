@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as d3 from 'd3'
 import { Observation, Ofv } from './types'
 import { NETWORK_LEGEND, getCategoryColor, getTaxonCategory } from './networkColors'
@@ -13,6 +13,8 @@ interface Props {
 interface NodeDatum {
   id: string
   label: string
+  commonName?: string
+  scientificName?: string
   isFocal: boolean
   iconicTaxon: string
   category: string
@@ -31,6 +33,12 @@ interface LinkDatum {
   count: number
 }
 
+const getCommonName = (observation?: Observation) =>
+  observation?.taxon.preferred_common_name
+
+const getScientificName = (observation?: Observation) =>
+  observation?.taxon.name
+
 const getDisplayName = (observation?: Observation) => {
   if (!observation) return undefined
   return (
@@ -46,9 +54,53 @@ const labelsMatch = (a: string, b: string) =>
 const getIconicTaxon = (observation?: Observation) =>
   observation?.taxon.iconic_taxon_name || 'Unidentified'
 
+const getNodeRadius = (node: NodeDatum) => (node.isFocal ? 12 : 9)
+
 export const SearchResultNetwork = (props: Props) => {
   const { results, partnerData, type, focalName } = props
   const svgRef = useRef<SVGSVGElement | null>(null)
+  const zoomBehaviourRef = useRef<any>(null)
+  const svgSelectionRef = useRef<any>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [isFullScreen, setIsFullScreen] = useState(false)
+  const [showCommonNames, setShowCommonNames] = useState(true)
+  const [showScientificNames, setShowScientificNames] = useState(true)
+
+  const formatNodeLabel = (node: NodeDatum) => {
+    const parts: string[] = []
+    const common = node.commonName || node.label
+    const scientific = node.scientificName
+
+    if (showCommonNames && common) {
+      parts.push(common)
+    }
+    if (showScientificNames && scientific) {
+      if (showCommonNames && common) {
+        parts.push(`(${scientific})`)
+      } else {
+        parts.push(scientific)
+      }
+    }
+
+    if (!parts.length) {
+      return common || scientific || node.label || 'Unknown'
+    }
+    return parts.join(' ')
+  }
+
+  const handleLabelPreferenceChange = (type: 'common' | 'scientific', checked: boolean) => {
+    if (type === 'common') {
+      if (!checked && !showScientificNames) {
+        return
+      }
+      setShowCommonNames(checked)
+    } else {
+      if (!checked && !showCommonNames) {
+        return
+      }
+      setShowScientificNames(checked)
+    }
+  }
 
   const categoryLabelMap = useMemo(() => {
     const map = new Map<string, string>()
@@ -67,14 +119,20 @@ export const SearchResultNetwork = (props: Props) => {
       observation: Observation | undefined,
       isFocal: boolean
     ) => {
-      if (!label) return
-      const existing = nodesMap.get(label)
+      const commonName = getCommonName(observation) || undefined
+      const scientificName = getScientificName(observation) || undefined
+      const fallbackLabel = commonName || scientificName || label || 'Unknown'
+      if (!fallbackLabel) return
       const iconicTaxon = getIconicTaxon(observation)
       const category = getTaxonCategory(iconicTaxon)
+
+      const existing = nodesMap.get(fallbackLabel)
       if (!existing) {
-        nodesMap.set(label, {
-          id: label,
-          label,
+        nodesMap.set(fallbackLabel, {
+          id: fallbackLabel,
+          label: fallbackLabel,
+          commonName,
+          scientificName,
           isFocal,
           iconicTaxon,
           category,
@@ -84,6 +142,13 @@ export const SearchResultNetwork = (props: Props) => {
 
       if (isFocal && !existing.isFocal) {
         existing.isFocal = true
+      }
+
+      if (!existing.commonName && commonName) {
+        existing.commonName = commonName
+      }
+      if (!existing.scientificName && scientificName) {
+        existing.scientificName = scientificName
       }
 
       if (iconicTaxon !== 'Unidentified' && existing.iconicTaxon === 'Unidentified') {
@@ -134,12 +199,25 @@ export const SearchResultNetwork = (props: Props) => {
   }, [partnerData, results, type, focalName])
 
   useEffect(() => {
+    const handleFullscreenChange = () => {
+      const target = containerRef.current
+      setIsFullScreen(document.fullscreenElement === target)
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    }
+  }, [])
+
+  useEffect(() => {
     const svgElement = svgRef.current
     if (!svgElement) return
 
     const { nodes, links } = graph
     const svg = d3.select(svgElement)
     svg.selectAll('*').remove()
+    svgSelectionRef.current = svg
 
     if (!nodes.length || !links.length) {
       return
@@ -153,9 +231,10 @@ export const SearchResultNetwork = (props: Props) => {
       measureContext.font = labelFont
     }
     nodes.forEach((node: NodeDatum) => {
+      const labelText = formatNodeLabel(node)
       const measured =
-        measureContext?.measureText(node.label).width ||
-        node.label.length * 7
+        measureContext?.measureText(labelText).width ||
+        labelText.length * 7
       node.labelWidth = measured
     })
     const focalNode = nodes.find((node) => node.isFocal) || nodes[0]
@@ -180,7 +259,7 @@ export const SearchResultNetwork = (props: Props) => {
       .append('marker')
       .attr('id', 'mini-arrow')
       .attr('viewBox', '0 -5 10 10')
-      .attr('refX', 12)
+      .attr('refX', 10)
       .attr('refY', 0)
       .attr('markerWidth', 6)
       .attr('markerHeight', 6)
@@ -210,17 +289,29 @@ export const SearchResultNetwork = (props: Props) => {
 
     node
       .append('circle')
-      .attr('r', (d: NodeDatum) => (d.isFocal ? 12 : 9))
+      .attr('r', (d: NodeDatum) => getNodeRadius(d))
       .attr('fill', (d: NodeDatum) => getCategoryColor(d.iconicTaxon))
-      .attr('stroke', (d: NodeDatum) => (d.isFocal ? '#1f2937' : '#ffffff'))
-      .attr('stroke-width', (d: NodeDatum) => (d.isFocal ? 4 : 1.5))
+      .attr('stroke', (d: NodeDatum) => (d.isFocal ? '#1f2937' : 'transparent'))
+      .attr('stroke-width', (d: NodeDatum) => (d.isFocal ? 4 : 0))
 
     const labels = node
       .append('text')
       .style('font', labelFont)
       .attr('fill', '#0f172a')
       .attr('dy', '0.35em')
-      .text((d: NodeDatum) => d.label)
+      .text((d: NodeDatum) => formatNodeLabel(d))
+
+    const updateLabelVisibility = (scale: number) => {
+      const minScale = 0.12
+      const maxScale = 0.35
+      const clamped =
+        scale <= minScale
+          ? 0
+          : scale >= maxScale
+            ? 1
+            : (scale - minScale) / (maxScale - minScale)
+      labels.style('opacity', clamped)
+    }
 
     node.append('title').text((d: NodeDatum) => `${d.label}\nGroup: ${categoryLabelMap.get(d.category) || 'Other'}`)
 
@@ -239,7 +330,7 @@ export const SearchResultNetwork = (props: Props) => {
         'collide',
         d3
           .forceCollide((d: NodeDatum) => {
-            const circleRadius = d.isFocal ? 12 : 9
+            const circleRadius = getNodeRadius(d)
             const labelRadius = (d.labelWidth ?? 0) / 2
             const padding = 14
             return circleRadius + padding + labelRadius
@@ -267,18 +358,53 @@ export const SearchResultNetwork = (props: Props) => {
         })
     )
 
+    const nodeById = new Map(nodes.map((n) => [n.id, n]))
+
+    const resolveNode = (endpoint: string | NodeDatum): NodeDatum | undefined =>
+      typeof endpoint === 'object' ? endpoint : nodeById.get(endpoint)
+
+    const positionedCoords = (d: LinkDatum) => {
+      const sourceNode = resolveNode(d.source)
+      const targetNode = resolveNode(d.target)
+      if (!sourceNode || !targetNode) {
+        return {
+          x1: 0,
+          y1: 0,
+          x2: 0,
+          y2: 0,
+        }
+      }
+      const sx = sourceNode.x ?? 0
+      const sy = sourceNode.y ?? 0
+      const tx = targetNode.x ?? 0
+      const ty = targetNode.y ?? 0
+      const dx = tx - sx
+      const dy = ty - sy
+      const distance = Math.sqrt(dx * dx + dy * dy) || 1
+      const normX = dx / distance
+      const normY = dy / distance
+      const startRadius = getNodeRadius(sourceNode)
+      const endRadius = getNodeRadius(targetNode)
+      return {
+        x1: sx + normX * startRadius,
+        y1: sy + normY * startRadius,
+        x2: tx - normX * endRadius,
+        y2: ty - normY * endRadius,
+      }
+    }
+
     simulation.on('tick', () => {
       link
-        .attr('x1', (d: LinkDatum) => (typeof d.source === 'object' ? d.source.x || 0 : 0))
-        .attr('y1', (d: LinkDatum) => (typeof d.source === 'object' ? d.source.y || 0 : 0))
-        .attr('x2', (d: LinkDatum) => (typeof d.target === 'object' ? d.target.x || 0 : 0))
-        .attr('y2', (d: LinkDatum) => (typeof d.target === 'object' ? d.target.y || 0 : 0))
+        .attr('x1', (d: LinkDatum) => positionedCoords(d).x1)
+        .attr('y1', (d: LinkDatum) => positionedCoords(d).y1)
+        .attr('x2', (d: LinkDatum) => positionedCoords(d).x2)
+        .attr('y2', (d: LinkDatum) => positionedCoords(d).y2)
 
       node.attr('transform', (d: NodeDatum) => `translate(${d.x || 0},${d.y || 0})`)
 
       labels
         .attr('x', (d: NodeDatum) => {
-          const radius = d.isFocal ? 12 : 9
+          const radius = getNodeRadius(d)
           const offset = radius + 10
           return (d.x || 0) >= width / 2 ? offset : -offset
         })
@@ -287,12 +413,15 @@ export const SearchResultNetwork = (props: Props) => {
 
     const zoomBehaviour = d3
       .zoom()
-      .scaleExtent([0.5, 5])
+      .scaleExtent([0.005, 8])
       .on('zoom', (event: any) => {
         zoomLayer.attr('transform', event.transform)
+        updateLabelVisibility(event.transform.k)
       })
 
+    zoomBehaviourRef.current = zoomBehaviour as any
     svg.call(zoomBehaviour)
+    updateLabelVisibility(1)
 
     const focusNode = (nodeDatum: NodeDatum) => {
       if (nodeDatum.x == null || nodeDatum.y == null) return
@@ -308,8 +437,8 @@ export const SearchResultNetwork = (props: Props) => {
     const resetStyles = () => {
       node
         .select('circle')
-        .attr('stroke', (d: NodeDatum) => (d.isFocal ? '#1f2937' : '#ffffff'))
-        .attr('stroke-width', (d: NodeDatum) => (d.isFocal ? 4 : 1.5))
+        .attr('stroke', (d: NodeDatum) => (d.isFocal ? '#1f2937' : 'transparent'))
+        .attr('stroke-width', (d: NodeDatum) => (d.isFocal ? 4 : 0))
 
       link.attr('stroke', '#94a3b8').attr('stroke-opacity', 0.85)
     }
@@ -327,7 +456,12 @@ export const SearchResultNetwork = (props: Props) => {
 
       if (!term) return
 
-      const match = nodes.find((n) => n.id.toLowerCase() === term)
+      const match = nodes.find((n) => {
+        const candidates = [n.id, n.label, n.commonName, n.scientificName]
+        return candidates.some(
+          (entry) => typeof entry === 'string' && entry.toLowerCase() === term
+        )
+      })
       if (!match) {
         alert(`No match found for "${value}"`)
         return
@@ -380,7 +514,33 @@ export const SearchResultNetwork = (props: Props) => {
       searchButton?.removeEventListener('click', handleButtonClick)
       searchInput?.removeEventListener('keydown', handleKeyDown)
     }
-  }, [graph])
+  }, [graph, isFullScreen, showCommonNames, showScientificNames])
+
+  const handleZoom = (factor: number) => {
+    if (!svgSelectionRef.current || !zoomBehaviourRef.current) return
+    svgSelectionRef.current
+      .transition()
+      .duration(200)
+      .call(zoomBehaviourRef.current.scaleBy, factor)
+  }
+
+  const containerClass = isFullScreen
+    ? 'flex flex-col lg:flex-row gap-6 w-full h-full bg-white p-4'
+    : 'flex flex-col lg:flex-row gap-6'
+
+  const svgWrapperClass = isFullScreen
+    ? 'flex-1 w-full border border-slate-200 rounded-lg shadow-sm h-full'
+    : 'w-full lg:flex-1 h-80 bg-white border border-slate-200 rounded-lg shadow-sm'
+
+  const handleFullscreenToggle = () => {
+    const target = containerRef.current
+    if (!target) return
+    if (document.fullscreenElement) {
+      void document.exitFullscreen()
+    } else {
+      void target.requestFullscreen()
+    }
+  }
 
   if (!graph.nodes.length || !graph.links.length) {
     return (
@@ -391,21 +551,76 @@ export const SearchResultNetwork = (props: Props) => {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="w-full h-80 bg-white border border-slate-200 rounded-lg shadow-sm">
+    <div ref={containerRef} className={containerClass}>
+      <div className={`relative ${svgWrapperClass}`}>
         <svg ref={svgRef} className="w-full h-full" role="img" aria-label="Search result network" />
+        <div className="absolute top-3 right-3 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => handleZoom(1.2)}
+            className="rounded-md bg-slate-800 text-white px-3 py-1 text-sm shadow"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            onClick={() => handleZoom(1 / 1.2)}
+            className="rounded-md bg-slate-800 text-white px-3 py-1 text-sm shadow"
+          >
+            -
+          </button>
+          <button
+            type="button"
+            onClick={handleFullscreenToggle}
+            className="rounded-md bg-white/90 text-slate-900 px-2 py-1 text-xs shadow"
+          >
+            {isFullScreen ? 'Exit Fullscreen' : 'Fullscreen'}
+          </button>
+        </div>
       </div>
-      <div className="flex flex-wrap gap-4 text-sm text-slate-700">
-        {NETWORK_LEGEND.map((entry) => (
-          <div key={entry.key} className="flex items-center gap-2">
-            <span
-              className="inline-block h-3 w-3 rounded"
-              style={{ backgroundColor: entry.color }}
-            />
-            <span>{entry.label}</span>
+      <aside className="w-full lg:w-64">
+        <div className="space-y-4">
+          <div>
+            <h4 className="text-sm font-semibold text-slate-900 mb-2">Name display</h4>
+            <div className="flex flex-col gap-2 text-sm text-slate-700">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={showCommonNames}
+                  onChange={(evt) =>
+                    handleLabelPreferenceChange('common', evt.target.checked)
+                  }
+                />
+                Common names
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={showScientificNames}
+                  onChange={(evt) =>
+                    handleLabelPreferenceChange('scientific', evt.target.checked)
+                  }
+                />
+                Scientific names
+              </label>
+            </div>
           </div>
-        ))}
-      </div>
+          <div>
+            <h4 className="text-sm font-semibold text-slate-900 mb-2">Legend</h4>
+            <div className="flex flex-col gap-3 text-sm text-slate-700">
+              {NETWORK_LEGEND.map((entry) => (
+                <div key={entry.key} className="flex items-center gap-3">
+                  <span
+                    className="inline-block h-3 w-3 rounded"
+                    style={{ backgroundColor: entry.color }}
+                  />
+                  <span>{entry.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </aside>
     </div>
   )
 }

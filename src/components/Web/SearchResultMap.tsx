@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import {
+  CircleMarker,
   MapContainer,
-  Marker,
   Popup,
   TileLayer,
   useMap,
@@ -10,49 +10,26 @@ import {
 } from 'react-leaflet'
 import L, { type LatLngExpression } from 'leaflet'
 
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
-import markerIcon from 'leaflet/dist/images/marker-icon.png'
-import markerShadow from 'leaflet/dist/images/marker-shadow.png'
-
 import { Observation, Ofv } from './types'
+import { getCategoryColor } from './networkColors'
 
 type MarkerPoint = {
   id: number
   lat: number
   lng: number
   label: string
-  roleLabel: string
+  scientificName?: string
   url: string
-  locationText?: string
-  positionalAccuracy?: number | null
+  color: string
 }
 
 const DEFAULT_CENTER: LatLngExpression = [20, 0]
 const DEFAULT_ZOOM = 2
 
-delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-})
-
 const getObservationLabel = (observation?: Observation) =>
   observation?.taxon.preferred_common_name || observation?.taxon.name || 'Unknown species'
 
-const getLocationLabel = (observation?: Observation) => {
-  if (!observation) return undefined
-  const parts = [
-    observation.place_town_name,
-    observation.place_county_name,
-    observation.place_state_name,
-    observation.place_country_name,
-  ]
-    .filter(Boolean)
-    .map((part) => part?.trim())
-
-  return parts.length ? parts.join(', ') : undefined
-}
+const getScientificName = (observation?: Observation) => observation?.taxon.name
 
 const extractCoordinates = (observation?: Observation) => {
   if (!observation) return null
@@ -110,16 +87,19 @@ interface Props {
   type: Ofv['value']
 }
 
-export const SearchResultMap = ({ results, partnerData, type }: Props) => {
+export const SearchResultMap = ({ results, partnerData }: Props) => {
   const markerPoints = useMemo<MarkerPoint[]>(() => {
-    const roleLabel = type === 'eaten' ? 'Predator' : 'Prey'
-
     return results.flatMap((result) => {
       const partner = partnerData[result.id]
       const coords = extractCoordinates(result) ?? extractCoordinates(partner)
       if (!coords) return []
 
       const label = getObservationLabel(result) || getObservationLabel(partner)
+      const scientificName = getScientificName(result) || getScientificName(partner)
+      const colorSource = result?.taxon?.iconic_taxon_name
+        ? result
+        : partner
+      const color = getCategoryColor(colorSource?.taxon?.iconic_taxon_name)
 
       return [
         {
@@ -127,14 +107,13 @@ export const SearchResultMap = ({ results, partnerData, type }: Props) => {
           lat: coords.lat,
           lng: coords.lng,
           label,
-          roleLabel,
+          scientificName,
           url: result.uri,
-          locationText: getLocationLabel(result) ?? getLocationLabel(partner),
-          positionalAccuracy: result.positional_accuracy ?? partner?.positional_accuracy,
+          color,
         },
       ]
     })
-  }, [partnerData, results, type])
+  }, [partnerData, results])
 
   const mapProps: MapContainerProps = useMemo(
     () => ({
@@ -178,18 +157,22 @@ export const SearchResultMap = ({ results, partnerData, type }: Props) => {
         <TileLayer {...tileLayerProps} />
         <MapBoundsHandler points={markerPoints} />
         {markerPoints.map((marker) => (
-          <Marker key={marker.id} position={[marker.lat, marker.lng]}>
+          <CircleMarker
+            key={marker.id}
+            center={[marker.lat, marker.lng]}
+            radius={8}
+            pathOptions={{
+              color: '#0f172a',
+              weight: 1,
+              fillColor: marker.color,
+              fillOpacity: 0.95,
+            }}
+          >
             <Popup>
               <div className="space-y-1">
                 <p className="font-semibold text-sm">{marker.label}</p>
-                <p className="text-xs text-slate-600">{marker.roleLabel}</p>
-                {marker.locationText && (
-                  <p className="text-xs text-slate-600">{marker.locationText}</p>
-                )}
-                {marker.positionalAccuracy != null && (
-                  <p className="text-[10px] text-slate-500">
-                    Positional accuracy: ~{marker.positionalAccuracy} m
-                  </p>
+                {marker.scientificName && (
+                  <p className="text-xs italic text-slate-600">{marker.scientificName}</p>
                 )}
                 <a
                   href={marker.url}
@@ -201,7 +184,7 @@ export const SearchResultMap = ({ results, partnerData, type }: Props) => {
                 </a>
               </div>
             </Popup>
-          </Marker>
+          </CircleMarker>
         ))}
       </MapContainer>
     </div>
