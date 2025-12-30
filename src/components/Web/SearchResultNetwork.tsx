@@ -64,9 +64,9 @@ export const SearchResultNetwork = (props: Props) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [isFullScreen, setIsFullScreen] = useState(false)
   const [showCommonNames, setShowCommonNames] = useState(true)
-  const [showScientificNames, setShowScientificNames] = useState(true)
+  const [showScientificNames, setShowScientificNames] = useState(false)
 
-  const formatNodeLabel = (node: NodeDatum) => {
+  const formatNodeLabelText = (node: NodeDatum) => {
     const parts: string[] = []
     const common = node.commonName || node.label
     const scientific = node.scientificName
@@ -231,7 +231,7 @@ export const SearchResultNetwork = (props: Props) => {
       measureContext.font = labelFont
     }
     nodes.forEach((node: NodeDatum) => {
-      const labelText = formatNodeLabel(node)
+      const labelText = formatNodeLabelText(node)
       const measured =
         measureContext?.measureText(labelText).width ||
         labelText.length * 7
@@ -299,7 +299,12 @@ export const SearchResultNetwork = (props: Props) => {
       .style('font', labelFont)
       .attr('fill', '#0f172a')
       .attr('dy', '0.35em')
-      .text((d: NodeDatum) => formatNodeLabel(d))
+      .attr('xml:space', 'preserve')
+
+    const updateLabels = () => {
+      labels.text((d: NodeDatum) => formatNodeLabelText(d))
+    }
+    updateLabels()
 
     const updateLabelVisibility = (scale: number) => {
       const minScale = 0.12
@@ -420,8 +425,9 @@ export const SearchResultNetwork = (props: Props) => {
       })
 
     zoomBehaviourRef.current = zoomBehaviour as any
-    svg.call(zoomBehaviour)
+      svg.call(zoomBehaviour)
     updateLabelVisibility(1)
+    updateLabels()
 
     const focusNode = (nodeDatum: NodeDatum) => {
       if (nodeDatum.x == null || nodeDatum.y == null) return

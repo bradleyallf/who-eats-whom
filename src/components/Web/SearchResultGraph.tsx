@@ -16,6 +16,27 @@ interface AggregatedStats {
   color: string
 }
 
+const ICONIC_COMMON_NAMES: Record<string, string> = {
+  Aves: 'Birds',
+  Mammalia: 'Mammals',
+  Reptilia: 'Reptiles',
+  Amphibia: 'Amphibians',
+  Actinopterygii: 'Ray-finned fishes',
+  Insecta: 'Insects',
+  Arachnida: 'Arachnids',
+  Mollusca: 'Molluscs',
+  Protozoa: 'Protozoans',
+  Animalia: 'Animals',
+  Fungi: 'Fungi',
+  Plantae: 'Plants',
+  Chromista: 'Chromists',
+}
+
+const formatTaxonLabel = (taxon: string) => {
+  const common = ICONIC_COMMON_NAMES[taxon]
+  return common ? `${common} (${taxon})` : taxon
+}
+
 const pickObservation = (
   _type: Ofv['value'],
   result: Observation,
@@ -84,7 +105,11 @@ export const SearchResultGraph = (props: Props) => {
 
   const maxObservations = totalObservations || 1
 
-  const yTicks = [maxObservations, Math.round(maxObservations / 2), 0]
+  const yTicks = Array.from(
+    new Set([maxObservations, Math.ceil(maxObservations / 2), 0])
+  )
+    .filter((tick) => tick >= 0)
+    .sort((a, b) => b - a)
 
   const summaryText = useMemo(() => {
     if (!totalObservations || !stats.length) return null
@@ -92,7 +117,7 @@ export const SearchResultGraph = (props: Props) => {
     const action = type === 'eaten' ? 'is eaten by' : 'eats'
     const fragments = stats.map(
       (item) =>
-        `${item.taxon} (${formatPercent(item.observations / totalObservations)})`
+        `${formatTaxonLabel(item.taxon)} (${formatPercent(item.observations / totalObservations)})`
     )
     return `${subject} ${action} ${fragments.join(', ')}.`
   }, [focalName, stats, totalObservations, type])
@@ -109,8 +134,8 @@ export const SearchResultGraph = (props: Props) => {
           </p>
         </header>
 
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-          <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm flex-1 overflow-hidden">
+        <div className="flex flex-col lg:flex-row lg:items-start gap-4">
+          <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm overflow-hidden flex-1 min-w-[320px]">
             <div className="flex items-center justify-center">
               <div className="relative h-80 w-64">
                 <div className="absolute bottom-0 left-0 h-full w-px bg-slate-200" />
@@ -151,12 +176,10 @@ export const SearchResultGraph = (props: Props) => {
                 </div>
               </div>
             </div>
-          </div>
 
-          <aside className="w-full lg:w-auto flex flex-col lg:flex-row gap-4">
-            <div className="rounded border border-slate-200 bg-white p-4 shadow-sm lg:min-w-[14rem]">
+            <div className="mt-6 rounded border border-slate-200 bg-slate-50 p-4">
               <h4 className="text-sm font-semibold text-slate-900 mb-3">Legend</h4>
-              <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {stats.map((item) => (
                   <div
                     key={`legend-${item.taxon}`}
@@ -166,24 +189,27 @@ export const SearchResultGraph = (props: Props) => {
                       className="inline-block h-3 w-3 rounded"
                       style={{ backgroundColor: item.color }}
                     />
-                    <span className="font-medium">{item.taxon}</span>
+                    <span className="font-medium">
+                      {formatTaxonLabel(item.taxon)}
+                    </span>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="rounded border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800 shadow-sm  lg:min-w-[16rem] max-w-2xl">
-              <h4 className="text-sm font-semibold text-slate-900 mb-2">Summary</h4>
-              {summaryText ? (
-                <p className="leading-snug">{summaryText}</p>
-              ) : (
-                <p className="text-slate-500">Not enough data for a summary.</p>
-              )}
-              <p className="mt-2 text-xs text-slate-500">
-                {stats.length} iconic taxa detected across {totalObservations}{' '}
-                observations.
-              </p>
-            </div>
-          </aside>
+          </div>
+
+          <div className="rounded border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800 shadow-sm lg:max-w-sm w-full">
+            <h4 className="text-sm font-semibold text-slate-900 mb-2">Summary</h4>
+            {summaryText ? (
+              <p className="leading-snug break-words">{summaryText}</p>
+            ) : (
+              <p className="text-slate-500">Not enough data for a summary.</p>
+            )}
+            <p className="mt-2 text-xs text-slate-500">
+              {stats.length} iconic {stats.length === 1 ? 'taxon' : 'taxa'} detected across {totalObservations}{' '}
+              observations.
+            </p>
+          </div>
         </div>
       </section>
     </div>

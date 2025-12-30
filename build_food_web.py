@@ -259,7 +259,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <div class=\"legend\" id=\"legend\"></div>
         <div class=\"label-options\">
           <label><input type=\"checkbox\" id=\"toggleCommon\" checked /> Common names</label>
-          <label><input type=\"checkbox\" id=\"toggleScientific\" checked /> Scientific names</label>
+          <label><input type=\"checkbox\" id=\"toggleScientific\" /> Scientific names</label>
         </div>
         <button id=\"downloadNetworkBtn\" class=\"download-btn\">Download network</button>
       </div>
@@ -281,7 +281,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       const tooltip = d3.select('#tooltip');
       const containerEl = document.getElementById('graph-container');
       let showCommonNames = true;
-      let showScientificNames = true;
+      let showScientificNames = false;
 
       const width = window.innerWidth;
       const height = window.innerHeight;

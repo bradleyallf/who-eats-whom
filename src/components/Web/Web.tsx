@@ -115,8 +115,6 @@ const observationFieldsParam = [
   'place_town_name',
 ].join(',')
 
-const buildQueryKey = (searchValue: string, placeId: number | null, placeLabel: string | null) =>
-  `${searchValue.toLowerCase()}|${placeId ?? ''}|${(placeLabel || '').toLowerCase()}`
 
 interface PlaceResult {
   id: number
@@ -162,7 +160,7 @@ export const Web = () => {
   const [locationSuggestions, setLocationSuggestions] = useState<PlaceResult[]>([])
   const [shouldDisplayResults, setShouldDisplayResults] = useState(false)
   const [selectedThumbnail, setSelectedThumbnail] = useState<string | null>(null)
-  const [lastQueryKey, setLastQueryKey] = useState<string | null>(null)
+  const [searchNonce, setSearchNonce] = useState(0)
 
   const [type, setType] = useState(types.eaten.key)
   const [selectedView, setSelectedView] = useState<
@@ -365,7 +363,16 @@ export const Web = () => {
   }, [locationInput, speciesInputReady])
 
   useEffect(() => {
-    if (!shouldDisplayResults || !data.length || isSearchLoading) return
+    if (!shouldDisplayResults || isSearchLoading) {
+      if (!shouldDisplayResults) {
+        setIsPartnerLoading(false)
+      }
+      return
+    }
+    if (!data.length) {
+      setIsPartnerLoading(false)
+      return
+    }
 
     // FILTER DATA
     const filteredData: Observation[] = []
@@ -444,6 +451,7 @@ export const Web = () => {
         if (!canceled) {
           setData(d.data.results || [])
           setIsSearchLoading(false)
+          setIsPartnerLoading(false)
           setShouldDisplayResults(true)
         }
       })
@@ -451,6 +459,7 @@ export const Web = () => {
         if (!canceled) {
           setData([])
           setIsSearchLoading(false)
+          setIsPartnerLoading(false)
           setShouldDisplayResults(true)
         }
       })
@@ -458,7 +467,7 @@ export const Web = () => {
     return () => {
       canceled = true
     }
-  }, [submittedSearch, selectedPlaceId])
+  }, [submittedSearch, selectedPlaceId, searchNonce])
 
   useEffect(() => {
     if (isDropdownOpen) {
@@ -544,6 +553,8 @@ export const Web = () => {
     setIsDropdownOpen(false)
     setIsLocationDropdownOpen(false)
     setPlaceLookupError(null)
+    // reset partner loading in case a previous search was mid-flight
+    setIsPartnerLoading(false)
 
     const rawSearch = explicitSearch ?? search
     const trimmedSearch = rawSearch.trim()
@@ -570,6 +581,14 @@ export const Web = () => {
     const trimmedLocation = (explicitLocation?.label ?? locationInput).trim()
     let resolvedId: number | null = explicitLocation?.id ?? null
     let resolvedLabel: string | null = explicitLocation?.label ?? null
+
+    // If location input was cleared, make sure we clear any prior place filters
+    if (!trimmedLocation) {
+      resolvedId = null
+      resolvedLabel = null
+      setSelectedPlaceId(null)
+      setSelectedPlaceLabel(null)
+    }
 
     try {
       if (trimmedLocation && explicitLocation === undefined) {
@@ -602,18 +621,10 @@ export const Web = () => {
       setIsResolvingPlace(false)
     }
 
-    const currentQueryKey = buildQueryKey(trimmedSearch, resolvedId, resolvedLabel)
-    if (currentQueryKey === lastQueryKey && shouldDisplayResults) {
-      setIsSearchLoading(false)
-      setIsPartnerLoading(false)
-      setShouldDisplayResults(true)
-      return
-    }
-
     setSelectedPlaceId(resolvedId)
     setSelectedPlaceLabel(resolvedLabel)
-    setLastQueryKey(currentQueryKey)
     setSubmittedSearch(trimmedSearch)
+    setSearchNonce((n) => n + 1)
     setShouldDisplayResults(true)
     setData([])
     setEatenByData([])
