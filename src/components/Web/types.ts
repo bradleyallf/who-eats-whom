@@ -1,0 +1,71 @@
+// Note: many of these are not a complete list of fields
+export interface User {
+  created_at: string
+  id: number
+  login: string
+  spam: boolean
+  suspended: boolean
+  uuid: string
+}
+
+export interface Photo {
+  attribution: string
+  flags: string[]
+  hidden: boolean
+  id: number
+  license_code: string
+  original_dimensions: { width: number; height: number }
+  url: string
+}
+
+export interface Ofv {
+  datatype: string
+  field_id: number
+  id: number
+  name: string
+  name_ci: string
+  user: User
+  user_id: number
+  uuid: string
+  value: 'eaten' | 'eater'
+  value_ci: string
+}
+
+export interface Taxon {
+  id: number
+  name: string
+  preferred_common_name?: string
+  iconic_taxon_name?: string
+
+  default_photo?: {
+    id: number
+    square_url?: string
+    url?: string
+    medium_url?: string
+    small_url?: string
+  }
+}
+
+export interface Observation {
+  community_taxon_id: number
+  created_at: string
+  description?: string
+  ofvs: Ofv[]
+  taxon: Taxon
+  id: number
+  uri: string
+  photos: Photo[]
+  uuid: string
+  place_country_name?: string
+  place_state_name?: string
+  place_county_name?: string
+  place_town_name?: string
+  geojson?: {
+    type: string
+    coordinates: [number, number]
+  }
+  location?: string
+  latitude?: number
+  longitude?: number
+  positional_accuracy?: number | null
+}

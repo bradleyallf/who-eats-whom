@@ -8,7 +8,8 @@ import {
   HowToSubmit,
   NotFound,
   WhoSearch,
-} from '@pages'
+  InteractiveFoodWeb
+} from './pages'
 
 export const routes: RouteObject[] = [
   {
@@ -34,6 +35,10 @@ export const routes: RouteObject[] = [
       {
         path: 'who-search',
         element: <WhoSearch />,
+      },
+      {
+        path: 'interactive-food-web',
+        element: <InteractiveFoodWeb />,
       },
       {
         path: '*',
