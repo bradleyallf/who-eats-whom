@@ -144,8 +144,22 @@ export const Web = () => {
   const [eatenByData, setEatenByData] = useState<Observation[]>()
 
   const [search, setSearch] = useState('')
+
+  // Actual search/what appears in searchbox
   const [submittedSearch, setSubmittedSearch] = useState('')
+  // NOT IMPLEMENTED YET -- search delay for api call after
+  const debouncedSubSearch = useDebounce(submittedSearch, 500)
+
+  // The taxonId from the API corresponding to a unique organism
+  const [selectedTaxonId, setSelectedTaxonId] = useState<number | null>(null)
+
+  // State representing the updated amount of results from API on each year update
+  // Added to handle year adjustments to properly display 0 results
+  const [updatedSearchLength, setUpdatedSearchLength] = useState(0)
+
+  // Year filter added by user
   const [yearFilter, setYearFilter] = useState<string>('')
+  const debouncedYearFilter = useDebounce(yearFilter, 500)
   const [suggestionSource, setSuggestionSource] = useState<TaxonSuggestion[]>(
     []
   )
@@ -190,6 +204,17 @@ export const Web = () => {
   const setPartnerLoadingFailed = () => {
     setIsPartnerLoading(false)
     setEatenByData([])
+  }
+
+  function useDebounce<T>(value: T, delay: number) {
+    const [debounced, setDebounced] = useState(value)
+
+    useEffect(() => {
+      const timeout = setTimeout(() => setDebounced(value), delay)
+      return () => clearTimeout(timeout)
+    }, [value, delay])
+
+    return debounced
   }
 
   const getPartnerData = async (ids: string[]) => {
@@ -291,6 +316,8 @@ export const Web = () => {
   // --------------------- ===
   //  EFFECTS
   // ---------------------
+
+  // Fetch suggestions when user types in the search box
   useEffect(() => {
     let canceled = false
     const query = search.trim()
@@ -333,6 +360,8 @@ export const Web = () => {
     }
   }, [search, selectedPlaceId])
 
+  // Fetch location suggestions when user types in the location box,
+  // but only if the species input is ready (to avoid unnecessary calls)
   useEffect(() => {
     let canceled = false
     const query = locationInput.trim()
@@ -381,6 +410,7 @@ export const Web = () => {
     }
   }, [locationInput, speciesInputReady])
 
+  // When new search data comes in, filter it (by eaten or eater) and fetch partner data
   useEffect(() => {
     if (!shouldDisplayResults || isSearchLoading) {
       if (!shouldDisplayResults) {
@@ -438,6 +468,8 @@ export const Web = () => {
     getPartnerData(observationIds)
   }, [data, type, shouldDisplayResults, selectedPlaceId, isSearchLoading])
 
+  // When search parameters change (search term, place filter, year filter), fetch new data from API
+  // MAIN SEARCH EFFECT / API CALL / QUERY
   useEffect(() => {
     let canceled = false
 
@@ -452,29 +484,47 @@ export const Web = () => {
       }
     }
 
+    if (yearFilter && !/^\d{4}$/.test(yearFilter)) {
+      setIsSearchLoading(false)
+      setData([])
+      return () => {
+        canceled = true
+      }
+    }
+
     setIsSearchLoading(true)
 
     const params = new URLSearchParams({
       project_id: String(projectId),
-      taxon_name: submittedSearch,
+      //taxon_name: submittedSearch,
       quality_grade: 'research',
       per_page: '200',
       fields: observationFieldsParam,
     })
+    if (selectedTaxonId) {
+      params.append('taxon_id', String(selectedTaxonId))
+    } else {
+      params.append('taxon_name', submittedSearch)
+    }
     if (selectedPlaceId) {
       params.append('place_id', String(selectedPlaceId))
     }
-    if (yearFilter) {
-      params.append('year', yearFilter)
+    if (yearFilter && /^\d{4}$/.test(yearFilter)) {
+      params.append('d1', `${yearFilter}-01-01`)
+      params.append('d2', `${yearFilter}-12-31`)
     }
 
     apiClient
       .get(`/observations?${params.toString()}`)
       .then((d) => {
-        if (!canceled) {
+        setUpdatedSearchLength(d.data.results?.length || 0)
+        if (!canceled && d.data?.results != 0) {
           setData(d.data.results || [])
           setIsSearchLoading(false)
           setIsPartnerLoading(false)
+          setShouldDisplayResults(true)
+        } else {
+          setIsSearchLoading(false)
           setShouldDisplayResults(true)
         }
       })
@@ -486,12 +536,12 @@ export const Web = () => {
           setShouldDisplayResults(true)
         }
       })
-
     return () => {
       canceled = true
     }
   }, [submittedSearch, selectedPlaceId, searchNonce, yearFilter])
 
+  // Close dropdown when clicking outside or pressing Escape/Enter
   useEffect(() => {
     if (isDropdownOpen) {
       const close = () => setIsDropdownOpen(false)
@@ -505,6 +555,7 @@ export const Web = () => {
     }
   }, [isDropdownOpen])
 
+  // Close location dropdown when clicking outside or pressing Escape
   useEffect(() => {
     if (!isLocationDropdownOpen) return
 
@@ -538,6 +589,7 @@ export const Web = () => {
   const handleInputChange = (evt: ChangeEvent<HTMLInputElement>) => {
     const { value } = evt.target
     setSearch(value)
+    setSelectedTaxonId(null)
     setIsDropdownOpen(value.trim().length >= 1)
     setSearchError(null)
     setShouldDisplayResults(false)
@@ -550,8 +602,12 @@ export const Web = () => {
 
   const handleYearChange = (evt: ChangeEvent<HTMLInputElement>) => {
     const { value } = evt.target
-    setYearFilter(value)
     setShouldDisplayResults(false)
+    if (/^\d*$/.test(value)) {
+      setYearFilter(value)
+    } else {
+      setYearFilter('')
+    }
   }
 
   const handleLocationChange = (evt: ChangeEvent<HTMLInputElement>) => {
@@ -576,12 +632,13 @@ export const Web = () => {
       | undefined,
     explicitSearch?: string,
     explicitThumbnail?: string | null,
-    explicitLocation?: { id: number | null; label: string | null },
-    explicitYear?: string | null
+    explicitLocation?: { id: number | null; label: string | null }
+    //explicitYear?: string | null
   ) => {
+    /*
     if (explicitYear != null && explicitYear != undefined) {
       setYearFilter(explicitYear)
-    }
+    }*/
     evt?.preventDefault()
     setIsDropdownOpen(false)
     setIsLocationDropdownOpen(false)
@@ -707,7 +764,7 @@ export const Web = () => {
 
   const filteredResults = shouldDisplayResults ? eatenByData || [] : []
 
-  const hasResults = filteredResults.length > 0
+  const hasResults = filteredResults.length > 0 && updatedSearchLength > 0
   const isResultsLoading = isSearchLoading || isPartnerLoading
 
   useEffect(() => {
@@ -879,6 +936,12 @@ export const Web = () => {
                   suggestions={suggestions}
                   onClick={(s) => {
                     setSearch(s.label)
+                    //setSearchSciName(s.sciName)
+                    //setSearchCommonName(s.label)
+                    const match = suggestionSource.find(
+                      (t) => (t.preferred_common_name || t.name) === s.label
+                    )
+                    setSelectedTaxonId(match?.id ?? null)
                     setSelectedThumbnail(s.thumbnail ?? null)
                     void handleSubmit(undefined, s.label, s.thumbnail ?? null)
                   }}
@@ -988,8 +1051,10 @@ export const Web = () => {
             } ${speciesLabel}${
               selectedPlaceLabel ? ` in ${selectedPlaceLabel}` : ''
             }:`}
-            totalObservations={filteredResults.length}
-            totalSpecies={totalSpecies}
+            totalObservations={
+              updatedSearchLength == 0 ? 0 : filteredResults.length
+            }
+            totalSpecies={updatedSearchLength == 0 ? 0 : totalSpecies}
             onDownload={downloadCsv}
             isDownloadDisabled={!aggregatedCounterparts.length}
             isLoading={isResultsLoading}
