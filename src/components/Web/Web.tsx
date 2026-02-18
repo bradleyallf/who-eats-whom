@@ -1050,7 +1050,7 @@ export const Web = () => {
               type === 'eaten' ? 'Who eats' : 'Who is eaten by'
             } ${speciesLabel}${
               selectedPlaceLabel ? ` in ${selectedPlaceLabel}` : ''
-            }:`}
+            }${yearFilter ? ` in ${yearFilter}` : ''}:`}
             totalObservations={
               updatedSearchLength == 0 ? 0 : filteredResults.length
             }
