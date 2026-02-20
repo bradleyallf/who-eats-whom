@@ -547,7 +547,6 @@ export const Web = () => {
   // Separate use effect for the about organism information
   useEffect(() => {
     setIsSearchLoading(true)
-    setShouldDisplayResults(false)
     apiClient
       .get(`/taxa/${selectedTaxonId?.toString()}`)
       .then((d) => {
@@ -560,7 +559,6 @@ export const Web = () => {
         setTaxonPhoto('')
       })
     setIsSearchLoading(false)
-    setShouldDisplayResults(true)
   }, [selectedTaxonId])
 
   // Close dropdown when clicking outside or pressing Escape/Enter
