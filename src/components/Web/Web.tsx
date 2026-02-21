@@ -665,6 +665,10 @@ export const Web = () => {
       return
     }
 
+    if (explicitSearch === undefined) {
+      setSelectedTaxonId(matchedSuggestion?.id ?? null)
+    }
+
     setSearchError(null)
     setIsSearchLoading(true)
 
@@ -749,6 +753,7 @@ export const Web = () => {
         photo?.square_url || photo?.small_url || photo?.url || undefined
       map.set(key, {
         label,
+        id: taxon.id,
         sciName: taxon.name,
         thumbnail,
       })
