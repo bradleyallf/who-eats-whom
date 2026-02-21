@@ -3,7 +3,6 @@ import React from 'react'
 export interface Suggestion {
   label: string
   id: number
-
   sciName?: string
   thumbnail?: string
 }
