@@ -152,6 +152,8 @@ export const Web = () => {
 
   // The taxonId from the API corresponding to a unique organism
   const [selectedTaxonId, setSelectedTaxonId] = useState<number | null>(null)
+  const [taxonDesc, setTaxonDesc] = useState<string>('')
+  const [taxonPhoto, setTaxonPhoto] = useState<string>('')
 
   // State representing the updated amount of results from API on each year update
   // Added to handle year adjustments to properly display 0 results
@@ -496,7 +498,6 @@ export const Web = () => {
 
     const params = new URLSearchParams({
       project_id: String(projectId),
-      //taxon_name: submittedSearch,
       quality_grade: 'research',
       per_page: '200',
       fields: observationFieldsParam,
@@ -536,10 +537,27 @@ export const Web = () => {
           setShouldDisplayResults(true)
         }
       })
+
     return () => {
       canceled = true
     }
   }, [submittedSearch, selectedPlaceId, searchNonce, yearFilter])
+
+  // Separate use effect for the about organism information
+  useEffect(() => {
+    setIsSearchLoading(true)
+    apiClient
+      .get(`/taxa/${selectedTaxonId?.toString()}`)
+      .then((d) => {
+        setTaxonDesc(d.data.results[0].wikipedia_summary)
+        setTaxonPhoto(d.data.results[0].default_photo.square_url)
+      })
+      .catch(() => {
+        setTaxonDesc('')
+        setTaxonPhoto('')
+      })
+    setIsSearchLoading(false)
+  }, [selectedTaxonId])
 
   // Close dropdown when clicking outside or pressing Escape/Enter
   useEffect(() => {
@@ -590,6 +608,8 @@ export const Web = () => {
     const { value } = evt.target
     setSearch(value)
     setSelectedTaxonId(null)
+    setTaxonDesc('')
+    setTaxonPhoto('')
     setIsDropdownOpen(value.trim().length >= 1)
     setSearchError(null)
     setShouldDisplayResults(false)
@@ -633,12 +653,7 @@ export const Web = () => {
     explicitSearch?: string,
     explicitThumbnail?: string | null,
     explicitLocation?: { id: number | null; label: string | null }
-    //explicitYear?: string | null
   ) => {
-    /*
-    if (explicitYear != null && explicitYear != undefined) {
-      setYearFilter(explicitYear)
-    }*/
     evt?.preventDefault()
     setIsDropdownOpen(false)
     setIsLocationDropdownOpen(false)
@@ -652,10 +667,15 @@ export const Web = () => {
 
     const lookupKey = trimmedSearch.toLowerCase()
     const matchedSuggestion = suggestionLookup.get(lookupKey)
+
     if (explicitThumbnail !== undefined) {
       setSelectedThumbnail(explicitThumbnail)
     } else {
       setSelectedThumbnail(matchedSuggestion?.thumbnail ?? null)
+    }
+
+    if (explicitSearch == undefined) {
+      setSelectedTaxonId(matchedSuggestion?.id ?? null)
     }
 
     if (trimmedSearch.length < 3) {
@@ -1050,6 +1070,8 @@ export const Web = () => {
       </div>
       {shouldDisplayResults && (
         <div className="col-12 mt-20 space-y-6">
+          <img src={taxonPhoto} />
+          <h1 dangerouslySetInnerHTML={{ __html: taxonDesc }} />
           <SearchResultSummary
             heading={`Search results for ${
               type === 'eaten' ? 'Who eats' : 'Who is eaten by'
