@@ -498,7 +498,6 @@ export const Web = () => {
 
     const params = new URLSearchParams({
       project_id: String(projectId),
-      //taxon_name: submittedSearch,
       quality_grade: 'research',
       per_page: '200',
       fields: observationFieldsParam,
@@ -552,7 +551,6 @@ export const Web = () => {
       .then((d) => {
         setTaxonDesc(d.data.results[0].wikipedia_summary)
         setTaxonPhoto(d.data.results[0].default_photo.square_url)
-        //console.log(d.data.results[0].default_photo.square_url)
       })
       .catch(() => {
         setTaxonDesc('')
@@ -655,12 +653,7 @@ export const Web = () => {
     explicitSearch?: string,
     explicitThumbnail?: string | null,
     explicitLocation?: { id: number | null; label: string | null }
-    //explicitYear?: string | null
   ) => {
-    /*
-    if (explicitYear != null && explicitYear != undefined) {
-      setYearFilter(explicitYear)
-    }*/
     evt?.preventDefault()
     setIsDropdownOpen(false)
     setIsLocationDropdownOpen(false)
@@ -674,14 +667,15 @@ export const Web = () => {
 
     const lookupKey = trimmedSearch.toLowerCase()
     const matchedSuggestion = suggestionLookup.get(lookupKey)
-    const match = suggestionSource.find(
-      (t) => (t.preferred_common_name || t.name) === lookupKey
-    )
 
     if (explicitThumbnail !== undefined) {
       setSelectedThumbnail(explicitThumbnail)
     } else {
       setSelectedThumbnail(matchedSuggestion?.thumbnail ?? null)
+    }
+
+    if (explicitSearch == undefined) {
+      setSelectedTaxonId(matchedSuggestion?.id ?? null)
     }
 
     if (trimmedSearch.length < 3) {
@@ -690,12 +684,6 @@ export const Web = () => {
       setSubmittedSearch('')
       return
     }
-
-    /**if (explicitSearch === undefined) {
-      setSelectedTaxonId(match?.id ?? null)
-    } else {
-      setSelectedTaxonId(null)
-    }*/
 
     setSearchError(null)
     setIsSearchLoading(true)
@@ -781,6 +769,7 @@ export const Web = () => {
         photo?.square_url || photo?.small_url || photo?.url || undefined
       map.set(key, {
         label,
+        id: taxon.id,
         sciName: taxon.name,
         thumbnail,
       })
