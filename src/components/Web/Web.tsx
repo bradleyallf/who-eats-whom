@@ -892,7 +892,7 @@ export const Web = () => {
   return (
     <>
       <div className="mt-12">
-        <div className="flex justify-center gap-2 w-full">
+        <div className="flex flex-col md:flex-row justify-center gap-2 w-full">
           {/* type selector */}
           <select
             className="form-select form-select-lg w-full max-w-[12rem]"
@@ -1075,7 +1075,7 @@ export const Web = () => {
             </div>
           ) : hasResults ? (
             <>
-              <div className="flex flex-wrap gap-2 text-sm">
+              <div className="flex flex-nowrap gap-2 text-sm overflow-x-auto">
                 {(
                   [
                     {
@@ -1112,7 +1112,7 @@ export const Web = () => {
                     onClick={() => {
                       if (!disabled) setSelectedView(key)
                     }}
-                    className={`flex items-center gap-2 rounded-md border px-4 py-2 transition-colors ${
+                    className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${
                       selectedView === key
                         ? 'bg-slate-900 text-white border-slate-900'
                         : 'bg-white text-slate-700 border-slate-200'
