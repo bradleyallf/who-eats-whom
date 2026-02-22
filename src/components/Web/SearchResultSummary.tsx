@@ -1,7 +1,7 @@
 import { MouseEventHandler, ReactNode } from 'react'
 
 interface Props {
-  heading: ReactNode
+  heading: ReactNode 
   totalObservations: number
   totalSpecies: number
   onDownload: MouseEventHandler<HTMLButtonElement>

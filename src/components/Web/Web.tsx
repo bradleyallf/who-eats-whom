@@ -1050,16 +1050,18 @@ export const Web = () => {
       </div>
       {shouldDisplayResults && (
         <div className="col-12 mt-20 space-y-6">
+          
           <SearchResultSummary
-            heading={`Search results for ${
-              type === 'eaten' ? 'Who eats' : 'Who is eaten by'
-            } ${speciesLabel}${
-              selectedPlaceLabel ? ` in ${selectedPlaceLabel}` : ''
-            }${yearFilter ? ` in ${yearFilter}` : ''}:`}
-            totalObservations={
-              updatedSearchLength == 0 ? 0 : filteredResults.length
+            heading={
+              <>
+                Search results for {type === 'eaten' ? 'Who eats' : 'Who is eaten by'}{' '}
+                <span className="text-orange-400 font-bold">{speciesLabel}</span> 
+                {selectedPlaceLabel ? ` in ${selectedPlaceLabel}` : ''}
+                {yearFilter ? ` in ${yearFilter}` : ''}:
+              </>
             }
-            totalSpecies={updatedSearchLength == 0 ? 0 : totalSpecies}
+            totalObservations={filteredResults.length}
+            totalSpecies={totalSpecies}
             onDownload={downloadCsv}
             isDownloadDisabled={!aggregatedCounterparts.length}
             isLoading={isResultsLoading}
