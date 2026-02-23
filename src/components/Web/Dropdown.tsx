@@ -2,6 +2,7 @@ import React from 'react'
 
 export interface Suggestion {
   label: string
+  id: number
   sciName?: string
   thumbnail?: string
 }
@@ -59,10 +60,7 @@ export const Dropdown = (props: Props) => {
                 <span>
                   {s.label}
                   {s.sciName && (
-                    <span className="text-gray-600 italic">
-                      {' '}
-                      ({s.sciName})
-                    </span>
+                    <span className="text-gray-600 italic"> ({s.sciName})</span>
                   )}
                 </span>
               </button>

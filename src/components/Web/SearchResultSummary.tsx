@@ -1,7 +1,7 @@
-import { MouseEventHandler } from 'react'
+import { MouseEventHandler, ReactNode } from 'react'
 
 interface Props {
-  heading: string
+  heading: ReactNode
   totalObservations: number
   totalSpecies: number
   onDownload: MouseEventHandler<HTMLButtonElement>
@@ -41,12 +41,10 @@ export const SearchResultSummary = (props: Props) => {
     )
 
   return (
-    <div className="sticky top-0 z-30">
-      <div className="flex flex-wrap items-center gap-6 rounded-md bg-slate-800 px-6 py-4 text-white shadow-lg">
-        <div className="flex min-w-0 flex-1 items-center gap-8">
-          <div className="min-w-0 max-w-full">
-            <p className="text-lg font-semibold leading-snug">{heading}</p>
-          </div>
+    <div>
+      <div className="flex flex-col gap-4 rounded-md bg-slate-800 px-6 py-4 text-white shadow-lg">
+        <p className="text-lg font-semibold leading-snug">{heading}</p>
+        <div className="flex flex-wrap items-center gap-4 sm:gap-6">
           <div className="flex items-end gap-6 text-right text-white">
             <div>
               <StatValue value={totalObservations} />
@@ -61,20 +59,20 @@ export const SearchResultSummary = (props: Props) => {
               </span>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={onDownload}
+            disabled={isDownloadDisabled || isLoading}
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition sm:w-auto ${
+              isDownloadDisabled || isLoading
+                ? 'bg-white/10 text-white/60 cursor-not-allowed'
+                : 'bg-white/10 text-white hover:bg-white/20'
+            }`}
+          >
+            <DownloadIcon />
+            Download CSV
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onDownload}
-          disabled={isDownloadDisabled || isLoading}
-          className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition ${
-            isDownloadDisabled || isLoading
-              ? 'bg-white/10 text-white/60 cursor-not-allowed'
-              : 'bg-white/10 text-white hover:bg-white/20'
-          }`}
-        >
-          <DownloadIcon />
-          Download CSV
-        </button>
       </div>
     </div>
   )
