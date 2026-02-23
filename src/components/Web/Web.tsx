@@ -152,6 +152,7 @@ export const Web = () => {
 
   // The taxonId from the API corresponding to a unique organism
   const [selectedTaxonId, setSelectedTaxonId] = useState<number | null>(null)
+  const [taxonDesc, setTaxonDesc] = useState<string | null>()
 
   // State representing the updated amount of results from API on each year update
   // Added to handle year adjustments to properly display 0 results
@@ -541,6 +542,20 @@ export const Web = () => {
     }
   }, [submittedSearch, selectedPlaceId, searchNonce, yearFilter])
 
+  // Separate use effect for the about organism information
+  useEffect(() => {
+    setIsSearchLoading(true)
+    apiClient
+      .get(`/taxa/${selectedTaxonId?.toString()}`)
+      .then((d) => {
+        setTaxonDesc(d.data.results[0].wikipedia_summary)
+      })
+      .catch(() => {
+        setTaxonDesc('')
+      })
+    setIsSearchLoading(false)
+  }, [selectedTaxonId])
+
   // Close dropdown when clicking outside or pressing Escape/Enter
   useEffect(() => {
     if (isDropdownOpen) {
@@ -590,6 +605,7 @@ export const Web = () => {
     const { value } = evt.target
     setSearch(value)
     setSelectedTaxonId(null)
+    setTaxonDesc('')
     setIsDropdownOpen(value.trim().length >= 1)
     setSearchError(null)
     setShouldDisplayResults(false)
@@ -1049,21 +1065,38 @@ export const Web = () => {
         </div>
       </div>
       {shouldDisplayResults && (
-        <div className="col-12 mt-20 space-y-6">
-          <SearchResultSummary
-            heading={`Search results for ${
-              type === 'eaten' ? 'Who eats' : 'Who is eaten by'
-            } ${speciesLabel}${
-              selectedPlaceLabel ? ` in ${selectedPlaceLabel}` : ''
-            }${yearFilter ? ` in ${yearFilter}` : ''}:`}
-            totalObservations={
-              updatedSearchLength == 0 ? 0 : filteredResults.length
-            }
-            totalSpecies={updatedSearchLength == 0 ? 0 : totalSpecies}
-            onDownload={downloadCsv}
-            isDownloadDisabled={!aggregatedCounterparts.length}
-            isLoading={isResultsLoading}
-          />
+        <div className="col-12 mt-6 space-y-6 sticky top-0">
+          <div className="flex justify-center items-start gap-6">
+            {selectedThumbnail && taxonDesc && (
+              <img
+                className="w-24 h-24 rounded"
+                src={selectedThumbnail}
+                alt=""
+              />
+            )}
+            {selectedThumbnail && taxonDesc && (
+              <h1
+                className="max-w-prose"
+                dangerouslySetInnerHTML={{ __html: taxonDesc }}
+              />
+            )}
+          </div>
+          {selectedThumbnail && taxonDesc && (
+            <SearchResultSummary
+              heading={`Search results for ${
+                type === 'eaten' ? 'Who eats' : 'Who is eaten by'
+              } ${speciesLabel}${
+                selectedPlaceLabel ? ` in ${selectedPlaceLabel}` : ''
+              }${yearFilter ? ` in ${yearFilter}` : ''}:`}
+              totalObservations={
+                updatedSearchLength == 0 ? 0 : filteredResults.length
+              }
+              totalSpecies={updatedSearchLength == 0 ? 0 : totalSpecies}
+              onDownload={downloadCsv}
+              isDownloadDisabled={!aggregatedCounterparts.length}
+              isLoading={isResultsLoading}
+            />
+          )}
 
           {isResultsLoading ? (
             <div className="p-4 border border-slate-200 rounded text-sm text-slate-700 flex items-center gap-3">
