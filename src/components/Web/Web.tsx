@@ -137,6 +137,9 @@ export const Web = () => {
   // --------------------- ===
   //  STATE
   // ---------------------
+  const taxonMetaSentinelRef = useRef<HTMLDivElement | null>(null)
+  const [isTaxonMetaCondensed, setIsTaxonMetaCondensed] = useState(false)
+
   const [data, setData] = useState<Observation[]>([])
   const [partnerData, setPartnerData] = useState<Record<string, Observation>>(
     {}
@@ -317,6 +320,18 @@ export const Web = () => {
   // --------------------- ===
   //  EFFECTS
   // ---------------------
+  useEffect(() => {
+    const sentinel = taxonMetaSentinelRef.current
+    if (!sentinel) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsTaxonMetaCondensed(!entry.isIntersecting),
+      { threshold: 0, rootMargin: '-8px 0px 0px 0px' }
+    )
+
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [shouldDisplayResults, selectedThumbnail, taxonDesc])
 
   // Fetch suggestions when user types in the search box
   useEffect(() => {
@@ -649,12 +664,7 @@ export const Web = () => {
     explicitSearch?: string,
     explicitThumbnail?: string | null,
     explicitLocation?: { id: number | null; label: string | null }
-    //explicitYear?: string | null
   ) => {
-    /*
-    if (explicitYear != null && explicitYear != undefined) {
-      setYearFilter(explicitYear)
-    }*/
     evt?.preventDefault()
     setIsDropdownOpen(false)
     setIsLocationDropdownOpen(false)
@@ -1065,18 +1075,31 @@ export const Web = () => {
         </div>
       </div>
       {shouldDisplayResults && (
-        <div className="col-12 mt-6 space-y-6 sticky top-0">
-          <div className="flex justify-center items-start gap-6">
+        <div className="col-8 mt-6 space-y-6">
+          <div ref={taxonMetaSentinelRef} aria-hidden className="h-px" />
+          <div
+            className={`sticky top-0 z-50 flex justify-center items-start gap-4 transition-all duration-50 ${
+              isTaxonMetaCondensed
+                ? 'bg-white/90 backdrop-blur border border-slate-200 rounded-lg px-3 py-2 shadow-sm'
+                : ''
+            }`}
+          >
             {selectedThumbnail && taxonDesc && (
               <img
-                className="w-24 h-24 rounded"
+                className={`rounded transition-all duration-50 ${
+                  isTaxonMetaCondensed ? `w-10 h-10` : `w-24 h-24 rounded`
+                }`}
                 src={selectedThumbnail}
                 alt=""
               />
             )}
             {selectedThumbnail && taxonDesc && (
               <h1
-                className="max-w-prose"
+                className={`transition-all duration-50 ${
+                  isTaxonMetaCondensed
+                    ? `text-sm max-w-xl max-h-10 overflow-hidden`
+                    : 'max-w-prose'
+                }`}
                 dangerouslySetInnerHTML={{ __html: taxonDesc }}
               />
             )}

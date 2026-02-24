@@ -10,12 +10,7 @@ interface Props {
 }
 
 const DownloadIcon = () => (
-  <svg
-    aria-hidden
-    viewBox="0 0 24 24"
-    className="h-4 w-4"
-    fill="currentColor"
-  >
+  <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
     <path d="M12 3a1 1 0 0 0-1 1v8.59l-2.3-2.3a1 1 0 0 0-1.4 1.42l4 4a1 1 0 0 0 1.4 0l4-4a1 1 0 1 0-1.4-1.42L13 12.59V4a1 1 0 0 0-1-1Zm-7 14a1 1 0 0 0 0 2h14a1 1 0 1 0 0-2H5Z" />
   </svg>
 )
@@ -41,7 +36,7 @@ export const SearchResultSummary = (props: Props) => {
     )
 
   return (
-    <div>
+    <div className="sticky fixed top-14 z-[9999]">
       <div className="flex flex-col gap-4 rounded-md bg-slate-800 px-6 py-4 text-white shadow-lg">
         <p className="text-lg font-semibold leading-snug">{heading}</p>
         <div className="flex flex-wrap items-center gap-4 sm:gap-6">
