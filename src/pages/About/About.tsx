@@ -153,7 +153,7 @@ export const About = () => {
           <p className="text-lg">
             In 2025, while a postdoc at North Carolina State University, Bradley connected with computer scientist <strong>Aditi Mallavarapu</strong>, who
             shared enthusiasm for the project and brought expertise in networks, databases, and software development. With her student <strong>Nikhil
-            Vasudeva</strong>, they rebuilt the site and launched the much improved version 2.0 of Who Eats Whom in late 2025.
+              Vasudeva</strong>, they rebuilt the site and launched the much improved version 2.0 of Who Eats Whom in late 2025.
           </p>
         </section>
       </article>
@@ -187,6 +187,15 @@ export const About = () => {
           We are so grateful to the iNaturalist community and staff, whose shared observations and digital infrastructure, respectively,
           make this project possible (note that Who Eats Whom is not formally affiliated with iNaturalist in any way).
         </p>
+      </section>
+      <section className="space-y-10">
+        <div className="space-y-3">
+          <h2 className="text-3xl font-semibold">Cite Our Data</h2>
+          <p className="text-sm font-semibold text-slate-700">If you use this data, please cite our paper:</p>
+          <p className="text-sm text-slate-700">Mallavarapu, A., Uzzo, S., Vasudeva, N., Dunn, R., Allf, B., “Who Eats Whom: Modeling
+            trophic interaction networks with large-scale, crowdsourced ecological data”. In: Proceedings of
+            The Fourteenth International Conference on Complex Networks and their Applications: COMPLEX NETWORKS 2025. Ed. by H. Cherifi, L. M. Rocha, C. Cherifi, and Z. Ertem. Springer. Dec. 2025.</p>
+        </div>
       </section>
     </section>
   )

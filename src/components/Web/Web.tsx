@@ -115,7 +115,6 @@ const observationFieldsParam = [
   'place_town_name',
 ].join(',')
 
-
 interface PlaceResult {
   id: number
   name: string
@@ -139,15 +138,36 @@ export const Web = () => {
   //  STATE
   // ---------------------
   const [data, setData] = useState<Observation[]>([])
-  const [partnerData, setPartnerData] = useState<Record<string, Observation>>({})
+  const [partnerData, setPartnerData] = useState<Record<string, Observation>>(
+    {}
+  )
   const [eatenByData, setEatenByData] = useState<Observation[]>()
 
   const [search, setSearch] = useState('')
+
+  // Actual search/what appears in searchbox
   const [submittedSearch, setSubmittedSearch] = useState('')
-  const [suggestionSource, setSuggestionSource] = useState<TaxonSuggestion[]>([])
+  // NOT IMPLEMENTED YET -- search delay for api call after
+  const debouncedSubSearch = useDebounce(submittedSearch, 500)
+
+  // The taxonId from the API corresponding to a unique organism
+  const [selectedTaxonId, setSelectedTaxonId] = useState<number | null>(null)
+
+  // State representing the updated amount of results from API on each year update
+  // Added to handle year adjustments to properly display 0 results
+  const [updatedSearchLength, setUpdatedSearchLength] = useState(0)
+
+  // Year filter added by user
+  const [yearFilter, setYearFilter] = useState<string>('')
+  const debouncedYearFilter = useDebounce(yearFilter, 500)
+  const [suggestionSource, setSuggestionSource] = useState<TaxonSuggestion[]>(
+    []
+  )
   const [locationInput, setLocationInput] = useState('')
   const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null)
-  const [selectedPlaceLabel, setSelectedPlaceLabel] = useState<string | null>(null)
+  const [selectedPlaceLabel, setSelectedPlaceLabel] = useState<string | null>(
+    null
+  )
   const [placeLookupError, setPlaceLookupError] = useState<string | null>(null)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [isResolvingPlace, setIsResolvingPlace] = useState(false)
@@ -155,11 +175,16 @@ export const Web = () => {
   const [isPartnerLoading, setIsPartnerLoading] = useState(false)
   const [isSuggestionLoading, setIsSuggestionLoading] = useState(false)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-  const [isLocationSuggestionLoading, setIsLocationSuggestionLoading] = useState(false)
+  const [isLocationSuggestionLoading, setIsLocationSuggestionLoading] =
+    useState(false)
   const [isLocationDropdownOpen, setIsLocationDropdownOpen] = useState(false)
-  const [locationSuggestions, setLocationSuggestions] = useState<PlaceResult[]>([])
+  const [locationSuggestions, setLocationSuggestions] = useState<PlaceResult[]>(
+    []
+  )
   const [shouldDisplayResults, setShouldDisplayResults] = useState(false)
-  const [selectedThumbnail, setSelectedThumbnail] = useState<string | null>(null)
+  const [selectedThumbnail, setSelectedThumbnail] = useState<string | null>(
+    null
+  )
   const [searchNonce, setSearchNonce] = useState(0)
 
   const [type, setType] = useState(types.eaten.key)
@@ -179,6 +204,17 @@ export const Web = () => {
   const setPartnerLoadingFailed = () => {
     setIsPartnerLoading(false)
     setEatenByData([])
+  }
+
+  function useDebounce<T>(value: T, delay: number) {
+    const [debounced, setDebounced] = useState(value)
+
+    useEffect(() => {
+      const timeout = setTimeout(() => setDebounced(value), delay)
+      return () => clearTimeout(timeout)
+    }, [value, delay])
+
+    return debounced
   }
 
   const getPartnerData = async (ids: string[]) => {
@@ -210,11 +246,15 @@ export const Web = () => {
     setIsPartnerLoading(false)
   }
 
-  const fetchPlaceCandidates = async (query: string): Promise<PlaceResult[]> => {
+  const fetchPlaceCandidates = async (
+    query: string
+  ): Promise<PlaceResult[]> => {
     const params = new URLSearchParams({ q: query, per_page: '10' })
 
     try {
-      const response = await apiClient.get(`/places/autocomplete?${params.toString()}`)
+      const response = await apiClient.get(
+        `/places/autocomplete?${params.toString()}`
+      )
       if (response.data?.results?.length) {
         return response.data.results
       }
@@ -252,29 +292,32 @@ export const Web = () => {
       'Local Administrative Area',
     ]
 
-    const prioritized = results
-      .slice()
-      .sort((a, b) => {
-        const priorityIndex = (place?: PlaceResult) => {
-          if (!place?.place_type_name) return priorities.length
-          const idx = priorities.findIndex(
-            (label) => label.toLowerCase() === place.place_type_name?.toLowerCase()
-          )
-          return idx === -1 ? priorities.length : idx
-        }
-        return priorityIndex(a) - priorityIndex(b)
-      })
+    const prioritized = results.slice().sort((a, b) => {
+      const priorityIndex = (place?: PlaceResult) => {
+        if (!place?.place_type_name) return priorities.length
+        const idx = priorities.findIndex(
+          (label) =>
+            label.toLowerCase() === place.place_type_name?.toLowerCase()
+        )
+        return idx === -1 ? priorities.length : idx
+      }
+      return priorityIndex(a) - priorityIndex(b)
+    })
 
     return (
       prioritized.find((place) =>
         place.display_name?.toLowerCase().includes(normalized)
-      ) || prioritized[0] || null
+      ) ||
+      prioritized[0] ||
+      null
     )
   }
 
   // --------------------- ===
   //  EFFECTS
   // ---------------------
+
+  // Fetch suggestions when user types in the search box
   useEffect(() => {
     let canceled = false
     const query = search.trim()
@@ -317,6 +360,8 @@ export const Web = () => {
     }
   }, [search, selectedPlaceId])
 
+  // Fetch location suggestions when user types in the location box,
+  // but only if the species input is ready (to avoid unnecessary calls)
   useEffect(() => {
     let canceled = false
     const query = locationInput.trim()
@@ -330,7 +375,10 @@ export const Web = () => {
       }
     }
 
-    if (selectedPlaceLabel && query.toLowerCase() === selectedPlaceLabel.toLowerCase()) {
+    if (
+      selectedPlaceLabel &&
+      query.toLowerCase() === selectedPlaceLabel.toLowerCase()
+    ) {
       setLocationSuggestions([])
       setIsLocationSuggestionLoading(false)
       setIsLocationDropdownOpen(false)
@@ -362,6 +410,7 @@ export const Web = () => {
     }
   }, [locationInput, speciesInputReady])
 
+  // When new search data comes in, filter it (by eaten or eater) and fetch partner data
   useEffect(() => {
     if (!shouldDisplayResults || isSearchLoading) {
       if (!shouldDisplayResults) {
@@ -391,8 +440,10 @@ export const Web = () => {
     const partnerD: Record<string, Observation> = {}
     filteredData.forEach((result) => {
       result.ofvs.forEach((ofv) => {
-        
-        if (ofv.field_id === partnerFieldId && ofv.value.includes('/observations/')) {
+        if (
+          ofv.field_id === partnerFieldId &&
+          ofv.value.includes('/observations/')
+        ) {
           /*
           console.log("...--->" + ofv.value)
           const i = ofv.value.lastIndexOf('/')
@@ -401,8 +452,8 @@ export const Web = () => {
           console.log(observationId)
           observationIds.push(observationId)
           */
-        
-         const matches = ofv.value.match(/\/observations\/(\d+)/g)
+
+          const matches = ofv.value.match(/\/observations\/(\d+)/g)
           if (matches) {
             matches.forEach((match) => {
               const observationId = match.split('/').pop()!
@@ -410,7 +461,6 @@ export const Web = () => {
               observationIds.push(observationId)
             })
           }
-          
         }
       })
     })
@@ -418,6 +468,8 @@ export const Web = () => {
     getPartnerData(observationIds)
   }, [data, type, shouldDisplayResults, selectedPlaceId, isSearchLoading])
 
+  // When search parameters change (search term, place filter, year filter), fetch new data from API
+  // MAIN SEARCH EFFECT / API CALL / QUERY
   useEffect(() => {
     let canceled = false
 
@@ -432,26 +484,47 @@ export const Web = () => {
       }
     }
 
+    if (yearFilter && !/^\d{4}$/.test(yearFilter)) {
+      setIsSearchLoading(false)
+      setData([])
+      return () => {
+        canceled = true
+      }
+    }
+
     setIsSearchLoading(true)
 
     const params = new URLSearchParams({
       project_id: String(projectId),
-      taxon_name: submittedSearch,
+      //taxon_name: submittedSearch,
       quality_grade: 'research',
       per_page: '200',
       fields: observationFieldsParam,
     })
+    if (selectedTaxonId) {
+      params.append('taxon_id', String(selectedTaxonId))
+    } else {
+      params.append('taxon_name', submittedSearch)
+    }
     if (selectedPlaceId) {
       params.append('place_id', String(selectedPlaceId))
+    }
+    if (yearFilter && /^\d{4}$/.test(yearFilter)) {
+      params.append('d1', `${yearFilter}-01-01`)
+      params.append('d2', `${yearFilter}-12-31`)
     }
 
     apiClient
       .get(`/observations?${params.toString()}`)
       .then((d) => {
-        if (!canceled) {
+        setUpdatedSearchLength(d.data.results?.length || 0)
+        if (!canceled && d.data?.results != 0) {
           setData(d.data.results || [])
           setIsSearchLoading(false)
           setIsPartnerLoading(false)
+          setShouldDisplayResults(true)
+        } else {
+          setIsSearchLoading(false)
           setShouldDisplayResults(true)
         }
       })
@@ -463,12 +536,12 @@ export const Web = () => {
           setShouldDisplayResults(true)
         }
       })
-
     return () => {
       canceled = true
     }
-  }, [submittedSearch, selectedPlaceId, searchNonce])
+  }, [submittedSearch, selectedPlaceId, searchNonce, yearFilter])
 
+  // Close dropdown when clicking outside or pressing Escape/Enter
   useEffect(() => {
     if (isDropdownOpen) {
       const close = () => setIsDropdownOpen(false)
@@ -482,6 +555,7 @@ export const Web = () => {
     }
   }, [isDropdownOpen])
 
+  // Close location dropdown when clicking outside or pressing Escape
   useEffect(() => {
     if (!isLocationDropdownOpen) return
 
@@ -515,6 +589,7 @@ export const Web = () => {
   const handleInputChange = (evt: ChangeEvent<HTMLInputElement>) => {
     const { value } = evt.target
     setSearch(value)
+    setSelectedTaxonId(null)
     setIsDropdownOpen(value.trim().length >= 1)
     setSearchError(null)
     setShouldDisplayResults(false)
@@ -522,6 +597,16 @@ export const Web = () => {
     if (value.trim().length < 3) {
       setSuggestionSource([])
       setIsSuggestionLoading(false)
+    }
+  }
+
+  const handleYearChange = (evt: ChangeEvent<HTMLInputElement>) => {
+    const { value } = evt.target
+    setShouldDisplayResults(false)
+    if (/^\d*$/.test(value)) {
+      setYearFilter(value)
+    } else {
+      setYearFilter('')
     }
   }
 
@@ -548,7 +633,12 @@ export const Web = () => {
     explicitSearch?: string,
     explicitThumbnail?: string | null,
     explicitLocation?: { id: number | null; label: string | null }
+    //explicitYear?: string | null
   ) => {
+    /*
+    if (explicitYear != null && explicitYear != undefined) {
+      setYearFilter(explicitYear)
+    }*/
     evt?.preventDefault()
     setIsDropdownOpen(false)
     setIsLocationDropdownOpen(false)
@@ -573,6 +663,10 @@ export const Web = () => {
       setShouldDisplayResults(false)
       setSubmittedSearch('')
       return
+    }
+
+    if (explicitSearch === undefined) {
+      setSelectedTaxonId(matchedSuggestion?.id ?? null)
     }
 
     setSearchError(null)
@@ -614,7 +708,9 @@ export const Web = () => {
       setIsSearchLoading(false)
       setIsPartnerLoading(false)
       setIsResolvingPlace(false)
-      setPlaceLookupError('Unable to resolve that location. Please try another.')
+      setPlaceLookupError(
+        'Unable to resolve that location. Please try another.'
+      )
       setShouldDisplayResults(false)
       return
     } finally {
@@ -639,12 +735,10 @@ export const Web = () => {
     setPlaceLookupError(null)
     setIsLocationDropdownOpen(false)
     setShouldDisplayResults(false)
-    void handleSubmit(
-      undefined,
-      search,
-      selectedThumbnail,
-      { id: place.id, label: label || null }
-    )
+    void handleSubmit(undefined, search, selectedThumbnail, {
+      id: place.id,
+      label: label || null,
+    })
   }
 
   const suggestionLookup = useMemo(() => {
@@ -659,6 +753,7 @@ export const Web = () => {
         photo?.square_url || photo?.small_url || photo?.url || undefined
       map.set(key, {
         label,
+        id: taxon.id,
         sciName: taxon.name,
         thumbnail,
       })
@@ -668,15 +763,13 @@ export const Web = () => {
 
   const suggestions = useMemo(
     () =>
-      search.trim().length >= 3
-        ? Array.from(suggestionLookup.values())
-        : [],
+      search.trim().length >= 3 ? Array.from(suggestionLookup.values()) : [],
     [search, suggestionLookup]
   )
 
   const filteredResults = shouldDisplayResults ? eatenByData || [] : []
 
-  const hasResults = filteredResults.length > 0
+  const hasResults = filteredResults.length > 0 && updatedSearchLength > 0
   const isResultsLoading = isSearchLoading || isPartnerLoading
 
   useEffect(() => {
@@ -790,7 +883,8 @@ export const Web = () => {
     URL.revokeObjectURL(url)
   }
 
-  const speciesLabel = submittedSearch || search.trim() || 'the selected species'
+  const speciesLabel =
+    submittedSearch || search.trim() || 'the selected species'
 
   // --------------------- ===
   //  RENDER
@@ -798,7 +892,7 @@ export const Web = () => {
   return (
     <>
       <div className="mt-12">
-        <div className="flex justify-center gap-2 w-full">
+        <div className="flex flex-col md:flex-row justify-center gap-2 w-full">
           {/* type selector */}
           <select
             className="form-select form-select-lg w-full max-w-[12rem]"
@@ -830,7 +924,11 @@ export const Web = () => {
               )}
               <div className="relative flex-1" style={{ zIndex: 2 }}>
                 <input
-                  className={`w-full ${searchError ? 'border-red-500 text-red-600 placeholder:text-red-500' : ''}`}
+                  className={`w-full ${
+                    searchError
+                      ? 'border-red-500 text-red-600 placeholder:text-red-500'
+                      : ''
+                  }`}
                   type="text"
                   onChange={handleInputChange}
                   value={search}
@@ -843,6 +941,12 @@ export const Web = () => {
                   suggestions={suggestions}
                   onClick={(s) => {
                     setSearch(s.label)
+                    //setSearchSciName(s.sciName)
+                    //setSearchCommonName(s.label)
+                    const match = suggestionSource.find(
+                      (t) => (t.preferred_common_name || t.name) === s.label
+                    )
+                    setSelectedTaxonId(match?.id ?? null)
                     setSelectedThumbnail(s.thumbnail ?? null)
                     void handleSubmit(undefined, s.label, s.thumbnail ?? null)
                   }}
@@ -868,35 +972,68 @@ export const Web = () => {
                     onChange={handleLocationChange}
                     placeholder="Location"
                     onFocus={() => {
-                      if (speciesInputReady && locationInput.trim().length >= 3) {
+                      if (
+                        speciesInputReady &&
+                        locationInput.trim().length >= 3
+                      ) {
                         setIsLocationDropdownOpen(true)
                       }
                     }}
                   />
-                  {(isLocationDropdownOpen || isLocationSuggestionLoading) && speciesInputReady && (
-                    <div className="absolute mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-60 overflow-y-auto text-sm">
-                      {isLocationSuggestionLoading ? (
-                        <p className="p-2 text-slate-500 italic">Loading...</p>
-                      ) : locationSuggestions.length ? (
-                        locationSuggestions.map((place) => (
-                          <button
-                            type="button"
-                            key={place.id}
-                            onClick={() => handleLocationSuggestionClick(place)}
-                            className="w-full text-left px-3 py-2 hover:bg-slate-100"
-                          >
-                            <span className="block font-medium">{place.display_name || place.name}</span>
-                            {place.place_type_name && (
-                              <span className="text-xs text-slate-500">{place.place_type_name}</span>
-                            )}
-                          </button>
-                        ))
-                      ) : (
-                        <p className="p-2 text-slate-500 italic">No matching locations</p>
-                      )}
-                    </div>
-                  )}
+
+                  {(isLocationDropdownOpen || isLocationSuggestionLoading) &&
+                    speciesInputReady && (
+                      <div className="absolute mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-60 overflow-y-auto text-sm">
+                        {isLocationSuggestionLoading ? (
+                          <p className="p-2 text-slate-500 italic">
+                            Loading...
+                          </p>
+                        ) : locationSuggestions.length ? (
+                          locationSuggestions.map((place) => (
+                            <button
+                              type="button"
+                              key={place.id}
+                              onClick={() =>
+                                handleLocationSuggestionClick(place)
+                              }
+                              className="w-full text-left px-3 py-2 hover:bg-slate-100"
+                            >
+                              <span className="block font-medium">
+                                {place.display_name || place.name}
+                              </span>
+                              {place.place_type_name && (
+                                <span className="text-xs text-slate-500">
+                                  {place.place_type_name}
+                                </span>
+                              )}
+                            </button>
+                          ))
+                        ) : (
+                          <p className="p-2 text-slate-500 italic">
+                            No matching locations
+                          </p>
+                        )}
+                      </div>
+                    )}
                 </div>
+                <div className="flex items-stretch gap-2">
+                  <input
+                    className="w-full"
+                    type="text"
+                    value={yearFilter}
+                    onChange={handleYearChange}
+                    placeholder="Year"
+                    onFocus={() => {
+                      if (
+                        speciesInputReady &&
+                        locationInput.trim().length >= 3
+                      ) {
+                        setIsLocationDropdownOpen(true)
+                      }
+                    }}
+                  />
+                </div>
+
                 <button
                   type="submit"
                   disabled={isResolvingPlace}
@@ -918,9 +1055,11 @@ export const Web = () => {
               type === 'eaten' ? 'Who eats' : 'Who is eaten by'
             } ${speciesLabel}${
               selectedPlaceLabel ? ` in ${selectedPlaceLabel}` : ''
-            }:`}
-            totalObservations={filteredResults.length}
-            totalSpecies={totalSpecies}
+            }${yearFilter ? ` in ${yearFilter}` : ''}:`}
+            totalObservations={
+              updatedSearchLength == 0 ? 0 : filteredResults.length
+            }
+            totalSpecies={updatedSearchLength == 0 ? 0 : totalSpecies}
             onDownload={downloadCsv}
             isDownloadDisabled={!aggregatedCounterparts.length}
             isLoading={isResultsLoading}
@@ -928,18 +1067,41 @@ export const Web = () => {
 
           {isResultsLoading ? (
             <div className="p-4 border border-slate-200 rounded text-sm text-slate-700 flex items-center gap-3">
-              <span className="inline-block h-5 w-5 rounded-full border-2 border-slate-300 border-t-slate-700 animate-spin" aria-label="Loading results" />
+              <span
+                className="inline-block h-5 w-5 rounded-full border-2 border-slate-300 border-t-slate-700 animate-spin"
+                aria-label="Loading results"
+              />
               <span>Loading results…</span>
             </div>
           ) : hasResults ? (
             <>
-              <div className="flex flex-wrap gap-2 text-sm">
+              <div className="flex flex-nowrap gap-2 text-sm overflow-x-auto">
                 {(
                   [
-                    { key: 'grid', label: 'Grid', disabled: false, icon: IconGrid },
-                    { key: 'graph', label: 'Graph', disabled: false, icon: IconGraph },
-                    { key: 'network', label: 'Network', disabled: false, icon: IconNetwork },
-                    { key: 'map', label: 'Map', disabled: false, icon: IconMap },
+                    {
+                      key: 'grid',
+                      label: 'Grid',
+                      disabled: false,
+                      icon: IconGrid,
+                    },
+                    {
+                      key: 'graph',
+                      label: 'Graph',
+                      disabled: false,
+                      icon: IconGraph,
+                    },
+                    {
+                      key: 'network',
+                      label: 'Network',
+                      disabled: false,
+                      icon: IconNetwork,
+                    },
+                    {
+                      key: 'map',
+                      label: 'Map',
+                      disabled: false,
+                      icon: IconMap,
+                    },
                   ] as const
                 ).map(({ key, label, disabled, icon: Icon }) => (
                   <button
@@ -950,7 +1112,7 @@ export const Web = () => {
                     onClick={() => {
                       if (!disabled) setSelectedView(key)
                     }}
-                    className={`flex items-center gap-2 rounded-md border px-4 py-2 transition-colors ${
+                    className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${
                       selectedView === key
                         ? 'bg-slate-900 text-white border-slate-900'
                         : 'bg-white text-slate-700 border-slate-200'
