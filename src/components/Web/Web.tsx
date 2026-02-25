@@ -320,17 +320,33 @@ export const Web = () => {
   // --------------------- ===
   //  EFFECTS
   // ---------------------
+
+  // Checks what position on the screen the scroll is, determining if there should be a condensed
+  // Taxon description or not
   useEffect(() => {
     const sentinel = taxonMetaSentinelRef.current
     if (!sentinel) return
 
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsTaxonMetaCondensed(!entry.isIntersecting),
-      { threshold: 0, rootMargin: '-8px 0px 0px 0px' }
-    )
+    const collapseThreshold = 8
+    const expandThreshold = 28
 
-    observer.observe(sentinel)
-    return () => observer.disconnect()
+    const updateCondensedState = () => {
+      const top = sentinel.getBoundingClientRect().top
+      setIsTaxonMetaCondensed((prev) => {
+        if (!prev && top <= collapseThreshold) return true
+        if (prev && top >= expandThreshold) return false
+        return prev
+      })
+    }
+
+    updateCondensedState()
+    window.addEventListener('scroll', updateCondensedState, { passive: true })
+    window.addEventListener('resize', updateCondensedState)
+
+    return () => {
+      window.removeEventListener('scroll', updateCondensedState)
+      window.removeEventListener('resize', updateCondensedState)
+    }
   }, [shouldDisplayResults, selectedThumbnail, taxonDesc])
 
   // Fetch suggestions when user types in the search box
@@ -1078,7 +1094,7 @@ export const Web = () => {
         <div className="col-8 mt-6 space-y-6">
           <div ref={taxonMetaSentinelRef} aria-hidden className="h-px" />
           <div
-            className={`sticky top-0 z-50 flex justify-center items-start gap-4 transition-all duration-50 ${
+            className={`sticky top-0 z-50 flex justify-center items-start gap-4 transition-[background-color,border-color,box-shadow,padding] duration-300 ease-out ${
               isTaxonMetaCondensed
                 ? 'bg-white/90 backdrop-blur border border-slate-200 rounded-lg px-3 py-2 shadow-sm'
                 : ''
@@ -1086,7 +1102,7 @@ export const Web = () => {
           >
             {selectedThumbnail && taxonDesc && (
               <img
-                className={`rounded transition-all duration-50 ${
+                className={`rounded transition-[width,height,border-radius] duration-300 ease-out ${
                   isTaxonMetaCondensed ? `w-10 h-10` : `w-24 h-24 rounded`
                 }`}
                 src={selectedThumbnail}
@@ -1095,9 +1111,9 @@ export const Web = () => {
             )}
             {selectedThumbnail && taxonDesc && (
               <h1
-                className={`transition-all duration-50 ${
+                className={`transition-[font-size,line-height,opacity] duration-300 ease-out ${
                   isTaxonMetaCondensed
-                    ? `text-sm max-w-xl max-h-10 overflow-hidden`
+                    ? `text-sm leading-snug max-w-xl max-h-10 overflow-hidden opacity-95`
                     : 'max-w-prose'
                 }`}
                 dangerouslySetInnerHTML={{ __html: taxonDesc }}
