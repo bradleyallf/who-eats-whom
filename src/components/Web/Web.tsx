@@ -100,6 +100,7 @@ const types: Record<
 const partnerFieldId = 12796
 const projectId = 41347
 const eaterEatenFieldId = 12795 // in the ofvs array
+// RESPONSE PROPERTIES SEARCHING FOR
 const observationFieldsParam = [
   'id',
   'uri',
@@ -109,6 +110,8 @@ const observationFieldsParam = [
   'geojson',
   'location',
   'positional_accuracy',
+  //'license',
+  //'license_code',
   'place_country_name',
   'place_state_name',
   'place_county_name',
@@ -235,6 +238,8 @@ export const Web = () => {
       quality_grade: 'research',
       per_page: '200',
       fields: observationFieldsParam,
+      photo_licensed: 'true',
+      licensed: 'true',
     })
     if (selectedPlaceId) {
       params.append('place_id', String(selectedPlaceId))
@@ -462,7 +467,7 @@ export const Web = () => {
       // "eater" or "organism being eaten" (previously "thing being eaten")
       if (!typeObj) return
       //console.log('id:',d.id, 'typeObj:', typeObj.value, 'type:', type, 'typeValue:', types[type].value)
-
+      //console.log('licensed: ' + d.license_code)
       if (getLastLetter(typeObj.value) === getLastLetter(types[type].value)) {
         filteredData.push(d)
       }
@@ -532,6 +537,8 @@ export const Web = () => {
       quality_grade: 'research',
       per_page: '200',
       fields: observationFieldsParam,
+      photo_licensed: 'true',
+      licensed: 'true',
     })
     if (selectedTaxonId) {
       params.append('taxon_id', String(selectedTaxonId))
@@ -545,6 +552,9 @@ export const Web = () => {
       params.append('d1', `${yearFilter}-01-01`)
       params.append('d2', `${yearFilter}-12-31`)
     }
+    console.log(
+      'https://api.inaturalist.org/v1/observations/' + params.toString()
+    )
 
     apiClient
       .get(`/observations?${params.toString()}`)
@@ -576,6 +586,7 @@ export const Web = () => {
   // Separate use effect for the about organism information
   useEffect(() => {
     setIsSearchLoading(true)
+    if (!selectedTaxonId) return
     apiClient
       .get(`/taxa/${selectedTaxonId?.toString()}`)
       .then((d) => {
