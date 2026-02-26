@@ -64,7 +64,7 @@ export const SearchResultGrid = (props: Props) => {
                   {displayObservation.photos?.[i].license_code}
                 </h2>
                 <div className="absolute top-2 left-10 opacity-0 group-hover:opacity-100 transition bg-black text-white text-xs px-2 py-1 rounded">
-                  Small hover text
+                  {displayObservation.photos?.[i].attribution}
                 </div>
               </div>
             </div>
