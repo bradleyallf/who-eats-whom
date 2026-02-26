@@ -552,9 +552,6 @@ export const Web = () => {
       params.append('d1', `${yearFilter}-01-01`)
       params.append('d2', `${yearFilter}-12-31`)
     }
-    console.log(
-      'https://api.inaturalist.org/v1/observations/' + params.toString()
-    )
 
     apiClient
       .get(`/observations?${params.toString()}`)
