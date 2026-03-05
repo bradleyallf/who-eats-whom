@@ -100,6 +100,7 @@ const types: Record<
 const partnerFieldId = 12796
 const projectId = 41347
 const eaterEatenFieldId = 12795 // in the ofvs array
+// RESPONSE PROPERTIES SEARCHING FOR
 const observationFieldsParam = [
   'id',
   'uri',
@@ -109,6 +110,8 @@ const observationFieldsParam = [
   'geojson',
   'location',
   'positional_accuracy',
+  //'license',
+  //'license_code',
   'place_country_name',
   'place_state_name',
   'place_county_name',
@@ -137,6 +140,9 @@ export const Web = () => {
   // --------------------- ===
   //  STATE
   // ---------------------
+  const taxonMetaSentinelRef = useRef<HTMLDivElement | null>(null)
+  const [isTaxonMetaCondensed, setIsTaxonMetaCondensed] = useState(false)
+
   const [data, setData] = useState<Observation[]>([])
   const [partnerData, setPartnerData] = useState<Record<string, Observation>>(
     {}
@@ -152,6 +158,7 @@ export const Web = () => {
 
   // The taxonId from the API corresponding to a unique organism
   const [selectedTaxonId, setSelectedTaxonId] = useState<number | null>(null)
+  const [taxonDesc, setTaxonDesc] = useState<string | null>()
 
   // State representing the updated amount of results from API on each year update
   // Added to handle year adjustments to properly display 0 results
@@ -231,6 +238,8 @@ export const Web = () => {
       quality_grade: 'research',
       per_page: '200',
       fields: observationFieldsParam,
+      photo_licensed: 'true',
+      licensed: 'true',
     })
     if (selectedPlaceId) {
       params.append('place_id', String(selectedPlaceId))
@@ -316,6 +325,34 @@ export const Web = () => {
   // --------------------- ===
   //  EFFECTS
   // ---------------------
+
+  // Checks what position on the screen the scroll is, determining if there should be a condensed
+  // Taxon description or not
+  useEffect(() => {
+    const sentinel = taxonMetaSentinelRef.current
+    if (!sentinel) return
+
+    const collapseThreshold = 8
+    const expandThreshold = 28
+
+    const updateCondensedState = () => {
+      const top = sentinel.getBoundingClientRect().top
+      setIsTaxonMetaCondensed((prev) => {
+        if (!prev && top <= collapseThreshold) return true
+        if (prev && top >= expandThreshold) return false
+        return prev
+      })
+    }
+
+    updateCondensedState()
+    window.addEventListener('scroll', updateCondensedState, { passive: true })
+    window.addEventListener('resize', updateCondensedState)
+
+    return () => {
+      window.removeEventListener('scroll', updateCondensedState)
+      window.removeEventListener('resize', updateCondensedState)
+    }
+  }, [shouldDisplayResults, selectedThumbnail, taxonDesc])
 
   // Fetch suggestions when user types in the search box
   useEffect(() => {
@@ -430,7 +467,7 @@ export const Web = () => {
       // "eater" or "organism being eaten" (previously "thing being eaten")
       if (!typeObj) return
       //console.log('id:',d.id, 'typeObj:', typeObj.value, 'type:', type, 'typeValue:', types[type].value)
-
+      //console.log('licensed: ' + d.license_code)
       if (getLastLetter(typeObj.value) === getLastLetter(types[type].value)) {
         filteredData.push(d)
       }
@@ -500,6 +537,8 @@ export const Web = () => {
       quality_grade: 'research',
       per_page: '200',
       fields: observationFieldsParam,
+      photo_licensed: 'true',
+      licensed: 'true',
     })
     if (selectedTaxonId) {
       params.append('taxon_id', String(selectedTaxonId))
@@ -540,6 +579,21 @@ export const Web = () => {
       canceled = true
     }
   }, [submittedSearch, selectedPlaceId, searchNonce, yearFilter])
+
+  // Separate use effect for the about organism information
+  useEffect(() => {
+    setIsSearchLoading(true)
+    if (!selectedTaxonId) return
+    apiClient
+      .get(`/taxa/${selectedTaxonId?.toString()}`)
+      .then((d) => {
+        setTaxonDesc(d.data.results[0].wikipedia_summary)
+      })
+      .catch(() => {
+        setTaxonDesc('')
+      })
+    setIsSearchLoading(false)
+  }, [selectedTaxonId])
 
   // Close dropdown when clicking outside or pressing Escape/Enter
   useEffect(() => {
@@ -590,6 +644,7 @@ export const Web = () => {
     const { value } = evt.target
     setSearch(value)
     setSelectedTaxonId(null)
+    setTaxonDesc('')
     setIsDropdownOpen(value.trim().length >= 1)
     setSearchError(null)
     setShouldDisplayResults(false)
@@ -633,12 +688,7 @@ export const Web = () => {
     explicitSearch?: string,
     explicitThumbnail?: string | null,
     explicitLocation?: { id: number | null; label: string | null }
-    //explicitYear?: string | null
   ) => {
-    /*
-    if (explicitYear != null && explicitYear != undefined) {
-      setYearFilter(explicitYear)
-    }*/
     evt?.preventDefault()
     setIsDropdownOpen(false)
     setIsLocationDropdownOpen(false)
@@ -870,9 +920,8 @@ export const Web = () => {
     const location = selectedPlaceLabel ? sanitize(selectedPlaceLabel) : null
     const prefix = type === 'eaten' ? 'Who Eats' : 'Who is Eaten By'
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const fileName = `${prefix} ${species}${
-      location ? ` - ${location}` : ''
-    } ${timestamp}.csv`
+    const fileName = `${prefix} ${species}${location ? ` - ${location}` : ''
+      } ${timestamp}.csv`
 
     const link = document.createElement('a')
     link.href = url
@@ -895,7 +944,7 @@ export const Web = () => {
         <div className="flex flex-col md:flex-row justify-center gap-2 w-full">
           {/* type selector */}
           <select
-            className="form-select form-select-lg w-full max-w-[12rem]"
+            className="hidden md:block form-select form-select-lg w-full max-w-[12rem]"
             value={type}
             onChange={(evt) => {
               const { value } = evt.target
@@ -911,10 +960,25 @@ export const Web = () => {
 
           {/* search box + dropdown */}
           <form
-            className="w-full max-w-3xl flex items-stretch gap-2"
+            className="w-full max-w-3xl flex flex-col gap-2 md:flex-row md:items-stretch"
             onSubmit={handleSubmit}
           >
             <div className="flex flex-1 items-center gap-2">
+              {/* Adjusting Who Eats bar for smaller screens */}
+              <select
+                className="md:hidden form-select form-select-lg w-full max-w-[12rem] shrink-0"
+                value={type}
+                onChange={(evt) => {
+                  const { value } = evt.target
+                  if (value === 'eaten' || value === 'eater') setType(value)
+                }}
+              >
+                {(Object.keys(types) as Array<Ofv['value']>).map((key) => (
+                  <option value={key} key={key}>
+                    {types[key].label}
+                  </option>
+                ))}
+              </select>
               {selectedThumbnail && (
                 <img
                   src={selectedThumbnail}
@@ -924,11 +988,10 @@ export const Web = () => {
               )}
               <div className="relative flex-1" style={{ zIndex: 2 }}>
                 <input
-                  className={`w-full ${
-                    searchError
+                  className={`w-full ${searchError
                       ? 'border-red-500 text-red-600 placeholder:text-red-500'
                       : ''
-                  }`}
+                    }`}
                   type="text"
                   onChange={handleInputChange}
                   value={search}
@@ -953,15 +1016,15 @@ export const Web = () => {
                 />
               </div>
             </div>
-            <div className="flex flex-col gap-1 items-start">
+            <div className="flex flex-col gap-1 items-start w-full md:w-auto">
               {placeLookupError && (
                 <p className="text-sm text-red-600 max-w-[16rem] leading-snug">
                   {placeLookupError}
                 </p>
               )}
-              <div className="flex items-stretch gap-2">
+              <div className="flex items-stretch gap-2 w-full md:w-auto">
                 <div
-                  className="relative w-full max-w-xs"
+                  className="relative w-full md:max-w-xs"
                   style={{ zIndex: 1 }}
                   ref={locationDropdownRef}
                 >
@@ -1037,9 +1100,8 @@ export const Web = () => {
                 <button
                   type="submit"
                   disabled={isResolvingPlace}
-                  className={`px-4 bg-orange-500 text-white font-semibold rounded ${
-                    isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
-                  }`}
+                  className={`px-4 bg-orange-500 text-white font-semibold rounded ${isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
+                    }`}
                 >
                   {isResolvingPlace ? 'Loading...' : 'Go'}
                 </button>
@@ -1049,21 +1111,51 @@ export const Web = () => {
         </div>
       </div>
       {shouldDisplayResults && (
-        <div className="col-12 mt-20 space-y-6">
-          <SearchResultSummary
-            heading={`Search results for ${
-              type === 'eaten' ? 'Who eats' : 'Who is eaten by'
-            } ${speciesLabel}${
-              selectedPlaceLabel ? ` in ${selectedPlaceLabel}` : ''
-            }${yearFilter ? ` in ${yearFilter}` : ''}:`}
-            totalObservations={
-              updatedSearchLength == 0 ? 0 : filteredResults.length
-            }
-            totalSpecies={updatedSearchLength == 0 ? 0 : totalSpecies}
-            onDownload={downloadCsv}
-            isDownloadDisabled={!aggregatedCounterparts.length}
-            isLoading={isResultsLoading}
-          />
+        <div className="col-8 mt-6 space-y-6">
+          <div ref={taxonMetaSentinelRef} aria-hidden className="h-px" />
+          <div
+            className={`sticky top-0 z-50 flex justify-center items-start gap-4 transition-[background-color,border-color,box-shadow,padding] duration-300 ease-out ${
+              isTaxonMetaCondensed
+                ? 'bg-white/90 backdrop-blur border border-slate-200 rounded-lg px-3 py-2 shadow-sm'
+                : ''
+            }`}
+          >
+            {selectedThumbnail && taxonDesc && (
+              <img
+                className={`rounded transition-[width,height,border-radius] duration-300 ease-out ${
+                  isTaxonMetaCondensed ? `w-10 h-10` : `w-24 h-24 rounded`
+                }`}
+                src={selectedThumbnail}
+                alt=""
+              />
+            )}
+            {selectedThumbnail && taxonDesc && (
+              <h1
+                className={`transition-[font-size,line-height,opacity] duration-300 ease-out ${
+                  isTaxonMetaCondensed
+                    ? `text-sm leading-snug max-w-xl max-h-10 overflow-hidden opacity-95`
+                    : 'max-w-prose'
+                }`}
+                dangerouslySetInnerHTML={{ __html: taxonDesc }}
+              />
+            )}
+          </div>
+          {selectedThumbnail && taxonDesc && (
+            <SearchResultSummary
+              heading={`Search results for ${
+                type === 'eaten' ? 'Who eats' : 'Who is eaten by'
+              } ${speciesLabel}${
+                selectedPlaceLabel ? ` in ${selectedPlaceLabel}` : ''
+              }${yearFilter ? ` in ${yearFilter}` : ''}:`}
+              totalObservations={
+                updatedSearchLength == 0 ? 0 : filteredResults.length
+              }
+              totalSpecies={updatedSearchLength == 0 ? 0 : totalSpecies}
+              onDownload={downloadCsv}
+              isDownloadDisabled={!aggregatedCounterparts.length}
+              isLoading={isResultsLoading}
+            />
+          )}
 
           {isResultsLoading ? (
             <div className="p-4 border border-slate-200 rounded text-sm text-slate-700 flex items-center gap-3">
@@ -1112,11 +1204,10 @@ export const Web = () => {
                     onClick={() => {
                       if (!disabled) setSelectedView(key)
                     }}
-                    className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${
-                      selectedView === key
+                    className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${selectedView === key
                         ? 'bg-slate-900 text-white border-slate-900'
                         : 'bg-white text-slate-700 border-slate-200'
-                    } ${disabled ? 'cursor-not-allowed opacity-70' : ''}`}
+                      } ${disabled ? 'cursor-not-allowed opacity-70' : ''}`}
                   >
                     <Icon active={selectedView === key && !disabled} />
                     <span>{label}</span>
