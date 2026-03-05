@@ -920,9 +920,8 @@ export const Web = () => {
     const location = selectedPlaceLabel ? sanitize(selectedPlaceLabel) : null
     const prefix = type === 'eaten' ? 'Who Eats' : 'Who is Eaten By'
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const fileName = `${prefix} ${species}${
-      location ? ` - ${location}` : ''
-    } ${timestamp}.csv`
+    const fileName = `${prefix} ${species}${location ? ` - ${location}` : ''
+      } ${timestamp}.csv`
 
     const link = document.createElement('a')
     link.href = url
@@ -945,7 +944,7 @@ export const Web = () => {
         <div className="flex flex-col md:flex-row justify-center gap-2 w-full">
           {/* type selector */}
           <select
-            className="form-select form-select-lg w-full max-w-[12rem]"
+            className="hidden md:block form-select form-select-lg w-full max-w-[12rem]"
             value={type}
             onChange={(evt) => {
               const { value } = evt.target
@@ -961,10 +960,25 @@ export const Web = () => {
 
           {/* search box + dropdown */}
           <form
-            className="w-full max-w-3xl flex items-stretch gap-2"
+            className="w-full max-w-3xl flex flex-col gap-2 md:flex-row md:items-stretch"
             onSubmit={handleSubmit}
           >
             <div className="flex flex-1 items-center gap-2">
+              {/* Adjusting Who Eats bar for smaller screens */}
+              <select
+                className="md:hidden form-select form-select-lg w-full max-w-[12rem] shrink-0"
+                value={type}
+                onChange={(evt) => {
+                  const { value } = evt.target
+                  if (value === 'eaten' || value === 'eater') setType(value)
+                }}
+              >
+                {(Object.keys(types) as Array<Ofv['value']>).map((key) => (
+                  <option value={key} key={key}>
+                    {types[key].label}
+                  </option>
+                ))}
+              </select>
               {selectedThumbnail && (
                 <img
                   src={selectedThumbnail}
@@ -974,11 +988,10 @@ export const Web = () => {
               )}
               <div className="relative flex-1" style={{ zIndex: 2 }}>
                 <input
-                  className={`w-full ${
-                    searchError
+                  className={`w-full ${searchError
                       ? 'border-red-500 text-red-600 placeholder:text-red-500'
                       : ''
-                  }`}
+                    }`}
                   type="text"
                   onChange={handleInputChange}
                   value={search}
@@ -1003,15 +1016,15 @@ export const Web = () => {
                 />
               </div>
             </div>
-            <div className="flex flex-col gap-1 items-start">
+            <div className="flex flex-col gap-1 items-start w-full md:w-auto">
               {placeLookupError && (
                 <p className="text-sm text-red-600 max-w-[16rem] leading-snug">
                   {placeLookupError}
                 </p>
               )}
-              <div className="flex items-stretch gap-2">
+              <div className="flex items-stretch gap-2 w-full md:w-auto">
                 <div
-                  className="relative w-full max-w-xs"
+                  className="relative w-full md:max-w-xs"
                   style={{ zIndex: 1 }}
                   ref={locationDropdownRef}
                 >
@@ -1087,9 +1100,8 @@ export const Web = () => {
                 <button
                   type="submit"
                   disabled={isResolvingPlace}
-                  className={`px-4 bg-orange-500 text-white font-semibold rounded ${
-                    isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
-                  }`}
+                  className={`px-4 bg-orange-500 text-white font-semibold rounded ${isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
+                    }`}
                 >
                   {isResolvingPlace ? 'Loading...' : 'Go'}
                 </button>
@@ -1192,11 +1204,10 @@ export const Web = () => {
                     onClick={() => {
                       if (!disabled) setSelectedView(key)
                     }}
-                    className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${
-                      selectedView === key
+                    className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${selectedView === key
                         ? 'bg-slate-900 text-white border-slate-900'
                         : 'bg-white text-slate-700 border-slate-200'
-                    } ${disabled ? 'cursor-not-allowed opacity-70' : ''}`}
+                      } ${disabled ? 'cursor-not-allowed opacity-70' : ''}`}
                   >
                     <Icon active={selectedView === key && !disabled} />
                     <span>{label}</span>
