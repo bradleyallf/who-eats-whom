@@ -33,11 +33,12 @@ export const SearchResultGrid = (props: Props) => {
         const displayObservation = result
         const commonName = getCommonName(displayObservation)
         const scientificName = getScientificName(displayObservation)
-        let i = 0
-        while (!displayObservation.photos?.[i].license_code) {
-          i++
-        }
-        const photoUrl = displayObservation.photos?.[i]?.url
+        const licensedPhoto = displayObservation.photos?.find(
+          (photo) => photo.license_code
+        )
+        const photoUrl = licensedPhoto?.url
+        const licenseCode = licensedPhoto?.license_code
+        const attribution = licensedPhoto?.attribution
         const roleLabel = type === 'eater' ? 'Prey' : 'Predator'
 
         return (
@@ -59,20 +60,26 @@ export const SearchResultGrid = (props: Props) => {
                 className="h-full w-full object-cover"
                 loading="lazy"
               />
-              <div className="bg-black p-2 rounded-full cursor-pointer group">
-                <h2 className="bg-black/60 absolute top-2 text-white p-1 rounded">
-                  {displayObservation.photos?.[i].license_code}
-                </h2>
-                <div className="absolute top-2 left-10 opacity-0 group-hover:opacity-100 transition bg-black text-white text-xs px-2 py-1 rounded">
-                  {displayObservation.photos?.[i].attribution}
-                </div>
-              </div>
             </div>
             <div className="p-4">
               <span className="sr-only">{roleLabel}</span>
-              <p className="text-base font-semibold text-slate-900">
-                {commonName || 'Unknown species'}
-              </p>
+              <div className="flex items-center justify-start gap-2">
+                <p className="text-base font-semibold text-slate-900">
+                  {commonName || 'Unknown species'}
+                </p>
+
+                <div
+                  className="ml-auto inline-flex items-center gap-1 text-xs text-slate-600 shrink-0"
+                  title={attribution}
+                >
+                  <span
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white-100 text-slate-900 font-semibold border border-black"
+                    aria-hidden="true"
+                  >
+                    CC
+                  </span>
+                </div>
+              </div>
               {scientificName && (
                 <p className="text-sm italic text-slate-600">
                   {scientificName}

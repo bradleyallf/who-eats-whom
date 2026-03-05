@@ -158,6 +158,7 @@ export const Web = () => {
 
   // The taxonId from the API corresponding to a unique organism
   const [selectedTaxonId, setSelectedTaxonId] = useState<number | null>(null)
+  const [isTaxonMetaLoading, setIsTaxonMetaLoading] = useState(false)
   const [taxonDesc, setTaxonDesc] = useState<string | null>()
 
   // State representing the updated amount of results from API on each year update
@@ -582,17 +583,24 @@ export const Web = () => {
 
   // Separate use effect for the about organism information
   useEffect(() => {
-    setIsSearchLoading(true)
-    if (!selectedTaxonId) return
+    if (!selectedTaxonId) {
+      setTaxonDesc('')
+      setIsTaxonMetaLoading(false)
+      return
+    }
+
+    setIsTaxonMetaLoading(true)
     apiClient
-      .get(`/taxa/${selectedTaxonId?.toString()}`)
+      .get(`/taxa/${selectedTaxonId.toString()}`)
       .then((d) => {
         setTaxonDesc(d.data.results[0].wikipedia_summary)
       })
       .catch(() => {
         setTaxonDesc('')
       })
-    setIsSearchLoading(false)
+      .finally(() => {
+        setIsTaxonMetaLoading(false)
+      })
   }, [selectedTaxonId])
 
   // Close dropdown when clicking outside or pressing Escape/Enter
@@ -736,6 +744,19 @@ export const Web = () => {
 
     try {
       if (trimmedLocation && explicitLocation === undefined) {
+        setSearchError(null)
+        // show summary area immediately
+        setShouldDisplayResults(true)
+
+        // start loading immediately
+        setIsSearchLoading(true)
+        setIsPartnerLoading(false)
+
+        // clear stale prior results immediately
+        setData([])
+        setEatenByData([])
+        setPartnerData({})
+        setUpdatedSearchLength(0)
         setIsResolvingPlace(true)
         const place = await resolvePlace(trimmedLocation)
         resolvedId = place?.id ?? null
@@ -771,10 +792,10 @@ export const Web = () => {
     setSelectedPlaceLabel(resolvedLabel)
     setSubmittedSearch(trimmedSearch)
     setSearchNonce((n) => n + 1)
-    setShouldDisplayResults(true)
-    setData([])
-    setEatenByData([])
-    setPartnerData({})
+    //setShouldDisplayResults(true)
+    //setData([])
+    //setEatenByData([])
+    //setPartnerData({})
   }
 
   const handleLocationSuggestionClick = (place: PlaceResult) => {
@@ -1098,9 +1119,10 @@ export const Web = () => {
           </form>
         </div>
       </div>
-      {shouldDisplayResults && (
+      {(shouldDisplayResults || isTaxonMetaLoading) && (
         <div className="col-8 mt-6 space-y-6">
           <div ref={taxonMetaSentinelRef} aria-hidden className="h-px" />
+
           <div
             className={`sticky top-0 z-50 flex justify-center items-start gap-4 transition-[background-color,border-color,box-shadow,padding] duration-300 ease-out ${
               isTaxonMetaCondensed
@@ -1108,27 +1130,59 @@ export const Web = () => {
                 : ''
             }`}
           >
-            {selectedThumbnail && taxonDesc && (
-              <img
-                className={`rounded transition-[width,height,border-radius] duration-300 ease-out ${
-                  isTaxonMetaCondensed ? `w-10 h-10` : `w-24 h-24 rounded`
-                }`}
-                src={selectedThumbnail}
-                alt=""
-              />
-            )}
-            {selectedThumbnail && taxonDesc && (
-              <h1
-                className={`transition-[font-size,line-height,opacity] duration-300 ease-out ${
-                  isTaxonMetaCondensed
-                    ? `text-sm leading-snug max-w-xl max-h-10 overflow-hidden opacity-95`
-                    : 'max-w-prose'
-                }`}
-                dangerouslySetInnerHTML={{ __html: taxonDesc }}
-              />
+            {isTaxonMetaLoading ? (
+              <div className="flex items-center gap-3 rounded-lg bg-white/90 px-4 py-3 border border-slate-200 shadow-sm">
+                <span
+                  className="inline-block h-10 w-10 rounded-full border-4 border-slate-300 border-t-slate-800 animate-spin"
+                  aria-label="Loading species details"
+                />
+                <span className="text-sm text-slate-700">
+                  Loading species details...
+                </span>
+              </div>
+            ) : (
+              <>
+                {selectedThumbnail && taxonDesc && (
+                  <img
+                    className={`rounded transition-[width,height,border-radius] duration-300 ease-out ${
+                      isTaxonMetaCondensed ? `w-10 h-10` : `w-24 h-24 rounded`
+                    }`}
+                    src={selectedThumbnail}
+                    alt=""
+                  />
+                )}
+                {selectedThumbnail && taxonDesc && (
+                  <h1
+                    className={`transition-[font-size,line-height,opacity] duration-300 ease-out ${
+                      isTaxonMetaCondensed
+                        ? `text-sm leading-snug max-w-xl max-h-10 overflow-hidden opacity-95`
+                        : 'max-w-prose'
+                    }`}
+                    dangerouslySetInnerHTML={{ __html: taxonDesc }}
+                  />
+                )}
+              </>
             )}
           </div>
-          {selectedThumbnail && taxonDesc && (
+          {selectedTaxonId ? (
+            selectedThumbnail &&
+            taxonDesc && (
+              <SearchResultSummary
+                heading={`Search results for ${
+                  type === 'eaten' ? 'Who eats' : 'Who is eaten by'
+                } ${speciesLabel}${
+                  selectedPlaceLabel ? ` in ${selectedPlaceLabel}` : ''
+                }${yearFilter ? ` in ${yearFilter}` : ''}:`}
+                totalObservations={
+                  updatedSearchLength == 0 ? 0 : filteredResults.length
+                }
+                totalSpecies={updatedSearchLength == 0 ? 0 : totalSpecies}
+                onDownload={downloadCsv}
+                isDownloadDisabled={!aggregatedCounterparts.length}
+                isLoading={isResultsLoading}
+              />
+            )
+          ) : (
             <SearchResultSummary
               heading={`Search results for ${
                 type === 'eaten' ? 'Who eats' : 'Who is eaten by'
