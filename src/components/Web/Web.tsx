@@ -98,25 +98,10 @@ const types: Record<
 }
 
 const partnerFieldId = 12796
-const projectId = 41347
 const eaterEatenFieldId = 12795 // in the ofvs array
-const observationFieldsParam = [
-  'id',
-  'uri',
-  'ofvs',
-  'taxon',
-  'photos',
-  'geojson',
-  'location',
-  'positional_accuracy',
-  'place_country_name',
-  'place_state_name',
-  'place_county_name',
-  'place_town_name',
-].join(',')
 
 interface PlaceResult {
-  id: number
+  id: string
   name: string
   display_name?: string
   place_type_name?: string
@@ -164,13 +149,11 @@ export const Web = () => {
     []
   )
   const [locationInput, setLocationInput] = useState('')
-  const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null)
   const [selectedPlaceLabel, setSelectedPlaceLabel] = useState<string | null>(
     null
   )
   const [placeLookupError, setPlaceLookupError] = useState<string | null>(null)
   const [searchError, setSearchError] = useState<string | null>(null)
-  const [isResolvingPlace, setIsResolvingPlace] = useState(false)
   const [isSearchLoading, setIsSearchLoading] = useState(false)
   const [isPartnerLoading, setIsPartnerLoading] = useState(false)
   const [isSuggestionLoading, setIsSuggestionLoading] = useState(false)
@@ -227,18 +210,13 @@ export const Web = () => {
     }
 
     const params = new URLSearchParams({
-      id: uniqueIds.join(','),
-      quality_grade: 'research',
-      per_page: '200',
-      fields: observationFieldsParam,
+      ids: uniqueIds.join(','),
+      limit: '200',
     })
-    if (selectedPlaceId) {
-      params.append('place_id', String(selectedPlaceId))
-    }
 
     try {
-      const d = await apiClient.get(`/observations?${params.toString()}`)
-      setEatenByData(d.data.results)
+      const d = await apiClient.get(`/v1/interactions?${params.toString()}`)
+      setEatenByData(d.data.results || [])
     } catch (error) {
       setPartnerLoadingFailed()
       return
@@ -249,68 +227,17 @@ export const Web = () => {
   const fetchPlaceCandidates = async (
     query: string
   ): Promise<PlaceResult[]> => {
-    const params = new URLSearchParams({ q: query, per_page: '10' })
+    const params = new URLSearchParams({ q: query, limit: '10' })
 
     try {
       const response = await apiClient.get(
-        `/places/autocomplete?${params.toString()}`
+        `/v1/locations/search?${params.toString()}`
       )
-      if (response.data?.results?.length) {
-        return response.data.results
-      }
-    } catch (error) {
-      console.error('Place autocomplete failed, falling back to /places', error)
-    }
-
-    try {
-      const response = await apiClient.get(`/places?${params.toString()}`)
       return response.data?.results || []
     } catch (error) {
-      console.error('Fallback place lookup failed', error)
+      console.error('Location search failed', error)
       throw error
     }
-  }
-
-  const resolvePlace = async (query: string): Promise<PlaceResult | null> => {
-    const results = await fetchPlaceCandidates(query)
-    if (!results.length) return null
-
-    const normalized = query.trim().toLowerCase()
-    const exact = results.find(
-      (place) =>
-        place.display_name?.toLowerCase() === normalized ||
-        place.name?.toLowerCase() === normalized
-    )
-    if (exact) return exact
-
-    const priorities = [
-      'Country',
-      'State',
-      'Province',
-      'County',
-      'Region',
-      'Local Administrative Area',
-    ]
-
-    const prioritized = results.slice().sort((a, b) => {
-      const priorityIndex = (place?: PlaceResult) => {
-        if (!place?.place_type_name) return priorities.length
-        const idx = priorities.findIndex(
-          (label) =>
-            label.toLowerCase() === place.place_type_name?.toLowerCase()
-        )
-        return idx === -1 ? priorities.length : idx
-      }
-      return priorityIndex(a) - priorityIndex(b)
-    })
-
-    return (
-      prioritized.find((place) =>
-        place.display_name?.toLowerCase().includes(normalized)
-      ) ||
-      prioritized[0] ||
-      null
-    )
   }
 
   // --------------------- ===
@@ -334,17 +261,20 @@ export const Web = () => {
 
     const params = new URLSearchParams({
       q: query,
-      per_page: '25',
+      limit: '25',
     })
-    if (selectedPlaceId) {
-      params.append('place_id', String(selectedPlaceId))
-    }
 
     apiClient
-      .get(`/taxa/autocomplete?${params.toString()}`)
+      .get(`/v1/species/search?${params.toString()}`)
       .then((d) => {
         if (!canceled) {
-          setSuggestionSource(d.data.results || [])
+          const mapped =
+            d.data.results?.map((result: any) => ({
+              id: result.taxon_id,
+              name: result.scientific_name,
+              preferred_common_name: result.common_name,
+            })) || []
+          setSuggestionSource(mapped)
           setIsSuggestionLoading(false)
         }
       })
@@ -358,7 +288,7 @@ export const Web = () => {
     return () => {
       canceled = true
     }
-  }, [search, selectedPlaceId])
+  }, [search])
 
   // Fetch location suggestions when user types in the location box,
   // but only if the species input is ready (to avoid unnecessary calls)
@@ -466,7 +396,7 @@ export const Web = () => {
     })
     setPartnerData(partnerD)
     getPartnerData(observationIds)
-  }, [data, type, shouldDisplayResults, selectedPlaceId, isSearchLoading])
+  }, [data, type, shouldDisplayResults, isSearchLoading])
 
   // When search parameters change (search term, place filter, year filter), fetch new data from API
   // MAIN SEARCH EFFECT / API CALL / QUERY
@@ -495,27 +425,25 @@ export const Web = () => {
     setIsSearchLoading(true)
 
     const params = new URLSearchParams({
-      project_id: String(projectId),
-      //taxon_name: submittedSearch,
-      quality_grade: 'research',
-      per_page: '200',
-      fields: observationFieldsParam,
+      limit: '200',
     })
     if (selectedTaxonId) {
       params.append('taxon_id', String(selectedTaxonId))
     } else {
       params.append('taxon_name', submittedSearch)
     }
-    if (selectedPlaceId) {
-      params.append('place_id', String(selectedPlaceId))
+    const roleParam =
+      type === types.eaten.key ? types.eaten.value : types.eater.value
+    params.append('role', roleParam)
+    if (selectedPlaceLabel) {
+      params.append('location', selectedPlaceLabel)
     }
     if (yearFilter && /^\d{4}$/.test(yearFilter)) {
-      params.append('d1', `${yearFilter}-01-01`)
-      params.append('d2', `${yearFilter}-12-31`)
+      params.append('year', yearFilter)
     }
 
     apiClient
-      .get(`/observations?${params.toString()}`)
+      .get(`/v1/interactions?${params.toString()}`)
       .then((d) => {
         setUpdatedSearchLength(d.data.results?.length || 0)
         if (!canceled && d.data?.results != 0) {
@@ -539,7 +467,7 @@ export const Web = () => {
     return () => {
       canceled = true
     }
-  }, [submittedSearch, selectedPlaceId, searchNonce, yearFilter])
+  }, [submittedSearch, selectedPlaceLabel, searchNonce, yearFilter, type])
 
   // Close dropdown when clicking outside or pressing Escape/Enter
   useEffect(() => {
@@ -614,7 +542,6 @@ export const Web = () => {
     const { value } = evt.target
     setLocationInput(value)
     setSelectedPlaceLabel(null)
-    setSelectedPlaceId(null)
     setPlaceLookupError(null)
     setShouldDisplayResults(false)
     const trimmed = value.trim()
@@ -632,7 +559,7 @@ export const Web = () => {
       | undefined,
     explicitSearch?: string,
     explicitThumbnail?: string | null,
-    explicitLocation?: { id: number | null; label: string | null }
+    explicitLocation?: { label: string | null }
     //explicitYear?: string | null
   ) => {
     /*
@@ -673,51 +600,8 @@ export const Web = () => {
     setIsSearchLoading(true)
 
     const trimmedLocation = (explicitLocation?.label ?? locationInput).trim()
-    let resolvedId: number | null = explicitLocation?.id ?? null
-    let resolvedLabel: string | null = explicitLocation?.label ?? null
+    const resolvedLabel = trimmedLocation || null
 
-    // If location input was cleared, make sure we clear any prior place filters
-    if (!trimmedLocation) {
-      resolvedId = null
-      resolvedLabel = null
-      setSelectedPlaceId(null)
-      setSelectedPlaceLabel(null)
-    }
-
-    try {
-      if (trimmedLocation && explicitLocation === undefined) {
-        setIsResolvingPlace(true)
-        const place = await resolvePlace(trimmedLocation)
-        resolvedId = place?.id ?? null
-        resolvedLabel = place?.display_name || place?.name || trimmedLocation
-      }
-
-      if (trimmedLocation && resolvedId === null) {
-        setIsSearchLoading(false)
-        setIsPartnerLoading(false)
-        setSelectedPlaceId(null)
-        setSelectedPlaceLabel(null)
-        setData([])
-        setEatenByData([])
-        setPartnerData({})
-        setShouldDisplayResults(true)
-        setSubmittedSearch('')
-        return
-      }
-    } catch (error) {
-      setIsSearchLoading(false)
-      setIsPartnerLoading(false)
-      setIsResolvingPlace(false)
-      setPlaceLookupError(
-        'Unable to resolve that location. Please try another.'
-      )
-      setShouldDisplayResults(false)
-      return
-    } finally {
-      setIsResolvingPlace(false)
-    }
-
-    setSelectedPlaceId(resolvedId)
     setSelectedPlaceLabel(resolvedLabel)
     setSubmittedSearch(trimmedSearch)
     setSearchNonce((n) => n + 1)
@@ -730,13 +614,11 @@ export const Web = () => {
   const handleLocationSuggestionClick = (place: PlaceResult) => {
     const label = place.display_name || place.name
     setLocationInput(label || '')
-    setSelectedPlaceId(place.id)
     setSelectedPlaceLabel(label || null)
     setPlaceLookupError(null)
     setIsLocationDropdownOpen(false)
     setShouldDisplayResults(false)
     void handleSubmit(undefined, search, selectedThumbnail, {
-      id: place.id,
       label: label || null,
     })
   }
@@ -1036,12 +918,9 @@ export const Web = () => {
 
                 <button
                   type="submit"
-                  disabled={isResolvingPlace}
-                  className={`px-4 bg-orange-500 text-white font-semibold rounded ${
-                    isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
-                  }`}
+                  className="px-4 bg-orange-500 text-white font-semibold rounded"
                 >
-                  {isResolvingPlace ? 'Loading...' : 'Go'}
+                  Go
                 </button>
               </div>
             </div>

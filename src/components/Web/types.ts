@@ -27,7 +27,7 @@ export interface Ofv {
   user: User
   user_id: number
   uuid: string
-  value: 'eaten' | 'eater'
+  value: string
   value_ci: string
 }
 
