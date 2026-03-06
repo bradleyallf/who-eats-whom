@@ -1,9 +1,11 @@
 import { MouseEventHandler, ReactNode } from 'react'
+import { Photo } from './types'
 
 interface Props {
-  heading: ReactNode 
+  heading: ReactNode
   totalObservations: number
   totalSpecies: number
+  taxonThumbnail?: string | null
   onDownload: MouseEventHandler<HTMLButtonElement>
   isDownloadDisabled?: boolean
   isLoading?: boolean
@@ -20,6 +22,7 @@ export const SearchResultSummary = (props: Props) => {
     heading,
     totalObservations,
     totalSpecies,
+    taxonThumbnail,
     onDownload,
     isDownloadDisabled,
     isLoading,
@@ -38,9 +41,9 @@ export const SearchResultSummary = (props: Props) => {
   return (
     <div className="sticky fixed top-14 z-[9999]">
       <div className="flex flex-col gap-4 rounded-md bg-slate-800 px-6 py-4 text-white shadow-lg">
-        <p className="text-lg font-semibold leading-snug">{heading}</p>
-        <div className="flex flex-wrap items-center gap-4 sm:gap-6">
-          <div className="flex items-end gap-6 text-right text-white">
+        <div className="flex flex-wrap items-center justify-left gap-4">
+          <p className="text-lg font-semibold leading-snug">{heading}</p>
+          <div className="flex items-end gap-10 text-right text-white">
             <div>
               <StatValue value={totalObservations} />
               <span className="text-xs uppercase tracking-wide text-slate-300">
@@ -53,20 +56,33 @@ export const SearchResultSummary = (props: Props) => {
                 Unique species
               </span>
             </div>
+            {taxonThumbnail ? (
+              <div className="">
+                <img
+                  className="z-50 w-10 h-10 object-cover rounded"
+                  src={taxonThumbnail}
+                  alt="nothing"
+                />
+              </div>
+            ) : (
+              ''
+            )}
           </div>
-          <button
-            type="button"
-            onClick={onDownload}
-            disabled={isDownloadDisabled || isLoading}
-            className={`inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition sm:w-auto ${
-              isDownloadDisabled || isLoading
-                ? 'bg-white/10 text-white/60 cursor-not-allowed'
-                : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            <DownloadIcon />
-            Download CSV
-          </button>
+          <div className="flex flex-wrap justify-end">
+            <button
+              type="button"
+              onClick={onDownload}
+              disabled={isDownloadDisabled || isLoading}
+              className={`inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition sm:w-auto ${
+                isDownloadDisabled || isLoading
+                  ? 'bg-white/10 text-white/60 cursor-not-allowed'
+                  : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
+            >
+              <DownloadIcon />
+              Download CSV
+            </button>
+          </div>
         </div>
       </div>
     </div>

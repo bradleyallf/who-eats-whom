@@ -702,10 +702,18 @@ export const Web = () => {
     setIsLocationDropdownOpen(false)
     setPlaceLookupError(null)
     // reset partner loading in case a previous search was mid-flight
+    setIsSuggestionLoading
     setIsPartnerLoading(false)
 
     const rawSearch = explicitSearch ?? search
     const trimmedSearch = rawSearch.trim()
+
+    if (trimmedSearch.length < 3) {
+      setSearchError('Please enter a species name.')
+      setShouldDisplayResults(false)
+      setSubmittedSearch('')
+      return
+    }
     setSearch(trimmedSearch)
 
     const lookupKey = trimmedSearch.toLowerCase()
@@ -714,13 +722,6 @@ export const Web = () => {
       setSelectedThumbnail(explicitThumbnail)
     } else {
       setSelectedThumbnail(matchedSuggestion?.thumbnail ?? null)
-    }
-
-    if (trimmedSearch.length < 3) {
-      setSearchError('Please enter a species name.')
-      setShouldDisplayResults(false)
-      setSubmittedSearch('')
-      return
     }
 
     if (explicitSearch === undefined) {
@@ -792,7 +793,7 @@ export const Web = () => {
     setSelectedPlaceLabel(resolvedLabel)
     setSubmittedSearch(trimmedSearch)
     setSearchNonce((n) => n + 1)
-    //setShouldDisplayResults(true)
+    setShouldDisplayResults(true)
     //setData([])
     //setEatenByData([])
     //setPartnerData({})
@@ -941,8 +942,9 @@ export const Web = () => {
     const location = selectedPlaceLabel ? sanitize(selectedPlaceLabel) : null
     const prefix = type === 'eaten' ? 'Who Eats' : 'Who is Eaten By'
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const fileName = `${prefix} ${species}${location ? ` - ${location}` : ''
-      } ${timestamp}.csv`
+    const fileName = `${prefix} ${species}${
+      location ? ` - ${location}` : ''
+    } ${timestamp}.csv`
 
     const link = document.createElement('a')
     link.href = url
@@ -1000,19 +1002,21 @@ export const Web = () => {
                   </option>
                 ))}
               </select>
+              {/*}
               {selectedThumbnail && (
                 <img
                   src={selectedThumbnail}
                   alt=""
                   className="h-10 w-10 rounded object-cover border border-slate-200"
                 />
-              )}
+              )}*/}
               <div className="relative flex-1" style={{ zIndex: 2 }}>
                 <input
-                  className={`w-full ${searchError
+                  className={`w-full ${
+                    searchError
                       ? 'border-red-500 text-red-600 placeholder:text-red-500'
                       : ''
-                    }`}
+                  }`}
                   type="text"
                   onChange={handleInputChange}
                   value={search}
@@ -1121,8 +1125,9 @@ export const Web = () => {
                 <button
                   type="submit"
                   disabled={isResolvingPlace}
-                  className={`px-4 bg-orange-500 text-white font-semibold rounded ${isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
-                    }`}
+                  className={`px-4 bg-orange-500 text-white font-semibold rounded ${
+                    isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
+                  }`}
                 >
                   {isResolvingPlace ? 'Loading...' : 'Go'}
                 </button>
@@ -1131,7 +1136,7 @@ export const Web = () => {
           </form>
         </div>
       </div>
-      {(shouldDisplayResults || isTaxonMetaLoading) && (
+      {(shouldDisplayResults || isTaxonMetaLoading || isResultsLoading) && (
         <div className="col-8 mt-6 space-y-6">
           <div ref={taxonMetaSentinelRef} aria-hidden className="h-px" />
 
@@ -1188,6 +1193,7 @@ export const Web = () => {
                 totalObservations={
                   updatedSearchLength == 0 ? 0 : filteredResults.length
                 }
+                taxonThumbnail={selectedThumbnail}
                 totalSpecies={updatedSearchLength == 0 ? 0 : totalSpecies}
                 onDownload={downloadCsv}
                 isDownloadDisabled={!aggregatedCounterparts.length}
@@ -1204,6 +1210,7 @@ export const Web = () => {
               totalObservations={
                 updatedSearchLength == 0 ? 0 : filteredResults.length
               }
+              taxonThumbnail={selectedThumbnail ? selectedThumbnail : null}
               totalSpecies={updatedSearchLength == 0 ? 0 : totalSpecies}
               onDownload={downloadCsv}
               isDownloadDisabled={!aggregatedCounterparts.length}
@@ -1258,10 +1265,11 @@ export const Web = () => {
                     onClick={() => {
                       if (!disabled) setSelectedView(key)
                     }}
-                    className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${selectedView === key
+                    className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${
+                      selectedView === key
                         ? 'bg-slate-900 text-white border-slate-900'
                         : 'bg-white text-slate-700 border-slate-200'
-                      } ${disabled ? 'cursor-not-allowed opacity-70' : ''}`}
+                    } ${disabled ? 'cursor-not-allowed opacity-70' : ''}`}
                   >
                     <Icon active={selectedView === key && !disabled} />
                     <span>{label}</span>
