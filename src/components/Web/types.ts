@@ -68,4 +68,10 @@ export interface Observation {
   latitude?: number
   longitude?: number
   positional_accuracy?: number | null
+  // Whether or not the observation is licensed
+  licensed: boolean | null
+  // The license code
+  license_code?: boolean | null
+  // Whether or not a single photo from the observation is licensed
+  photo_licensed: boolean | null
 }

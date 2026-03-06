@@ -95,7 +95,10 @@ export const SearchResultGraph = (props: Props) => {
     )
   }
 
-  const totalObservations = stats.reduce((sum, item) => sum + item.observations, 0)
+  const totalObservations = stats.reduce(
+    (sum, item) => sum + item.observations,
+    0
+  )
 
   const observationSegments = stats.map((item) => ({
     ...item,
@@ -117,7 +120,9 @@ export const SearchResultGraph = (props: Props) => {
     const action = type === 'eaten' ? 'is eaten by' : 'eats'
     const fragments = stats.map(
       (item) =>
-        `${formatTaxonLabel(item.taxon)} (${formatPercent(item.observations / totalObservations)})`
+        `${formatTaxonLabel(item.taxon)} (${formatPercent(
+          item.observations / totalObservations
+        )})`
     )
     return `${subject} ${action} ${fragments.join(', ')}.`
   }, [focalName, stats, totalObservations, type])
@@ -178,7 +183,9 @@ export const SearchResultGraph = (props: Props) => {
             </div>
 
             <div className="mt-6 rounded border border-slate-200 bg-slate-50 p-4">
-              <h4 className="text-sm font-semibold text-slate-900 mb-3">Legend</h4>
+              <h4 className="text-sm font-semibold text-slate-900 mb-3">
+                Legend
+              </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {stats.map((item) => (
                   <div
@@ -199,15 +206,17 @@ export const SearchResultGraph = (props: Props) => {
           </div>
 
           <div className="rounded border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800 shadow-sm lg:max-w-sm w-full">
-            <h4 className="text-sm font-semibold text-slate-900 mb-2">Summary</h4>
+            <h4 className="text-sm font-semibold text-slate-900 mb-2">
+              Summary
+            </h4>
             {summaryText ? (
               <p className="leading-snug break-words">{summaryText}</p>
             ) : (
               <p className="text-slate-500">Not enough data for a summary.</p>
             )}
             <p className="mt-2 text-xs text-slate-500">
-              {stats.length} iconic {stats.length === 1 ? 'taxon' : 'taxa'} detected across {totalObservations}{' '}
-              observations.
+              {stats.length} iconic {stats.length === 1 ? 'taxon' : 'taxa'}{' '}
+              detected across {totalObservations} observations.
             </p>
           </div>
         </div>

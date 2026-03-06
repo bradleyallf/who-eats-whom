@@ -254,6 +254,12 @@ export const SearchResultNetwork = (props: Props) => {
       node.y = centerY + Math.sin(angle) * radius
     })
 
+    // Fix initial nodes to prevent simulation from drifting other nodes
+    // nodes.forEach((node) => {
+    //   node.fx = node.x ?? 0
+    //   node.fy = node.y ?? 0
+    // })
+
     const defs = svg.append('defs')
     defs
       .append('marker')
@@ -425,7 +431,7 @@ export const SearchResultNetwork = (props: Props) => {
       })
 
     zoomBehaviourRef.current = zoomBehaviour as any
-      svg.call(zoomBehaviour)
+    svg.call(zoomBehaviour)
     updateLabelVisibility(1)
     updateLabels()
 
