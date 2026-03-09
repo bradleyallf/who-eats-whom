@@ -99,23 +99,6 @@ const types: Record<
 
 const partnerFieldId = 12796
 const eaterEatenFieldId = 12795 // in the ofvs array
-// RESPONSE PROPERTIES SEARCHING FOR
-const observationFieldsParam = [
-  'id',
-  'uri',
-  'ofvs',
-  'taxon',
-  'photos',
-  'geojson',
-  'location',
-  'positional_accuracy',
-  //'license',
-  //'license_code',
-  'place_country_name',
-  'place_state_name',
-  'place_county_name',
-  'place_town_name',
-].join(',')
 
 interface PlaceResult {
   id: string
@@ -233,12 +216,6 @@ export const Web = () => {
     const params = new URLSearchParams({
       ids: uniqueIds.join(','),
       limit: '200',
-      id: uniqueIds.join(','),
-      quality_grade: 'research',
-      per_page: '200',
-      fields: observationFieldsParam,
-      photo_licensed: 'true',
-      licensed: 'true',
     })
 
     try {
@@ -328,6 +305,7 @@ export const Web = () => {
               id: result.taxon_id,
               name: result.scientific_name,
               preferred_common_name: result.common_name,
+              default_photo: result.default_photo,
             })) || []
           setSuggestionSource(mapped)
           setIsSuggestionLoading(false)
@@ -450,6 +428,11 @@ export const Web = () => {
       })
     })
     setPartnerData(partnerD)
+    if (!observationIds.length) {
+      setEatenByData(filteredData)
+      setIsPartnerLoading(false)
+      return
+    }
     getPartnerData(observationIds)
   }, [data, type, shouldDisplayResults, isSearchLoading])
 
@@ -481,13 +464,6 @@ export const Web = () => {
 
     const params = new URLSearchParams({
       limit: '200',
-      project_id: String(projectId),
-      //taxon_name: submittedSearch,
-      quality_grade: 'research',
-      per_page: '200',
-      fields: observationFieldsParam,
-      photo_licensed: 'true',
-      licensed: 'true',
     })
     if (selectedTaxonId) {
       params.append('taxon_id', String(selectedTaxonId))
@@ -507,16 +483,13 @@ export const Web = () => {
     apiClient
       .get(`/v1/interactions?${params.toString()}`)
       .then((d) => {
-        setUpdatedSearchLength(d.data.results?.length || 0)
-        if (!canceled && d.data?.results != 0) {
-          setData(d.data.results || [])
-          setIsSearchLoading(false)
-          setIsPartnerLoading(false)
-          setShouldDisplayResults(true)
-        } else {
-          setIsSearchLoading(false)
-          setShouldDisplayResults(true)
-        }
+        if (canceled) return
+        const results = d.data?.results || []
+        setUpdatedSearchLength(results.length)
+        setData(results)
+        setIsSearchLoading(false)
+        setIsPartnerLoading(false)
+        setShouldDisplayResults(true)
       })
       .catch(() => {
         if (!canceled) {
@@ -533,17 +506,18 @@ export const Web = () => {
 
   // Separate use effect for the about organism information
   useEffect(() => {
-    setIsSearchLoading(true)
-    if (!selectedTaxonId) return
+    if (!selectedTaxonId) {
+      setTaxonDesc('')
+      return
+    }
     apiClient
-      .get(`/taxa/${selectedTaxonId?.toString()}`)
+      .get(`/v1/species/${selectedTaxonId}`)
       .then((d) => {
-        setTaxonDesc(d.data.results[0].wikipedia_summary)
+        setTaxonDesc(d.data.results?.[0]?.wikipedia_summary || '')
       })
       .catch(() => {
         setTaxonDesc('')
       })
-    setIsSearchLoading(false)
   }, [selectedTaxonId])
 
   // Close dropdown when clicking outside or pressing Escape/Enter
@@ -638,8 +612,6 @@ export const Web = () => {
     explicitSearch?: string,
     explicitThumbnail?: string | null,
     explicitLocation?: { label: string | null }
-    //explicitYear?: string | null
-    explicitLocation?: { id: number | null; label: string | null }
   ) => {
     evt?.preventDefault()
     setIsDropdownOpen(false)
@@ -1007,9 +979,6 @@ export const Web = () => {
                 <button
                   type="submit"
                   className="px-4 bg-orange-500 text-white font-semibold rounded"
-                  disabled={isResolvingPlace}
-                  className={`px-4 bg-orange-500 text-white font-semibold rounded ${isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
-                    }`}
                 >
                   Go
                 </button>
@@ -1048,22 +1017,20 @@ export const Web = () => {
               />
             )}
           </div>
-          {selectedThumbnail && taxonDesc && (
-            <SearchResultSummary
-              heading={`Search results for ${
-                type === 'eaten' ? 'Who eats' : 'Who is eaten by'
-              } ${speciesLabel}${
-                selectedPlaceLabel ? ` in ${selectedPlaceLabel}` : ''
-              }${yearFilter ? ` in ${yearFilter}` : ''}:`}
-              totalObservations={
-                updatedSearchLength == 0 ? 0 : filteredResults.length
-              }
-              totalSpecies={updatedSearchLength == 0 ? 0 : totalSpecies}
-              onDownload={downloadCsv}
-              isDownloadDisabled={!aggregatedCounterparts.length}
-              isLoading={isResultsLoading}
-            />
-          )}
+          <SearchResultSummary
+            heading={`Search results for ${
+              type === 'eaten' ? 'Who eats' : 'Who is eaten by'
+            } ${speciesLabel}${
+              selectedPlaceLabel ? ` in ${selectedPlaceLabel}` : ''
+            }${yearFilter ? ` in ${yearFilter}` : ''}:`}
+            totalObservations={
+              updatedSearchLength == 0 ? 0 : filteredResults.length
+            }
+            totalSpecies={updatedSearchLength == 0 ? 0 : totalSpecies}
+            onDownload={downloadCsv}
+            isDownloadDisabled={!aggregatedCounterparts.length}
+            isLoading={isResultsLoading}
+          />
 
           {isResultsLoading ? (
             <div className="p-4 border border-slate-200 rounded text-sm text-slate-700 flex items-center gap-3">

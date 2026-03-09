@@ -1,9 +1,10 @@
 import json
 import os
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 from neo4j import AsyncGraphDatabase
@@ -182,6 +183,20 @@ app = FastAPI(
   lifespan=lifespan,
 )
 
+allowed_origins_env = os.getenv("CORS_ALLOW_ORIGINS")
+allowed_origins = (
+  [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+  if allowed_origins_env
+  else ["http://localhost:4200", "http://127.0.0.1:4200"]
+)
+app.add_middleware(
+  CORSMiddleware,
+  allow_origins=allowed_origins,
+  allow_credentials=True,
+  allow_methods=["*"],
+  allow_headers=["*"],
+)
+
 
 async def get_pg_pool(request: Request) -> AsyncConnectionPool:
   pool: Optional[AsyncConnectionPool] = request.app.state.pg_pool
@@ -219,6 +234,65 @@ async def resolve_etl_version_id(pool: AsyncConnectionPool, requested_version: O
       if not row:
         raise HTTPException(status_code=404, detail="No ETL version found. Load data first.")
       return dict(row)
+
+
+async def resolve_taxon_condition(
+  pool: AsyncConnectionPool,
+  taxon_id: Optional[int] = None,
+  taxon_name: Optional[str] = None,
+) -> Tuple[Optional[str], List[Any]]:
+  """
+  Return a (sql_condition, params) tuple for filtering observations by taxon,
+  expanding higher-level taxa (order/family/genus) to include all descendants.
+  """
+  if not taxon_id and not taxon_name:
+    return None, []
+
+  async with pool.connection() as conn:
+    async with conn.cursor(row_factory=dict_row) as cur:
+      if taxon_id:
+        await cur.execute(
+          "SELECT scientific_name, order_name, family_name, genus_name FROM species WHERE taxon_id = %s",
+          (taxon_id,),
+        )
+        row = await cur.fetchone()
+      else:
+        like = f"%{taxon_name.strip()}%"
+        await cur.execute(
+          """
+          SELECT taxon_id, scientific_name, order_name, family_name, genus_name
+          FROM species
+          WHERE scientific_name ILIKE %s OR common_name ILIKE %s
+          LIMIT 1
+          """,
+          (like, like),
+        )
+        row = await cur.fetchone()
+        if row:
+          taxon_id = row["taxon_id"]
+
+  if not row:
+    if taxon_name:
+      like = f"%{taxon_name.strip()}%"
+      return "(s.scientific_name ILIKE %s OR s.common_name ILIKE %s)", [like, like]
+    return "o.taxon_id = %s", [taxon_id]
+
+  sci = (row.get("scientific_name") or "").strip()
+  order_name = (row.get("order_name") or "").strip()
+  family_name = (row.get("family_name") or "").strip()
+  genus_name = (row.get("genus_name") or "").strip()
+
+  # Detect order-level taxon: scientific name matches its own order name
+  if order_name and sci == order_name:
+    return "s.order_name = %s", [order_name]
+  # Detect family-level taxon
+  if family_name and sci == family_name:
+    return "s.family_name = %s", [family_name]
+  # Detect genus-level taxon
+  if genus_name and sci == genus_name:
+    return "s.genus_name = %s", [genus_name]
+
+  return "o.taxon_id = %s", [taxon_id]
 
 
 async def cached_response(cache: RedisCache, key: str, producer, ttl: int = DEFAULT_CACHE_TTL):
@@ -305,16 +379,65 @@ async def search_species(
     async with conn.cursor(row_factory=dict_row) as cur:
       await cur.execute(
         """
-        SELECT taxon_id, scientific_name, common_name, iconic_taxon_name
-        FROM species
-        WHERE scientific_name ILIKE %s OR common_name ILIKE %s
-        ORDER BY COALESCE(common_name, scientific_name)
+        SELECT
+          s.taxon_id,
+          s.scientific_name,
+          s.common_name,
+          s.iconic_taxon_name,
+          (
+            SELECT o.raw->>'image_url'
+            FROM observations o
+            WHERE o.taxon_id = s.taxon_id
+              AND o.raw->>'image_url' IS NOT NULL
+              AND o.raw->>'image_url' <> ''
+            LIMIT 1
+          ) AS image_url
+        FROM species s
+        WHERE s.scientific_name ILIKE %s OR s.common_name ILIKE %s
+        ORDER BY COALESCE(s.common_name, s.scientific_name)
         LIMIT %s
         """,
         (search_term, search_term, limit),
       )
       rows = await cur.fetchall()
-      return {"results": [dict(row) for row in rows]}
+      results = []
+      for row in rows:
+        r = dict(row)
+        image_url = r.pop("image_url", None)
+        if image_url:
+          r["default_photo"] = {"square_url": image_url, "small_url": image_url, "url": image_url}
+        results.append(r)
+      return {"results": results}
+
+
+@app.get("/api/v1/species/{taxon_id}", tags=["data"])
+async def species_detail(request: Request, taxon_id: int):
+  pool = await get_pg_pool(request)
+  async with pool.connection() as conn:
+    async with conn.cursor(row_factory=dict_row) as cur:
+      await cur.execute(
+        """
+        SELECT taxon_id, scientific_name, common_name, iconic_taxon_name
+        FROM species
+        WHERE taxon_id = %s
+        """,
+        (taxon_id,),
+      )
+      row = await cur.fetchone()
+      if not row:
+        raise HTTPException(status_code=404, detail="Species not found.")
+
+  return {
+    "results": [
+      {
+        "taxon_id": row["taxon_id"],
+        "scientific_name": row["scientific_name"],
+        "common_name": row["common_name"],
+        "iconic_taxon_name": row["iconic_taxon_name"],
+        "wikipedia_summary": None,
+      }
+    ]
+  }
 
 
 @app.get("/api/v1/food-web/summary", tags=["data"])
@@ -514,13 +637,11 @@ async def interaction_search(
     conditions.append("o.observation_id = ANY(%s)")
     params.append(id_list)
 
-  if taxon_id:
-    conditions.append("o.taxon_id = %s")
-    params.append(taxon_id)
-  elif taxon_name:
-    like = f"%{taxon_name.strip()}%"
-    conditions.append("(s.scientific_name ILIKE %s OR s.common_name ILIKE %s)")
-    params.extend([like, like])
+  if taxon_id or taxon_name:
+    taxon_cond, taxon_params = await resolve_taxon_condition(pool, taxon_id=taxon_id, taxon_name=taxon_name)
+    if taxon_cond:
+      conditions.append(taxon_cond)
+      params.extend(taxon_params)
 
   if role:
     conditions.append("o.role = %s")

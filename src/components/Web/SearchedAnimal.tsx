@@ -27,17 +27,13 @@ export const SearchResultGrid = (props: Props) => {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
       {results.map((result) => {
-        const partner = partnerData[result.id]
-        if (!partner) return null
-
         const displayObservation = result
         const commonName = getCommonName(displayObservation)
         const scientificName = getScientificName(displayObservation)
-        let i = 0
-        while (!displayObservation.photos?.[i].license_code) {
-          i++
-        }
-        const photoUrl = displayObservation.photos?.[i]?.url
+
+        const safePhoto =
+          displayObservation.photos?.find((photo) => !!photo?.url) || null
+        const photoUrl = safePhoto?.url
         const roleLabel = type === 'eater' ? 'Prey' : 'Predator'
 
         return (
@@ -59,14 +55,18 @@ export const SearchResultGrid = (props: Props) => {
                 className="h-full w-full object-cover"
                 loading="lazy"
               />
-              <div className="bg-black p-2 rounded-full cursor-pointer group">
-                <h2 className="bg-black/60 absolute top-2 text-white p-1 rounded">
-                  {displayObservation.photos?.[i].license_code}
-                </h2>
-                <div className="absolute top-2 left-10 opacity-0 group-hover:opacity-100 transition bg-black text-white text-xs px-2 py-1 rounded">
-                  {displayObservation.photos?.[i].attribution}
+              {safePhoto?.license_code && (
+                <div className="bg-black p-2 rounded-full cursor-pointer group">
+                  <h2 className="bg-black/60 absolute top-2 text-white p-1 rounded">
+                    {safePhoto.license_code}
+                  </h2>
+                  {safePhoto.attribution && (
+                    <div className="absolute top-2 left-10 opacity-0 group-hover:opacity-100 transition bg-black text-white text-xs px-2 py-1 rounded">
+                      {safePhoto.attribution}
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
             <div className="p-4">
               <span className="sr-only">{roleLabel}</span>
