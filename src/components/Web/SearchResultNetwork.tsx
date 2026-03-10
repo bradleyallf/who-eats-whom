@@ -379,7 +379,6 @@ export const SearchResultNetwork = (props: Props) => {
         });
     }
 
-
     const nodeById = new Map(nodes.map((n) => [n.id, n]))
 
     const resolveNode = (endpoint: string | NodeDatum): NodeDatum | undefined =>
