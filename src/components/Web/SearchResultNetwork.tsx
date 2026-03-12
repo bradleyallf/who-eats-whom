@@ -361,6 +361,7 @@ export const SearchResultNetwork = (props: Props) => {
         .on('drag', (event: any, d: NodeDatum) => {
           d.fx = event.x
           d.fy = event.y
+          fix_nodes(d);
         })
         .on('end', (event: any, d: NodeDatum) => {
           if (!event.active) simulation.alphaTarget(0)
@@ -368,6 +369,15 @@ export const SearchResultNetwork = (props: Props) => {
           d.fy = null
         })
     )
+    
+    function fix_nodes(this_node: NodeDatum) {
+        node.each(function(this: SVGElement, d: NodeDatum) {
+            if (this_node !== d) {
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+        });
+    }
 
     const nodeById = new Map(nodes.map((n) => [n.id, n]))
 
