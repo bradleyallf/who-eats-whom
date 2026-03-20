@@ -1,5 +1,4 @@
 import { MouseEventHandler, ReactNode } from 'react'
-import { Photo } from './types'
 
 interface Props {
   heading: ReactNode
@@ -31,49 +30,61 @@ export const SearchResultSummary = (props: Props) => {
   const StatValue = ({ value }: { value: number }) =>
     isLoading ? (
       <span
-        className="inline-block h-5 w-5 rounded-full border-2 border-white/40 border-t-white animate-spin"
+        className="inline-block h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin sm:h-5 sm:w-5"
         aria-label="Loading"
       />
     ) : (
-      <span className="block text-2xl font-bold leading-none">{value}</span>
+      <span className="block text-lg font-bold leading-none sm:text-2xl">
+        {value}
+      </span>
     )
 
   return (
-    <div className="sticky fixed top-14 z-[9999]">
-      <div className="flex flex-col gap-4 rounded-md bg-slate-800 px-6 py-4 text-white shadow-lg">
-        <div className="flex flex-wrap items-center justify-left gap-4">
-          <p className="text-lg font-semibold leading-snug">{heading}</p>
-          <div className="flex items-end gap-10 text-right text-white">
-            <div>
-              <StatValue value={totalObservations} />
-              <span className="text-xs uppercase tracking-wide text-slate-300">
-                Observations
-              </span>
-            </div>
-            <div>
-              <StatValue value={totalSpecies} />
-              <span className="text-xs uppercase tracking-wide text-slate-300">
-                Unique species
-              </span>
-            </div>
-            {taxonThumbnail ? (
-              <div className="">
+    <div className="sticky fixed top-0 z-[9999]">
+      <div className="flex flex-col gap-2 rounded-md bg-slate-800 px-2.5 py-2.5 text-white shadow-lg sm:gap-4 sm:px-6 sm:py-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-6 lg:grid-cols-[minmax(20rem,30rem)_auto_auto_auto] lg:items-center lg:gap-6">
+          {taxonThumbnail ? (
+            <div className="flex min-w-0 items-center gap-1">
+              <p className="min-w-0 flex-1 text-sm font-semibold leading-snug sm:text-lg">
+                {heading}
+              </p>
+
+              <div className="flex shrink-0 items-center gap-1">
                 <img
-                  className="z-50 w-10 h-10 object-cover rounded"
+                  className="relative z-50 h-10 w-10 rounded object-cover sm:-top-1 sm:h-10 sm:w-10"
                   src={taxonThumbnail}
                   alt="nothing"
                 />
               </div>
-            ) : (
-              ''
-            )}
+            </div>
+          ) : (
+            <div className="min-w-0">
+              <p className="min-w-0 text-sm font-semibold leading-snug sm:text-lg">
+                {heading}
+              </p>
+            </div>
+          )}
+
+          <div className="justify-self-center sm:justify-self-start flex w-fit flex-nowrap items-center justify-center gap-3 text-right text-white sm:justify-center sm:gap-8">
+            <div className="shrink-0">
+              <StatValue value={totalObservations} />
+              <span className="text-[9px] uppercase tracking-wide text-slate-300 sm:text-xs md:text-xs">
+                Observations
+              </span>
+            </div>
+            <div className="shrink-0">
+              <StatValue value={totalSpecies} />
+              <span className="text-[9px] uppercase tracking-wide text-slate-300 sm:text-xs md:text-xs">
+                Unique species
+              </span>
+            </div>
           </div>
-          <div className="flex flex-wrap justify-end">
+          <div className="flex w-full flex-wrap justify-stretch sm:col-span-2 lg:ml-12 lg:w-auto lg:justify-end">
             <button
               type="button"
               onClick={onDownload}
               disabled={isDownloadDisabled || isLoading}
-              className={`inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition sm:w-auto ${
+              className={`relative inline-flex w-full items-center justify-center gap-2 rounded-md px-7 py-1.5 text-xs font-semibold transition sm:-top-1 sm:px-4 sm:py-2 sm:text-sm lg:w-auto ${
                 isDownloadDisabled || isLoading
                   ? 'bg-white/10 text-white/60 cursor-not-allowed'
                   : 'bg-white/10 text-white hover:bg-white/20'
