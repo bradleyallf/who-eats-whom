@@ -1111,7 +1111,6 @@ export const Web = () => {
         {/* Compact search summary replaces the old large summary card. */}
         {shouldDisplayResults && (
           <div className="mt-3 flex justify-center">
-            {/* Match the summary width and left edge to the search controls above. */}
             <div className="w-full max-w-[60rem] text-xs text-slate-600 md:text-sm">
               {isResultsLoading ? (
                 <span>Loading results...</span>
@@ -1167,7 +1166,7 @@ export const Web = () => {
               />
             )}
           </div>
-          {/* Removed the old summary card one line sticky summary above. */}
+          {/* Replaced the old summary card with one line sticky summary above. */}
 
           {isResultsLoading ? (
             <div className="p-4 border border-slate-200 rounded text-sm text-slate-700 flex items-center gap-3">
