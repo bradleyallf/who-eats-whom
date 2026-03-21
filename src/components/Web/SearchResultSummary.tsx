@@ -1,9 +1,10 @@
 import { MouseEventHandler, ReactNode } from 'react'
 
 interface Props {
-  heading: ReactNode 
+  heading: ReactNode
   totalObservations: number
   totalSpecies: number
+  taxonThumbnail?: string | null
   onDownload: MouseEventHandler<HTMLButtonElement>
   isDownloadDisabled?: boolean
   isLoading?: boolean
@@ -20,6 +21,7 @@ export const SearchResultSummary = (props: Props) => {
     heading,
     totalObservations,
     totalSpecies,
+    taxonThumbnail,
     onDownload,
     isDownloadDisabled,
     isLoading,
@@ -28,11 +30,13 @@ export const SearchResultSummary = (props: Props) => {
   const StatValue = ({ value }: { value: number }) =>
     isLoading ? (
       <span
-        className="inline-block h-5 w-5 rounded-full border-2 border-white/40 border-t-white animate-spin"
+        className="inline-block h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin sm:h-5 sm:w-5"
         aria-label="Loading"
       />
     ) : (
-      <span className="block text-2xl font-bold leading-none">{value}</span>
+      <span className="block text-lg font-bold leading-none sm:text-2xl">
+        {value}
+      </span>
     )
 
   return (
@@ -44,30 +48,32 @@ export const SearchResultSummary = (props: Props) => {
           <div className="flex items-end gap-6 text-right text-white">
             <div>
               <StatValue value={totalObservations} />
-              <span className="text-xs uppercase tracking-wide text-slate-300">
+              <span className="text-[9px] uppercase tracking-wide text-slate-300 sm:text-xs md:text-xs">
                 Observations
               </span>
             </div>
-            <div>
+            <div className="shrink-0">
               <StatValue value={totalSpecies} />
-              <span className="text-xs uppercase tracking-wide text-slate-300">
+              <span className="text-[9px] uppercase tracking-wide text-slate-300 sm:text-xs md:text-xs">
                 Unique species
               </span>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onDownload}
-            disabled={isDownloadDisabled || isLoading}
-            className={`inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition sm:w-auto ${
-              isDownloadDisabled || isLoading
-                ? 'bg-white/10 text-white/60 cursor-not-allowed'
-                : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            <DownloadIcon />
-            Download CSV
-          </button>
+          <div className="flex w-full flex-wrap justify-stretch sm:col-span-2 lg:ml-12 lg:w-auto lg:justify-end">
+            <button
+              type="button"
+              onClick={onDownload}
+              disabled={isDownloadDisabled || isLoading}
+              className={`relative inline-flex w-full items-center justify-center gap-2 rounded-md px-7 py-1.5 text-xs font-semibold transition sm:-top-1 sm:px-4 sm:py-2 sm:text-sm lg:w-auto ${
+                isDownloadDisabled || isLoading
+                  ? 'bg-white/10 text-white/60 cursor-not-allowed'
+                  : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
+            >
+              <DownloadIcon />
+              Download CSV
+            </button>
+          </div>
         </div>
       </div>
     </div>

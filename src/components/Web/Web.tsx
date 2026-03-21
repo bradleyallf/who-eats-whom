@@ -157,6 +157,7 @@ export const Web = () => {
 
   // The taxonId from the API corresponding to a unique organism
   const [selectedTaxonId, setSelectedTaxonId] = useState<number | null>(null)
+  const [isTaxonMetaLoading, setIsTaxonMetaLoading] = useState(false)
   const [taxonDesc, setTaxonDesc] = useState<string | null>()
 
   // State representing the updated amount of results from API on each year update
@@ -326,7 +327,8 @@ export const Web = () => {
   // ---------------------
 
   // Checks what position on the screen the scroll is, determining if there should be a condensed
-  // Taxon description or not
+  // Taxon description or not. MAY NOT NEED THIS ANYMORE ON SCROLL.
+  /** 
   useEffect(() => {
     const sentinel = taxonMetaSentinelRef.current
     if (!sentinel) return
@@ -341,7 +343,7 @@ export const Web = () => {
         if (prev && top >= expandThreshold) return false
         return prev
       })
-    }
+    } 
 
     updateCondensedState()
     window.addEventListener('scroll', updateCondensedState, { passive: true })
@@ -351,7 +353,7 @@ export const Web = () => {
       window.removeEventListener('scroll', updateCondensedState)
       window.removeEventListener('resize', updateCondensedState)
     }
-  }, [shouldDisplayResults, selectedThumbnail, taxonDesc])
+  }, [shouldDisplayResults, selectedThumbnail, taxonDesc]) */
 
   // Fetch suggestions when user types in the search box
   useEffect(() => {
@@ -581,17 +583,24 @@ export const Web = () => {
 
   // Separate use effect for the about organism information
   useEffect(() => {
-    setIsSearchLoading(true)
-    if (!selectedTaxonId) return
+    if (!selectedTaxonId) {
+      setTaxonDesc('')
+      setIsTaxonMetaLoading(false)
+      return
+    }
+
+    setIsTaxonMetaLoading(true)
     apiClient
-      .get(`/taxa/${selectedTaxonId?.toString()}`)
+      .get(`/taxa/${selectedTaxonId.toString()}`)
       .then((d) => {
         setTaxonDesc(d.data.results[0].wikipedia_summary)
       })
       .catch(() => {
         setTaxonDesc('')
       })
-    setIsSearchLoading(false)
+      .finally(() => {
+        setIsTaxonMetaLoading(false)
+      })
   }, [selectedTaxonId])
 
   // Close dropdown when clicking outside or pressing Escape/Enter
@@ -693,10 +702,18 @@ export const Web = () => {
     setIsLocationDropdownOpen(false)
     setPlaceLookupError(null)
     // reset partner loading in case a previous search was mid-flight
+    setIsSuggestionLoading
     setIsPartnerLoading(false)
 
     const rawSearch = explicitSearch ?? search
     const trimmedSearch = rawSearch.trim()
+
+    if (trimmedSearch.length < 3) {
+      setSearchError('Please enter a species name.')
+      setShouldDisplayResults(false)
+      setSubmittedSearch('')
+      return
+    }
     setSearch(trimmedSearch)
 
     const lookupKey = trimmedSearch.toLowerCase()
@@ -705,13 +722,6 @@ export const Web = () => {
       setSelectedThumbnail(explicitThumbnail)
     } else {
       setSelectedThumbnail(matchedSuggestion?.thumbnail ?? null)
-    }
-
-    if (trimmedSearch.length < 3) {
-      setSearchError('Please enter a species name.')
-      setShouldDisplayResults(false)
-      setSubmittedSearch('')
-      return
     }
 
     if (explicitSearch === undefined) {
@@ -735,6 +745,19 @@ export const Web = () => {
 
     try {
       if (trimmedLocation && explicitLocation === undefined) {
+        setSearchError(null)
+        // show summary area immediately
+        setShouldDisplayResults(true)
+
+        // start loading immediately
+        setIsSearchLoading(true)
+        setIsPartnerLoading(false)
+
+        // clear stale prior results immediately
+        setData([])
+        setEatenByData([])
+        setPartnerData({})
+        setUpdatedSearchLength(0)
         setIsResolvingPlace(true)
         const place = await resolvePlace(trimmedLocation)
         resolvedId = place?.id ?? null
@@ -771,9 +794,9 @@ export const Web = () => {
     setSubmittedSearch(trimmedSearch)
     setSearchNonce((n) => n + 1)
     setShouldDisplayResults(true)
-    setData([])
-    setEatenByData([])
-    setPartnerData({})
+    //setData([])
+    //setEatenByData([])
+    //setPartnerData({})
   }
 
   const handleLocationSuggestionClick = (place: PlaceResult) => {
@@ -919,8 +942,9 @@ export const Web = () => {
     const location = selectedPlaceLabel ? sanitize(selectedPlaceLabel) : null
     const prefix = type === 'eaten' ? 'Who Eats' : 'Who is Eaten By'
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const fileName = `${prefix} ${species}${location ? ` - ${location}` : ''
-      } ${timestamp}.csv`
+    const fileName = `${prefix} ${species}${
+      location ? ` - ${location}` : ''
+    } ${timestamp}.csv`
 
     const link = document.createElement('a')
     link.href = url
@@ -959,13 +983,13 @@ export const Web = () => {
 
           {/* search box + dropdown */}
           <form
-            className="w-full max-w-3xl flex flex-col gap-2 md:flex-row md:items-stretch"
+            className="flex w-full max-w-3xl flex-col gap-2 md:flex-row md:items-stretch"
             onSubmit={handleSubmit}
           >
-            <div className="flex flex-1 items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               {/* Adjusting Who Eats bar for smaller screens */}
               <select
-                className="md:hidden form-select form-select-lg w-full max-w-[12rem] shrink-0"
+                className="form-select form-select-lg w-full max-w-[12rem] shrink-0 md:hidden"
                 value={type}
                 onChange={(evt) => {
                   const { value } = evt.target
@@ -978,19 +1002,21 @@ export const Web = () => {
                   </option>
                 ))}
               </select>
+              {/*}
               {selectedThumbnail && (
                 <img
                   src={selectedThumbnail}
                   alt=""
                   className="h-10 w-10 rounded object-cover border border-slate-200"
                 />
-              )}
-              <div className="relative flex-1" style={{ zIndex: 2 }}>
+              )}*/}
+              <div className="relative min-w-0 flex-1" style={{ zIndex: 2 }}>
                 <input
-                  className={`w-full ${searchError
+                  className={`w-full ${
+                    searchError
                       ? 'border-red-500 text-red-600 placeholder:text-red-500'
                       : ''
-                    }`}
+                  }`}
                   type="text"
                   onChange={handleInputChange}
                   value={search}
@@ -1015,15 +1041,15 @@ export const Web = () => {
                 />
               </div>
             </div>
-            <div className="flex flex-col gap-1 items-start w-full md:w-auto">
+            <div className="flex w-full flex-col items-start gap-1 md:w-auto md:shrink-0">
               {placeLookupError && (
                 <p className="text-sm text-red-600 max-w-[16rem] leading-snug">
                   {placeLookupError}
                 </p>
               )}
-              <div className="flex items-stretch gap-2 w-full md:w-auto">
+              <div className="flex w-full items-stretch gap-2 md:w-auto">
                 <div
-                  className="relative w-full md:max-w-xs"
+                  className="relative min-w-0 flex-[1.35] sm:flex-[1.5] md:w-56 md:flex-none lg:w-64"
                   style={{ zIndex: 1 }}
                   ref={locationDropdownRef}
                 >
@@ -1078,7 +1104,7 @@ export const Web = () => {
                       </div>
                     )}
                 </div>
-                <div className="flex items-stretch gap-2">
+                <div className="flex w-[5.5rem] shrink-0 items-stretch sm:w-24">
                   <input
                     className="w-full"
                     type="text"
@@ -1099,8 +1125,9 @@ export const Web = () => {
                 <button
                   type="submit"
                   disabled={isResolvingPlace}
-                  className={`px-4 bg-orange-500 text-white font-semibold rounded ${isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
-                    }`}
+                  className={`shrink-0 rounded bg-orange-500 px-4 text-white font-semibold ${
+                    isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
+                  }`}
                 >
                   {isResolvingPlace ? 'Loading...' : 'Go'}
                 </button>
@@ -1215,10 +1242,11 @@ export const Web = () => {
                     onClick={() => {
                       if (!disabled) setSelectedView(key)
                     }}
-                    className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${selectedView === key
+                    className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${
+                      selectedView === key
                         ? 'bg-slate-900 text-white border-slate-900'
                         : 'bg-white text-slate-700 border-slate-200'
-                      } ${disabled ? 'cursor-not-allowed opacity-70' : ''}`}
+                    } ${disabled ? 'cursor-not-allowed opacity-70' : ''}`}
                   >
                     <Icon active={selectedView === key && !disabled} />
                     <span>{label}</span>
