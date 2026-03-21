@@ -36,7 +36,8 @@ export const SearchResultSummary = (props: Props) => {
     )
 
   return (
-    <div className="sticky fixed top-14 z-[9999]">
+    // removed sticky top-0 z-50 
+    <div className="">
       <div className="flex flex-col gap-4 rounded-md bg-slate-800 px-6 py-4 text-white shadow-lg">
         <p className="text-lg font-semibold leading-snug">{heading}</p>
         <div className="flex flex-wrap items-center gap-4 sm:gap-6">

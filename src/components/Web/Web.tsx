@@ -11,7 +11,6 @@ import { apiClient } from '../../utils'
 
 import { SearchResultGrid } from './SearchedAnimal'
 import { SearchResultGraph } from './SearchResultGraph'
-import { SearchResultSummary } from './SearchResultSummary'
 import { Observation, Ofv } from './types'
 import { Dropdown, Suggestion } from './Dropdown'
 import { SearchResultNetwork } from './SearchResultNetwork'
@@ -940,7 +939,7 @@ export const Web = () => {
   // ---------------------
   return (
     <>
-      <div className="mt-12">
+      <div className="mt-12 sticky top-0 z-50 bg-white p-5 shadow-lg">
         <div className="flex flex-col md:flex-row justify-center gap-2 w-full">
           {/* type selector */}
           <select
@@ -1109,12 +1108,40 @@ export const Web = () => {
             </div>
           </form>
         </div>
+        {/* Compact search summary replaces the old large summary card. */}
+        {shouldDisplayResults && (
+          <div className="mt-3 flex justify-center">
+            {/* Match the summary width and left edge to the search controls above. */}
+            <div className="w-full max-w-[60rem] text-xs text-slate-600 md:text-sm">
+              {isResultsLoading ? (
+                <span>Loading results...</span>
+              ) : (
+                <>
+                  <span>
+                    {updatedSearchLength == 0 ? 0 : filteredResults.length}{' '}
+                    observations, {updatedSearchLength == 0 ? 0 : totalSpecies}{' '}
+                    species
+                  </span>
+                  {!aggregatedCounterparts.length ? null : (
+                    <button
+                      type="button"
+                      onClick={downloadCsv}
+                      className="ml-3 font-medium text-slate-800 underline underline-offset-2 hover:text-black"
+                    >
+                      Download CSV
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       {shouldDisplayResults && (
         <div className="col-8 mt-6 space-y-6">
           <div ref={taxonMetaSentinelRef} aria-hidden className="h-px" />
           <div
-            className={`sticky top-0 z-50 flex justify-center items-start gap-4 transition-[background-color,border-color,box-shadow,padding] duration-300 ease-out ${
+            className={`flex justify-center items-start gap-4 transition-[background-color,border-color,box-shadow,padding] duration-300 ease-out ${
               isTaxonMetaCondensed
                 ? 'bg-white/90 backdrop-blur border border-slate-200 rounded-lg px-3 py-2 shadow-sm'
                 : ''
@@ -1140,22 +1167,7 @@ export const Web = () => {
               />
             )}
           </div>
-          {selectedThumbnail && taxonDesc && (
-            <SearchResultSummary
-              heading={`Search results for ${
-                type === 'eaten' ? 'Who eats' : 'Who is eaten by'
-              } ${speciesLabel}${
-                selectedPlaceLabel ? ` in ${selectedPlaceLabel}` : ''
-              }${yearFilter ? ` in ${yearFilter}` : ''}:`}
-              totalObservations={
-                updatedSearchLength == 0 ? 0 : filteredResults.length
-              }
-              totalSpecies={updatedSearchLength == 0 ? 0 : totalSpecies}
-              onDownload={downloadCsv}
-              isDownloadDisabled={!aggregatedCounterparts.length}
-              isLoading={isResultsLoading}
-            />
-          )}
+          {/* Removed the old summary card one line sticky summary above. */}
 
           {isResultsLoading ? (
             <div className="p-4 border border-slate-200 rounded text-sm text-slate-700 flex items-center gap-3">
