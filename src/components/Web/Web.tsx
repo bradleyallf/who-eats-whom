@@ -963,7 +963,7 @@ export const Web = () => {
   // ---------------------
   return (
     <>
-      <div className="mt-12 sticky top-0 z-50 bg-white p-5 shadow-lg">
+      <div className="mt-12 sticky top-0 z-50 bg-white p-5">
         <div className="flex flex-col md:flex-row justify-center gap-2 w-full">
           {/* type selector */}
           <select
