@@ -155,6 +155,8 @@ export const Web = () => {
   const [submittedSearch, setSubmittedSearch] = useState('')
   // NOT IMPLEMENTED YET -- search delay for api call after
   const debouncedSubSearch = useDebounce(submittedSearch, 500)
+  const [recentTaxon, setRecentTaxon] = useState('')
+  const [recentTaxDate, setRecentTaxDate] = useState('')
 
   // The taxonId from the API corresponding to a unique organism
   const [selectedTaxonId, setSelectedTaxonId] = useState<number | null>(null)
@@ -357,6 +359,36 @@ export const Web = () => {
   }, [shouldDisplayResults, selectedThumbnail, taxonDesc]) */
 
   // Fetch suggestions when user types in the search box
+  useEffect(() => {
+    const params = new URLSearchParams({
+      project_id: String(projectId),
+      //taxon_name: submittedSearch,
+      quality_grade: 'research',
+      per_page: '1',
+      fields: observationFieldsParam,
+      photo_licensed: 'true',
+      licensed: 'true',
+      order_by: 'created_at',
+      order: 'desc',
+    })
+
+    apiClient.get(`/observations?${params.toString()}`).then((data) => {
+      const mostRecent = data.data.results[0]
+      const date = new Date(mostRecent.created_at)
+      const readable = date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+      //console.log(readable)
+      //console.log(mostRecent)
+      setRecentTaxon(mostRecent.taxon.preferred_common_name)
+      setRecentTaxDate(readable)
+    })
+  }, [])
+
   useEffect(() => {
     let canceled = false
     const query = search.trim()
@@ -1021,7 +1053,7 @@ export const Web = () => {
                   type="text"
                   onChange={handleInputChange}
                   value={search}
-                  placeholder={searchError || 'Search...'}
+                  placeholder={searchError || 'Organism (ex. Osprey)'}
                 />
 
                 <Dropdown
@@ -1055,11 +1087,11 @@ export const Web = () => {
                   ref={locationDropdownRef}
                 >
                   <input
-                    className="w-full"
+                    className="w-full placeholder-[#bfb6b6]"
                     type="text"
                     value={locationInput}
                     onChange={handleLocationChange}
-                    placeholder="Location"
+                    placeholder="Location (ex. Cary, NC)"
                     onFocus={() => {
                       if (
                         speciesInputReady &&
@@ -1136,6 +1168,11 @@ export const Web = () => {
             </div>
           </form>
         </div>
+        {!search.trim() && (
+          <h2 className="mt-2 text-center text-gray-500">
+            A {recentTaxon} was observed {recentTaxDate}
+          </h2>
+        )}
       </div>
       {(shouldDisplayResults || isTaxonMetaLoading || isResultsLoading) && (
         <div className="col-8 mt-6 space-y-6">
@@ -1159,7 +1196,7 @@ export const Web = () => {
                 )}
                 {selectedThumbnail && taxonDesc && (
                   <h1
-                    className={'max-w-prose'}
+                    className={'max-w-prose text-[12px] sm:text-lg'}
                     dangerouslySetInnerHTML={{ __html: taxonDesc }}
                   />
                 )}
