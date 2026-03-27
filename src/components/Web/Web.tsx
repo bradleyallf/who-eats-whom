@@ -992,7 +992,7 @@ export const Web = () => {
   // ---------------------
   return (
     <>
-      <div className="mt-12 sticky top-0 z-50 bg-white p-5">
+      <div className="mt-3 sticky top-[72px] z-40 bg-white p-5">
         <div className="flex flex-col md:flex-row justify-center gap-2 w-full">
           {/* type selector */}
           <select
@@ -1041,7 +1041,7 @@ export const Web = () => {
               )}*/}
               <div className="relative min-w-0 flex-1" style={{ zIndex: 2 }}>
                 <input
-                  className={`w-full ${
+                  className={`w-full placeholder-[#bfb6b6] ${
                     searchError
                       ? 'border-red-500 text-red-600 placeholder:text-red-500'
                       : ''
@@ -1135,7 +1135,7 @@ export const Web = () => {
                 </div>
                 <div className="flex w-[5.5rem] shrink-0 items-stretch sm:w-24">
                   <input
-                    className="w-full"
+                    className="w-full placeholder-[#bfb6b6]"
                     type="text"
                     value={yearFilter}
                     onChange={handleYearChange}
@@ -1163,6 +1163,13 @@ export const Web = () => {
               </div>
             </div>
           </form>
+        </div>
+        <div>
+          {!search.trim() && (
+            <h2 className="mt-2 text-center text-gray-500">
+              A {recentTaxon} was observed {recentTaxDate}
+            </h2>
+          )}
         </div>
         {/* Compact search summary replaces the old large summary card. */}
         {shouldDisplayResults && (
