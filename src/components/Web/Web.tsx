@@ -11,7 +11,6 @@ import { apiClient } from '../../utils'
 
 import { SearchResultGrid } from './SearchedAnimal'
 import { SearchResultGraph } from './SearchResultGraph'
-import { SearchResultSummary } from './SearchResultSummary'
 import { Observation, Ofv } from './types'
 import { Dropdown, Suggestion } from './Dropdown'
 import { SearchResultNetwork } from './SearchResultNetwork'
@@ -827,9 +826,6 @@ export const Web = () => {
     setSubmittedSearch(trimmedSearch)
     setSearchNonce((n) => n + 1)
     setShouldDisplayResults(true)
-    //setData([])
-    //setEatenByData([])
-    //setPartnerData({})
   }
 
   const handleLocationSuggestionClick = (place: PlaceResult) => {
@@ -996,7 +992,7 @@ export const Web = () => {
   // ---------------------
   return (
     <>
-      <div className="mt-12">
+      <div className="mt-12 sticky top-0 z-50 bg-white p-5">
         <div className="flex flex-col md:flex-row justify-center gap-2 w-full">
           {/* type selector */}
           <select
@@ -1168,79 +1164,65 @@ export const Web = () => {
             </div>
           </form>
         </div>
-        {!search.trim() && (
-          <h2 className="mt-2 text-center text-gray-500">
-            A {recentTaxon} was observed {recentTaxDate}
-          </h2>
+        {/* Compact search summary replaces the old large summary card. */}
+        {shouldDisplayResults && (
+          <div className="mt-3 flex justify-center">
+            <div className="w-full max-w-[60rem] text-xs text-slate-600 md:text-sm">
+              {isResultsLoading ? (
+                <span>Loading results...</span>
+              ) : (
+                <>
+                  <span>
+                    {updatedSearchLength == 0 ? 0 : filteredResults.length}{' '}
+                    observations, {updatedSearchLength == 0 ? 0 : totalSpecies}{' '}
+                    species
+                  </span>
+                  {!aggregatedCounterparts.length ? null : (
+                    <button
+                      type="button"
+                      onClick={downloadCsv}
+                      className="ml-3 font-medium text-slate-800 underline underline-offset-2 hover:text-black"
+                    >
+                      Download CSV
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
         )}
       </div>
-      {(shouldDisplayResults || isTaxonMetaLoading || isResultsLoading) && (
+      {shouldDisplayResults && (
         <div className="col-8 mt-6 space-y-6">
           <div ref={taxonMetaSentinelRef} aria-hidden className="h-px" />
-
-          <div className={'flex justify-center items-start gap-4'}>
-            {isTaxonMetaLoading ? (
-              <div className="flex items-center gap-3 rounded-lg bg-white/90 px-4 py-3 border border-slate-200 shadow-sm">
-                <span
-                  className="inline-block h-10 w-10 rounded-full border-4 border-slate-300 border-t-slate-800 animate-spin"
-                  aria-label="Loading species details"
-                />
-                <span className="text-sm text-slate-700">
-                  Loading species details...
-                </span>
-              </div>
-            ) : (
-              <>
-                {selectedThumbnail && taxonDesc && (
-                  <img className={'rounded'} src={selectedThumbnail} alt="" />
-                )}
-                {selectedThumbnail && taxonDesc && (
-                  <h1
-                    className={'max-w-prose text-[12px] sm:text-lg'}
-                    dangerouslySetInnerHTML={{ __html: taxonDesc }}
-                  />
-                )}
-              </>
+          <div
+            className={`flex justify-center items-start gap-4 transition-[background-color,border-color,box-shadow,padding] duration-300 ease-out ${
+              isTaxonMetaCondensed
+                ? 'bg-white/90 backdrop-blur border border-slate-200 rounded-lg px-3 py-2 shadow-sm'
+                : ''
+            }`}
+          >
+            {selectedThumbnail && taxonDesc && (
+              <img
+                className={`rounded transition-[width,height,border-radius] duration-300 ease-out ${
+                  isTaxonMetaCondensed ? `w-10 h-10` : `w-24 h-24 rounded`
+                }`}
+                src={selectedThumbnail}
+                alt=""
+              />
+            )}
+            {selectedThumbnail && taxonDesc && (
+              <h1
+                className={`transition-[font-size,line-height,opacity] duration-300 ease-out ${
+                  isTaxonMetaCondensed
+                    ? `text-sm leading-snug max-w-xl max-h-10 overflow-hidden opacity-95`
+                    : 'max-w-prose'
+                }`}
+                dangerouslySetInnerHTML={{ __html: taxonDesc }}
+              />
             )}
           </div>
-          {/* Multiple result summary renders for if there is a selected id or not.
-          If yes, wait on the thumbnail and description to render before the summary.*/}
-          {selectedTaxonId ? (
-            selectedThumbnail &&
-            taxonDesc && (
-              <SearchResultSummary
-                heading={`Search results for ${
-                  type === 'eaten' ? 'Who eats' : 'Who is eaten by'
-                } ${speciesLabel}${
-                  selectedPlaceLabel ? ` in ${selectedPlaceLabel}` : ''
-                }${yearFilter ? ` in ${yearFilter}` : ''}:`}
-                totalObservations={
-                  updatedSearchLength == 0 ? 0 : filteredResults.length
-                }
-                taxonThumbnail={selectedThumbnail}
-                totalSpecies={updatedSearchLength == 0 ? 0 : totalSpecies}
-                onDownload={downloadCsv}
-                isDownloadDisabled={!aggregatedCounterparts.length}
-                isLoading={isResultsLoading}
-              />
-            )
-          ) : (
-            <SearchResultSummary
-              heading={`Search results for ${
-                type === 'eaten' ? 'Who eats' : 'Who is eaten by'
-              } ${speciesLabel}${
-                selectedPlaceLabel ? ` in ${selectedPlaceLabel}` : ''
-              }${yearFilter ? ` in ${yearFilter}` : ''}:`}
-              totalObservations={
-                updatedSearchLength == 0 ? 0 : filteredResults.length
-              }
-              taxonThumbnail={selectedThumbnail ? selectedThumbnail : null}
-              totalSpecies={updatedSearchLength == 0 ? 0 : totalSpecies}
-              onDownload={downloadCsv}
-              isDownloadDisabled={!aggregatedCounterparts.length}
-              isLoading={isResultsLoading}
-            />
-          )}
+          {/* Replaced the old summary card with one line sticky summary above. */}
 
           {isResultsLoading ? (
             <div className="p-4 border border-slate-200 rounded text-sm text-slate-700 flex items-center gap-3">

@@ -40,33 +40,13 @@ export const SearchResultSummary = (props: Props) => {
     )
 
   return (
-    <div className="sticky fixed top-0 z-[9999]">
-      <div className="flex flex-col gap-2 rounded-md bg-slate-800 px-2.5 py-2.5 text-white shadow-lg sm:gap-4 sm:px-6 sm:py-4">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-6 lg:grid-cols-[minmax(20rem,30rem)_auto_auto_auto] lg:items-center lg:gap-6">
-          {taxonThumbnail ? (
-            <div className="flex min-w-0 items-center gap-1">
-              <p className="min-w-0 flex-1 text-sm font-semibold leading-snug sm:text-lg">
-                {heading}
-              </p>
-
-              <div className="flex shrink-0 items-center gap-1">
-                <img
-                  className="relative z-50 h-10 w-10 rounded object-cover sm:-top-1 sm:h-10 sm:w-10"
-                  src={taxonThumbnail}
-                  alt="nothing"
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="min-w-0">
-              <p className="min-w-0 text-sm font-semibold leading-snug sm:text-lg">
-                {heading}
-              </p>
-            </div>
-          )}
-
-          <div className="justify-self-center sm:justify-self-start flex w-fit flex-nowrap items-center justify-center gap-3 text-right text-white sm:justify-center sm:gap-8">
-            <div className="shrink-0">
+    // removed sticky top-0 z-50 
+    <div className="">
+      <div className="flex flex-col gap-4 rounded-md bg-slate-800 px-6 py-4 text-white shadow-lg">
+        <p className="text-lg font-semibold leading-snug">{heading}</p>
+        <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+          <div className="flex items-end gap-6 text-right text-white">
+            <div>
               <StatValue value={totalObservations} />
               <span className="text-[9px] uppercase tracking-wide text-slate-300 sm:text-xs md:text-xs">
                 Observations
