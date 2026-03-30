@@ -40,7 +40,7 @@ export const SearchResultSummary = (props: Props) => {
     )
 
   return (
-    // removed sticky top-0 z-50 
+    // removed sticky top-0 z-50
     <div className="">
       <div className="flex flex-col gap-4 rounded-md bg-slate-800 px-6 py-4 text-white shadow-lg">
         <p className="text-lg font-semibold leading-snug">{heading}</p>
@@ -55,7 +55,7 @@ export const SearchResultSummary = (props: Props) => {
             <div className="shrink-0">
               <StatValue value={totalSpecies} />
               <span className="text-[9px] uppercase tracking-wide text-slate-300 sm:text-xs md:text-xs">
-                Unique species
+                Unique
               </span>
             </div>
           </div>
