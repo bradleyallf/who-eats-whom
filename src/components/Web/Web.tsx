@@ -1154,7 +1154,7 @@ export const Web = () => {
                 <button
                   type="submit"
                   disabled={isResolvingPlace}
-                  className={`shrink-0 rounded bg-orange-500 px-4 text-white font-semibold ${
+                  className={`shrink-0 rounded bg-orange-700 px-4 text-white font-semibold ${
                     isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
                   }`}
                 >

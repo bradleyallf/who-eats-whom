@@ -324,7 +324,35 @@ export const SearchResultNetwork = (props: Props) => {
       labels.style('opacity', clamped)
     }
 
-    node.append('title').text((d: NodeDatum) => `${d.label}\nGroup: ${categoryLabelMap.get(d.category) || 'Other'}`)
+    node
+      .append('title')
+      .text(
+        (d: NodeDatum) =>
+          `${d.label}\nGroup: ${categoryLabelMap.get(d.category) || 'Other'}`
+      )
+
+    // makes it clearer what node you are on when you tab
+    // node
+    //   .append('circle')
+    //   .attr('class', 'focus-ring')
+    //   .attr('r', (d: NodeDatum) => getNodeRadius(d) + 6)
+    //   .attr('fill', 'none')
+    //   .attr('stroke', '#2563eb')
+    //   .attr('stroke-width', 2)
+    //   .attr('pointer-events', 'none')
+    //   .style('display', 'none')
+
+    // nodeCircles.on('focus', (event: FocusEvent) => {
+    //   d3.select((event.currentTarget as SVGCircleElement).parentNode as SVGGElement)
+    //     .select('.focus-ring')
+    //     .style('display', null)
+    // })
+    // nodeCircles.on('blur', (event: FocusEvent) => {
+    //   d3.select((event.currentTarget as SVGCircleElement).parentNode as SVGGElement)
+    //     .select('.focus-ring')
+    //     .style('display', 'none')
+    // })
+
 
     const simulation = d3
       .forceSimulation(nodes as NodeDatum[])
@@ -500,6 +528,47 @@ export const SearchResultNetwork = (props: Props) => {
 
       focusNode(match)
     }
+
+    // ---- Keyboard accessibility for network nodes --------------
+    // const adjacentNodeIds = new Map<string, string[]>()
+    // links.forEach((link) => {
+    //   const s = typeof link.source === 'object' ? (link.source as NodeDatum).id : link.source as string
+    //   const t = typeof link.target === 'object' ? (link.target as NodeDatum).id : link.target as string
+    //   if (!adjacentNodeIds.has(s)) adjacentNodeIds.set(s, [])
+    //   if (!adjacentNodeIds.has(t)) adjacentNodeIds.set(t, [])
+    //   if (!adjacentNodeIds.get(s)!.includes(t)) adjacentNodeIds.get(s)!.push(t)
+    //   if (!adjacentNodeIds.get(t)!.includes(s)) adjacentNodeIds.get(t)!.push(s)
+    // })
+
+    // const adjFocusIndex = new Map<string, number>()
+
+    // nodeCircles.on('keydown', (event: KeyboardEvent, d: NodeDatum) => {
+    //   if (event.key === 'Enter' || event.key === ' ') {
+    //     event.preventDefault()
+    //     highlight(d.id)
+    //   } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+    //     event.preventDefault()
+    //     const adjIds = adjacentNodeIds.get(d.id) || []
+    //     if (!adjIds.length) return
+    //     const next = ((adjFocusIndex.get(d.id) ?? -1) + 1) % adjIds.length
+    //     adjFocusIndex.set(d.id, next)
+    //     ;(nodeCircles
+    //       .filter((n: NodeDatum) => n.id === adjIds[next])
+    //       .node() as SVGCircleElement | null)
+    //       ?.focus()
+    //   } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+    //     event.preventDefault()
+    //     const adjIds = adjacentNodeIds.get(d.id) || []
+    //     if (!adjIds.length) return
+    //     const prev = ((adjFocusIndex.get(d.id) ?? 0) - 1 + adjIds.length) % adjIds.length
+    //     adjFocusIndex.set(d.id, prev)
+    //     ;(nodeCircles
+    //       .filter((n: NodeDatum) => n.id === adjIds[prev])
+    //       .node() as SVGCircleElement | null)
+    //       ?.focus()
+    //   }
+    // })
+    // //
 
     const handleButtonClick = () => {
       if (!searchInput) return
