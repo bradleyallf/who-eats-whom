@@ -98,25 +98,10 @@ const types: Record<
 }
 
 const partnerFieldId = 12796
-const projectId = 41347
 const eaterEatenFieldId = 12795 // in the ofvs array
-const observationFieldsParam = [
-  'id',
-  'uri',
-  'ofvs',
-  'taxon',
-  'photos',
-  'geojson',
-  'location',
-  'positional_accuracy',
-  'place_country_name',
-  'place_state_name',
-  'place_county_name',
-  'place_town_name',
-].join(',')
 
 interface PlaceResult {
-  id: number
+  id: string
   name: string
   display_name?: string
   place_type_name?: string
@@ -137,6 +122,9 @@ export const Web = () => {
   // --------------------- ===
   //  STATE
   // ---------------------
+  const taxonMetaSentinelRef = useRef<HTMLDivElement | null>(null)
+  const [isTaxonMetaCondensed, setIsTaxonMetaCondensed] = useState(false)
+
   const [data, setData] = useState<Observation[]>([])
   const [partnerData, setPartnerData] = useState<Record<string, Observation>>(
     {}
@@ -152,6 +140,7 @@ export const Web = () => {
 
   // The taxonId from the API corresponding to a unique organism
   const [selectedTaxonId, setSelectedTaxonId] = useState<number | null>(null)
+  const [taxonDesc, setTaxonDesc] = useState<string | null>()
 
   // State representing the updated amount of results from API on each year update
   // Added to handle year adjustments to properly display 0 results
@@ -164,13 +153,11 @@ export const Web = () => {
     []
   )
   const [locationInput, setLocationInput] = useState('')
-  const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null)
   const [selectedPlaceLabel, setSelectedPlaceLabel] = useState<string | null>(
     null
   )
   const [placeLookupError, setPlaceLookupError] = useState<string | null>(null)
   const [searchError, setSearchError] = useState<string | null>(null)
-  const [isResolvingPlace, setIsResolvingPlace] = useState(false)
   const [isSearchLoading, setIsSearchLoading] = useState(false)
   const [isPartnerLoading, setIsPartnerLoading] = useState(false)
   const [isSuggestionLoading, setIsSuggestionLoading] = useState(false)
@@ -227,18 +214,13 @@ export const Web = () => {
     }
 
     const params = new URLSearchParams({
-      id: uniqueIds.join(','),
-      quality_grade: 'research',
-      per_page: '200',
-      fields: observationFieldsParam,
+      ids: uniqueIds.join(','),
+      limit: '200',
     })
-    if (selectedPlaceId) {
-      params.append('place_id', String(selectedPlaceId))
-    }
 
     try {
-      const d = await apiClient.get(`/observations?${params.toString()}`)
-      setEatenByData(d.data.results)
+      const d = await apiClient.get(`/v1/interactions?${params.toString()}`)
+      setEatenByData(d.data.results || [])
     } catch (error) {
       setPartnerLoadingFailed()
       return
@@ -249,73 +231,50 @@ export const Web = () => {
   const fetchPlaceCandidates = async (
     query: string
   ): Promise<PlaceResult[]> => {
-    const params = new URLSearchParams({ q: query, per_page: '10' })
+    const params = new URLSearchParams({ q: query, limit: '10' })
 
     try {
       const response = await apiClient.get(
-        `/places/autocomplete?${params.toString()}`
+        `/v1/locations/search?${params.toString()}`
       )
-      if (response.data?.results?.length) {
-        return response.data.results
-      }
-    } catch (error) {
-      console.error('Place autocomplete failed, falling back to /places', error)
-    }
-
-    try {
-      const response = await apiClient.get(`/places?${params.toString()}`)
       return response.data?.results || []
     } catch (error) {
-      console.error('Fallback place lookup failed', error)
+      console.error('Location search failed', error)
       throw error
     }
-  }
-
-  const resolvePlace = async (query: string): Promise<PlaceResult | null> => {
-    const results = await fetchPlaceCandidates(query)
-    if (!results.length) return null
-
-    const normalized = query.trim().toLowerCase()
-    const exact = results.find(
-      (place) =>
-        place.display_name?.toLowerCase() === normalized ||
-        place.name?.toLowerCase() === normalized
-    )
-    if (exact) return exact
-
-    const priorities = [
-      'Country',
-      'State',
-      'Province',
-      'County',
-      'Region',
-      'Local Administrative Area',
-    ]
-
-    const prioritized = results.slice().sort((a, b) => {
-      const priorityIndex = (place?: PlaceResult) => {
-        if (!place?.place_type_name) return priorities.length
-        const idx = priorities.findIndex(
-          (label) =>
-            label.toLowerCase() === place.place_type_name?.toLowerCase()
-        )
-        return idx === -1 ? priorities.length : idx
-      }
-      return priorityIndex(a) - priorityIndex(b)
-    })
-
-    return (
-      prioritized.find((place) =>
-        place.display_name?.toLowerCase().includes(normalized)
-      ) ||
-      prioritized[0] ||
-      null
-    )
   }
 
   // --------------------- ===
   //  EFFECTS
   // ---------------------
+
+  // Checks what position on the screen the scroll is, determining if there should be a condensed
+  // Taxon description or not
+  useEffect(() => {
+    const sentinel = taxonMetaSentinelRef.current
+    if (!sentinel) return
+
+    const collapseThreshold = 8
+    const expandThreshold = 28
+
+    const updateCondensedState = () => {
+      const top = sentinel.getBoundingClientRect().top
+      setIsTaxonMetaCondensed((prev) => {
+        if (!prev && top <= collapseThreshold) return true
+        if (prev && top >= expandThreshold) return false
+        return prev
+      })
+    }
+
+    updateCondensedState()
+    window.addEventListener('scroll', updateCondensedState, { passive: true })
+    window.addEventListener('resize', updateCondensedState)
+
+    return () => {
+      window.removeEventListener('scroll', updateCondensedState)
+      window.removeEventListener('resize', updateCondensedState)
+    }
+  }, [shouldDisplayResults, selectedThumbnail, taxonDesc])
 
   // Fetch suggestions when user types in the search box
   useEffect(() => {
@@ -334,17 +293,21 @@ export const Web = () => {
 
     const params = new URLSearchParams({
       q: query,
-      per_page: '25',
+      limit: '25',
     })
-    if (selectedPlaceId) {
-      params.append('place_id', String(selectedPlaceId))
-    }
 
     apiClient
-      .get(`/taxa/autocomplete?${params.toString()}`)
+      .get(`/v1/species/search?${params.toString()}`)
       .then((d) => {
         if (!canceled) {
-          setSuggestionSource(d.data.results || [])
+          const mapped =
+            d.data.results?.map((result: any) => ({
+              id: result.taxon_id,
+              name: result.scientific_name,
+              preferred_common_name: result.common_name,
+              default_photo: result.default_photo,
+            })) || []
+          setSuggestionSource(mapped)
           setIsSuggestionLoading(false)
         }
       })
@@ -358,7 +321,7 @@ export const Web = () => {
     return () => {
       canceled = true
     }
-  }, [search, selectedPlaceId])
+  }, [search])
 
   // Fetch location suggestions when user types in the location box,
   // but only if the species input is ready (to avoid unnecessary calls)
@@ -430,7 +393,7 @@ export const Web = () => {
       // "eater" or "organism being eaten" (previously "thing being eaten")
       if (!typeObj) return
       //console.log('id:',d.id, 'typeObj:', typeObj.value, 'type:', type, 'typeValue:', types[type].value)
-
+      //console.log('licensed: ' + d.license_code)
       if (getLastLetter(typeObj.value) === getLastLetter(types[type].value)) {
         filteredData.push(d)
       }
@@ -465,8 +428,13 @@ export const Web = () => {
       })
     })
     setPartnerData(partnerD)
+    if (!observationIds.length) {
+      setEatenByData(filteredData)
+      setIsPartnerLoading(false)
+      return
+    }
     getPartnerData(observationIds)
-  }, [data, type, shouldDisplayResults, selectedPlaceId, isSearchLoading])
+  }, [data, type, shouldDisplayResults, isSearchLoading])
 
   // When search parameters change (search term, place filter, year filter), fetch new data from API
   // MAIN SEARCH EFFECT / API CALL / QUERY
@@ -495,38 +463,33 @@ export const Web = () => {
     setIsSearchLoading(true)
 
     const params = new URLSearchParams({
-      project_id: String(projectId),
-      //taxon_name: submittedSearch,
-      quality_grade: 'research',
-      per_page: '200',
-      fields: observationFieldsParam,
+      limit: '200',
     })
     if (selectedTaxonId) {
       params.append('taxon_id', String(selectedTaxonId))
     } else {
       params.append('taxon_name', submittedSearch)
     }
-    if (selectedPlaceId) {
-      params.append('place_id', String(selectedPlaceId))
+    const roleParam =
+      type === types.eaten.key ? types.eaten.value : types.eater.value
+    params.append('role', roleParam)
+    if (selectedPlaceLabel) {
+      params.append('location', selectedPlaceLabel)
     }
     if (yearFilter && /^\d{4}$/.test(yearFilter)) {
-      params.append('d1', `${yearFilter}-01-01`)
-      params.append('d2', `${yearFilter}-12-31`)
+      params.append('year', yearFilter)
     }
 
     apiClient
-      .get(`/observations?${params.toString()}`)
+      .get(`/v1/interactions?${params.toString()}`)
       .then((d) => {
-        setUpdatedSearchLength(d.data.results?.length || 0)
-        if (!canceled && d.data?.results != 0) {
-          setData(d.data.results || [])
-          setIsSearchLoading(false)
-          setIsPartnerLoading(false)
-          setShouldDisplayResults(true)
-        } else {
-          setIsSearchLoading(false)
-          setShouldDisplayResults(true)
-        }
+        if (canceled) return
+        const results = d.data?.results || []
+        setUpdatedSearchLength(results.length)
+        setData(results)
+        setIsSearchLoading(false)
+        setIsPartnerLoading(false)
+        setShouldDisplayResults(true)
       })
       .catch(() => {
         if (!canceled) {
@@ -539,7 +502,23 @@ export const Web = () => {
     return () => {
       canceled = true
     }
-  }, [submittedSearch, selectedPlaceId, searchNonce, yearFilter])
+  }, [submittedSearch, selectedPlaceLabel, searchNonce, yearFilter, type])
+
+  // Separate use effect for the about organism information
+  useEffect(() => {
+    if (!selectedTaxonId) {
+      setTaxonDesc('')
+      return
+    }
+    apiClient
+      .get(`/v1/species/${selectedTaxonId}`)
+      .then((d) => {
+        setTaxonDesc(d.data.results?.[0]?.wikipedia_summary || '')
+      })
+      .catch(() => {
+        setTaxonDesc('')
+      })
+  }, [selectedTaxonId])
 
   // Close dropdown when clicking outside or pressing Escape/Enter
   useEffect(() => {
@@ -590,6 +569,7 @@ export const Web = () => {
     const { value } = evt.target
     setSearch(value)
     setSelectedTaxonId(null)
+    setTaxonDesc('')
     setIsDropdownOpen(value.trim().length >= 1)
     setSearchError(null)
     setShouldDisplayResults(false)
@@ -614,7 +594,6 @@ export const Web = () => {
     const { value } = evt.target
     setLocationInput(value)
     setSelectedPlaceLabel(null)
-    setSelectedPlaceId(null)
     setPlaceLookupError(null)
     setShouldDisplayResults(false)
     const trimmed = value.trim()
@@ -632,13 +611,8 @@ export const Web = () => {
       | undefined,
     explicitSearch?: string,
     explicitThumbnail?: string | null,
-    explicitLocation?: { id: number | null; label: string | null }
-    //explicitYear?: string | null
+    explicitLocation?: { label: string | null }
   ) => {
-    /*
-    if (explicitYear != null && explicitYear != undefined) {
-      setYearFilter(explicitYear)
-    }*/
     evt?.preventDefault()
     setIsDropdownOpen(false)
     setIsLocationDropdownOpen(false)
@@ -673,51 +647,8 @@ export const Web = () => {
     setIsSearchLoading(true)
 
     const trimmedLocation = (explicitLocation?.label ?? locationInput).trim()
-    let resolvedId: number | null = explicitLocation?.id ?? null
-    let resolvedLabel: string | null = explicitLocation?.label ?? null
+    const resolvedLabel = trimmedLocation || null
 
-    // If location input was cleared, make sure we clear any prior place filters
-    if (!trimmedLocation) {
-      resolvedId = null
-      resolvedLabel = null
-      setSelectedPlaceId(null)
-      setSelectedPlaceLabel(null)
-    }
-
-    try {
-      if (trimmedLocation && explicitLocation === undefined) {
-        setIsResolvingPlace(true)
-        const place = await resolvePlace(trimmedLocation)
-        resolvedId = place?.id ?? null
-        resolvedLabel = place?.display_name || place?.name || trimmedLocation
-      }
-
-      if (trimmedLocation && resolvedId === null) {
-        setIsSearchLoading(false)
-        setIsPartnerLoading(false)
-        setSelectedPlaceId(null)
-        setSelectedPlaceLabel(null)
-        setData([])
-        setEatenByData([])
-        setPartnerData({})
-        setShouldDisplayResults(true)
-        setSubmittedSearch('')
-        return
-      }
-    } catch (error) {
-      setIsSearchLoading(false)
-      setIsPartnerLoading(false)
-      setIsResolvingPlace(false)
-      setPlaceLookupError(
-        'Unable to resolve that location. Please try another.'
-      )
-      setShouldDisplayResults(false)
-      return
-    } finally {
-      setIsResolvingPlace(false)
-    }
-
-    setSelectedPlaceId(resolvedId)
     setSelectedPlaceLabel(resolvedLabel)
     setSubmittedSearch(trimmedSearch)
     setSearchNonce((n) => n + 1)
@@ -730,13 +661,11 @@ export const Web = () => {
   const handleLocationSuggestionClick = (place: PlaceResult) => {
     const label = place.display_name || place.name
     setLocationInput(label || '')
-    setSelectedPlaceId(place.id)
     setSelectedPlaceLabel(label || null)
     setPlaceLookupError(null)
     setIsLocationDropdownOpen(false)
     setShouldDisplayResults(false)
     void handleSubmit(undefined, search, selectedThumbnail, {
-      id: place.id,
       label: label || null,
     })
   }
@@ -870,9 +799,8 @@ export const Web = () => {
     const location = selectedPlaceLabel ? sanitize(selectedPlaceLabel) : null
     const prefix = type === 'eaten' ? 'Who Eats' : 'Who is Eaten By'
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const fileName = `${prefix} ${species}${
-      location ? ` - ${location}` : ''
-    } ${timestamp}.csv`
+    const fileName = `${prefix} ${species}${location ? ` - ${location}` : ''
+      } ${timestamp}.csv`
 
     const link = document.createElement('a')
     link.href = url
@@ -895,7 +823,7 @@ export const Web = () => {
         <div className="flex flex-col md:flex-row justify-center gap-2 w-full">
           {/* type selector */}
           <select
-            className="form-select form-select-lg w-full max-w-[12rem]"
+            className="hidden md:block form-select form-select-lg w-full max-w-[12rem]"
             value={type}
             onChange={(evt) => {
               const { value } = evt.target
@@ -911,10 +839,25 @@ export const Web = () => {
 
           {/* search box + dropdown */}
           <form
-            className="w-full max-w-3xl flex items-stretch gap-2"
+            className="w-full max-w-3xl flex flex-col gap-2 md:flex-row md:items-stretch"
             onSubmit={handleSubmit}
           >
             <div className="flex flex-1 items-center gap-2">
+              {/* Adjusting Who Eats bar for smaller screens */}
+              <select
+                className="md:hidden form-select form-select-lg w-full max-w-[12rem] shrink-0"
+                value={type}
+                onChange={(evt) => {
+                  const { value } = evt.target
+                  if (value === 'eaten' || value === 'eater') setType(value)
+                }}
+              >
+                {(Object.keys(types) as Array<Ofv['value']>).map((key) => (
+                  <option value={key} key={key}>
+                    {types[key].label}
+                  </option>
+                ))}
+              </select>
               {selectedThumbnail && (
                 <img
                   src={selectedThumbnail}
@@ -924,11 +867,10 @@ export const Web = () => {
               )}
               <div className="relative flex-1" style={{ zIndex: 2 }}>
                 <input
-                  className={`w-full ${
-                    searchError
+                  className={`w-full ${searchError
                       ? 'border-red-500 text-red-600 placeholder:text-red-500'
                       : ''
-                  }`}
+                    }`}
                   type="text"
                   onChange={handleInputChange}
                   value={search}
@@ -953,15 +895,15 @@ export const Web = () => {
                 />
               </div>
             </div>
-            <div className="flex flex-col gap-1 items-start">
+            <div className="flex flex-col gap-1 items-start w-full md:w-auto">
               {placeLookupError && (
                 <p className="text-sm text-red-600 max-w-[16rem] leading-snug">
                   {placeLookupError}
                 </p>
               )}
-              <div className="flex items-stretch gap-2">
+              <div className="flex items-stretch gap-2 w-full md:w-auto">
                 <div
-                  className="relative w-full max-w-xs"
+                  className="relative w-full md:max-w-xs"
                   style={{ zIndex: 1 }}
                   ref={locationDropdownRef}
                 >
@@ -1036,12 +978,9 @@ export const Web = () => {
 
                 <button
                   type="submit"
-                  disabled={isResolvingPlace}
-                  className={`px-4 bg-orange-500 text-white font-semibold rounded ${
-                    isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
-                  }`}
+                  className="px-4 bg-orange-500 text-white font-semibold rounded"
                 >
-                  {isResolvingPlace ? 'Loading...' : 'Go'}
+                  Go
                 </button>
               </div>
             </div>
@@ -1049,7 +988,35 @@ export const Web = () => {
         </div>
       </div>
       {shouldDisplayResults && (
-        <div className="col-12 mt-20 space-y-6">
+        <div className="col-8 mt-6 space-y-6">
+          <div ref={taxonMetaSentinelRef} aria-hidden className="h-px" />
+          <div
+            className={`sticky top-0 z-50 flex justify-center items-start gap-4 transition-[background-color,border-color,box-shadow,padding] duration-300 ease-out ${
+              isTaxonMetaCondensed
+                ? 'bg-white/90 backdrop-blur border border-slate-200 rounded-lg px-3 py-2 shadow-sm'
+                : ''
+            }`}
+          >
+            {selectedThumbnail && taxonDesc && (
+              <img
+                className={`rounded transition-[width,height,border-radius] duration-300 ease-out ${
+                  isTaxonMetaCondensed ? `w-10 h-10` : `w-24 h-24 rounded`
+                }`}
+                src={selectedThumbnail}
+                alt=""
+              />
+            )}
+            {selectedThumbnail && taxonDesc && (
+              <h1
+                className={`transition-[font-size,line-height,opacity] duration-300 ease-out ${
+                  isTaxonMetaCondensed
+                    ? `text-sm leading-snug max-w-xl max-h-10 overflow-hidden opacity-95`
+                    : 'max-w-prose'
+                }`}
+                dangerouslySetInnerHTML={{ __html: taxonDesc }}
+              />
+            )}
+          </div>
           <SearchResultSummary
             heading={`Search results for ${
               type === 'eaten' ? 'Who eats' : 'Who is eaten by'
@@ -1112,11 +1079,10 @@ export const Web = () => {
                     onClick={() => {
                       if (!disabled) setSelectedView(key)
                     }}
-                    className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${
-                      selectedView === key
+                    className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${selectedView === key
                         ? 'bg-slate-900 text-white border-slate-900'
                         : 'bg-white text-slate-700 border-slate-200'
-                    } ${disabled ? 'cursor-not-allowed opacity-70' : ''}`}
+                      } ${disabled ? 'cursor-not-allowed opacity-70' : ''}`}
                   >
                     <Icon active={selectedView === key && !disabled} />
                     <span>{label}</span>

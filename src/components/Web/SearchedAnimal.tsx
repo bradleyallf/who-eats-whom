@@ -6,14 +6,12 @@ interface Props {
   partnerData: Record<string, Observation>
 }
 
-const placeholderSrc =
-  'https://via.placeholder.com/400x300.png?text=No+Image'
+const placeholderSrc = 'https://via.placeholder.com/400x300.png?text=No+Image'
 
 const getCommonName = (observation?: Observation) =>
   observation?.taxon.preferred_common_name || observation?.taxon.name
 
-const getScientificName = (observation?: Observation) =>
-  observation?.taxon.name
+const getScientificName = (observation?: Observation) => observation?.taxon.name
 
 export const SearchResultGrid = (props: Props) => {
   const { results, type, partnerData } = props
@@ -29,13 +27,13 @@ export const SearchResultGrid = (props: Props) => {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
       {results.map((result) => {
-        const partner = partnerData[result.id]
-        if (!partner) return null
-
         const displayObservation = result
         const commonName = getCommonName(displayObservation)
         const scientificName = getScientificName(displayObservation)
-        const photoUrl = displayObservation.photos?.[0]?.url
+
+        const safePhoto =
+          displayObservation.photos?.find((photo) => !!photo?.url) || null
+        const photoUrl = safePhoto?.url
         const roleLabel = type === 'eater' ? 'Prey' : 'Predator'
 
         return (
@@ -46,13 +44,29 @@ export const SearchResultGrid = (props: Props) => {
             rel="noopener noreferrer"
             className="block rounded-lg overflow-hidden bg-white border border-slate-200 shadow-sm transition hover:border-slate-300 hover:shadow"
           >
-            <div className="h-48 w-full overflow-hidden bg-slate-100">
+            <div className="h-48 w-full overflow-hidden bg-slate-100 relative">
               <img
-                src={photoUrl ? photoUrl.replace('square', 'medium') : placeholderSrc}
+                src={
+                  photoUrl
+                    ? photoUrl.replace('square', 'medium')
+                    : placeholderSrc
+                }
                 alt={commonName || scientificName || 'Observation'}
                 className="h-full w-full object-cover"
                 loading="lazy"
               />
+              {safePhoto?.license_code && (
+                <div className="bg-black p-2 rounded-full cursor-pointer group">
+                  <h2 className="bg-black/60 absolute top-2 text-white p-1 rounded">
+                    {safePhoto.license_code}
+                  </h2>
+                  {safePhoto.attribution && (
+                    <div className="absolute top-2 left-10 opacity-0 group-hover:opacity-100 transition bg-black text-white text-xs px-2 py-1 rounded">
+                      {safePhoto.attribution}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="p-4">
               <span className="sr-only">{roleLabel}</span>
@@ -60,7 +74,9 @@ export const SearchResultGrid = (props: Props) => {
                 {commonName || 'Unknown species'}
               </p>
               {scientificName && (
-                <p className="text-sm italic text-slate-600">{scientificName}</p>
+                <p className="text-sm italic text-slate-600">
+                  {scientificName}
+                </p>
               )}
             </div>
           </a>
