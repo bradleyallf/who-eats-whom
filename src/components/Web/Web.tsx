@@ -18,6 +18,8 @@ import { SearchResultMap } from './SearchResultMap'
 
 const getLastLetter = (str: string) => str[str.length - 1]
 
+const vowels = ['a', 'e', 'i', 'o', 'u']
+
 const IconGrid = ({ active }: { active: boolean }) => (
   <svg
     aria-hidden
@@ -109,8 +111,7 @@ const observationFieldsParam = [
   'geojson',
   'location',
   'positional_accuracy',
-  //'license',
-  //'license_code',
+  'observed_on',
   'place_country_name',
   'place_state_name',
   'place_county_name',
@@ -167,6 +168,7 @@ export const Web = () => {
   const [updatedSearchLength, setUpdatedSearchLength] = useState(0)
 
   // Year filter added by user
+  //const [advSearchShowing, setAdvSearchShowing] = useState(false)
   const [yearFilter, setYearFilter] = useState<string>('')
   const debouncedYearFilter = useDebounce(yearFilter, 500)
   const [suggestionSource, setSuggestionSource] = useState<TaxonSuggestion[]>(
@@ -324,6 +326,20 @@ export const Web = () => {
     )
   }
 
+  const getPartnerObservationIds = (observation: Observation) =>
+    observation.ofvs
+      ?.filter(
+        (ofv) =>
+          ofv.field_id === partnerFieldId &&
+          typeof ofv.value === 'string' &&
+          ofv.value.includes('/observations/')
+      )
+      .flatMap((ofv) =>
+        Array.from(ofv.value.matchAll(/\/observations\/(\d+)/g)).map(
+          (match) => match[1]
+        )
+      ) || []
+
   // --------------------- ===
   //  EFFECTS
   // ---------------------
@@ -358,6 +374,7 @@ export const Web = () => {
   }, [shouldDisplayResults, selectedThumbnail, taxonDesc]) */
 
   // Fetch suggestions when user types in the search box
+  /*
   useEffect(() => {
     const params = new URLSearchParams({
       project_id: String(projectId),
@@ -386,6 +403,94 @@ export const Web = () => {
       setRecentTaxon(mostRecent.taxon.preferred_common_name)
       setRecentTaxDate(readable)
     })
+  }, [])
+  */
+
+  useEffect(() => {
+    const loadMostRecentWithResearchPartner = async () => {
+      try {
+        const params = new URLSearchParams({
+          project_id: String(projectId),
+          quality_grade: 'research',
+          per_page: '25',
+          fields: observationFieldsParam,
+          photo_licensed: 'true',
+          licensed: 'true',
+          order_by: 'observed_on',
+          order: 'desc',
+        })
+
+        const response = await apiClient.get(
+          `/observations?${params.toString()}`
+        )
+        const recentResults = response.data.results || []
+
+        const partnerIdsByObservation = new Map<number, string[]>()
+
+        recentResults.forEach((observation: Observation) => {
+          const partnerIds = getPartnerObservationIds(observation)
+          if (partnerIds.length) {
+            partnerIdsByObservation.set(observation.id, partnerIds)
+          }
+        })
+
+        const allPartnerIds = Array.from(
+          new Set(Array.from(partnerIdsByObservation.values()).flat())
+        )
+
+        if (!allPartnerIds.length) return
+
+        const partnerParams = new URLSearchParams({
+          id: allPartnerIds.join(','),
+          quality_grade: 'research',
+          per_page: String(allPartnerIds.length),
+          fields: observationFieldsParam,
+          photo_licensed: 'true',
+          licensed: 'true',
+        })
+
+        const partnerResponse = await apiClient.get(
+          `/observations?${partnerParams.toString()}`
+        )
+
+        const researchPartnerIds = new Set(
+          (partnerResponse.data.results || []).map((obs: Observation) =>
+            String(obs.id)
+          )
+        )
+
+        const mostRecentWithResearchPartner = recentResults.find(
+          (observation: Observation) =>
+            partnerIdsByObservation
+              .get(observation.id)
+              ?.some((partnerId) => researchPartnerIds.has(partnerId))
+        )
+
+        if (!mostRecentWithResearchPartner?.observed_on) return
+
+        const date = new Date(
+          `${mostRecentWithResearchPartner.observed_on}T12:00:00`
+        )
+        const readable = date.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
+
+        setRecentTaxon(
+          mostRecentWithResearchPartner.taxon.preferred_common_name ||
+            mostRecentWithResearchPartner.taxon.name
+        )
+        setRecentTaxDate(readable)
+      } catch (error) {
+        console.error(
+          'Unable to load the most recent research-grade observation with a research-grade partner',
+          error
+        )
+      }
+    }
+
+    void loadMostRecentWithResearchPartner()
   }, [])
 
   useEffect(() => {
@@ -1031,14 +1136,13 @@ export const Web = () => {
                   </option>
                 ))}
               </select>
-              {/*}
               {selectedThumbnail && (
                 <img
                   src={selectedThumbnail}
                   alt=""
                   className="h-10 w-10 rounded object-cover border border-slate-200"
                 />
-              )}*/}
+              )}
               <div className="relative min-w-0 flex-1" style={{ zIndex: 2 }}>
                 <input
                   className={`w-full placeholder-[#bfb6b6] ${
@@ -1165,11 +1269,17 @@ export const Web = () => {
           </form>
         </div>
         <div>
-          {!search.trim() && (
-            <h2 className="mt-2 text-center text-gray-500">
-              A {recentTaxon} was observed {recentTaxDate}
-            </h2>
-          )}
+          {!search.trim() &&
+            recentTaxon &&
+            (vowels.includes(recentTaxon.charAt(0).toLowerCase()) ? (
+              <h2 className="mt-2 text-center text-gray-500">
+                An {recentTaxon} was observed {recentTaxDate}
+              </h2>
+            ) : (
+              <h2 className="mt-2 text-center text-gray-500">
+                A {recentTaxon} was observed {recentTaxDate}
+              </h2>
+            ))}
         </div>
         {/* Compact search summary replaces the old large summary card. */}
         {shouldDisplayResults && (
@@ -1181,8 +1291,8 @@ export const Web = () => {
                 <>
                   <span>
                     {updatedSearchLength == 0 ? 0 : filteredResults.length}{' '}
-                    observations, {updatedSearchLength == 0 ? 0 : totalSpecies}{' '}
-                    species
+                    Observations, {updatedSearchLength == 0 ? 0 : totalSpecies}{' '}
+                    Unique Species
                   </span>
                   {!aggregatedCounterparts.length ? null : (
                     <button

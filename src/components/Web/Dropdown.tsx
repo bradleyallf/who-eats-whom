@@ -14,11 +14,18 @@ interface Props {
   onClick: (s: Suggestion) => void
 }
 
-const titleCase = (str: String) =>
-  str
-    .split(' ')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+const titleCase = (value: string) => {
+  const minorWords = new Set(['and', 'or', 'but'])
+
+  return value
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word, index) => {
+      if (index > 0 && minorWords.has(word)) return word
+      return word.charAt(0).toUpperCase() + word.slice(1)
+    })
     .join(' ')
+}
 
 export const Dropdown = (props: Props) => {
   // --------------------- ===
