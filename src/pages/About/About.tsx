@@ -25,6 +25,13 @@ const team = [
     bio: 'Undergraduate researcher concentrating on front-end development and improving user experience.',
     img: `${basePath}Adam.jpg`,
   },
+
+  {
+    name: 'Maithili Bhoop',
+    role: 'Front-End Developer',
+    bio: 'Undergraduate researcher focused on interface design, accessibility, and improving user experience.',
+    img: `${basePath}Maithili-Bhoop.jpg`,
+  },
 ]
 
 export const About = () => {
