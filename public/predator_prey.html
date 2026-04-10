@@ -203,6 +203,16 @@
         stroke: #f97316;
         stroke-opacity: 0.9;
       }
+      .link {
+            stroke: #1e293b;
+            stroke-opacity: 0.55;
+            stroke-width: 1.5;
+        }
+    .link.highlight {
+            stroke: #f97316;
+            stroke-opacity: 0.75;
+            stroke-width: 2.5;
+        }
     </style>
   </head>
   <body>
@@ -304,7 +314,7 @@
         .data(graphData.links)
         .join('line')
         .attr('class', 'link')
-        .attr('stroke-width', d => Math.max(0.03 + d.count, 0.75))
+        .attr('stroke-width', d => Math.max(0.75))
         .attr('marker-end', 'url(#arrowhead)');
 
       const node = zoomLayer.append('g')
@@ -347,6 +357,7 @@ Iconic taxa in group: ${taxaList}`;
               ? 1
               : (scale - minScale) / (maxScale - minScale);
         labels.style('opacity', clamped);
+        labels.style("visibility", scale > .35 ? "visible" : "hidden");
       };
 
       const updateLabels = () => {
