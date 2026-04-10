@@ -179,7 +179,18 @@ export const Web = () => {
   const [selectedPlaceLabel, setSelectedPlaceLabel] = useState<string | null>(
     null
   )
+  const [draftYearFilter, setDraftYearFilter] = useState<string>('')
+  const [draftLocationInput, setDraftLocationInput] = useState('')
+  const [draftSelectedPlaceId, setDraftSelectedPlaceId] = useState<
+    number | null
+  >(null)
+  const [draftSelectedPlaceLabel, setDraftSelectedPlaceLabel] = useState<
+    string | null
+  >(null)
   const [placeLookupError, setPlaceLookupError] = useState<string | null>(null)
+  const [advancedSearchError, setAdvancedSearchError] = useState<string | null>(
+    null
+  )
   const [searchError, setSearchError] = useState<string | null>(null)
   const [isResolvingPlace, setIsResolvingPlace] = useState(false)
   const [isSearchLoading, setIsSearchLoading] = useState(false)
@@ -197,6 +208,7 @@ export const Web = () => {
     null
   )
   const [searchNonce, setSearchNonce] = useState(0)
+  const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false)
 
   const [type, setType] = useState(types.eaten.key)
   const [selectedView, setSelectedView] = useState<
@@ -539,9 +551,9 @@ export const Web = () => {
   // but only if the species input is ready (to avoid unnecessary calls)
   useEffect(() => {
     let canceled = false
-    const query = locationInput.trim()
+    const query = draftLocationInput.trim()
 
-    if (!speciesInputReady || query.length < 3) {
+    if (!isAdvancedSearchOpen || !speciesInputReady || query.length < 3) {
       setLocationSuggestions([])
       setIsLocationSuggestionLoading(false)
       setIsLocationDropdownOpen(false)
@@ -551,8 +563,8 @@ export const Web = () => {
     }
 
     if (
-      selectedPlaceLabel &&
-      query.toLowerCase() === selectedPlaceLabel.toLowerCase()
+      draftSelectedPlaceLabel &&
+      query.toLowerCase() === draftSelectedPlaceLabel.toLowerCase()
     ) {
       setLocationSuggestions([])
       setIsLocationSuggestionLoading(false)
@@ -583,7 +595,12 @@ export const Web = () => {
     return () => {
       canceled = true
     }
-  }, [locationInput, speciesInputReady])
+  }, [
+    draftLocationInput,
+    draftSelectedPlaceLabel,
+    isAdvancedSearchOpen,
+    speciesInputReady,
+  ])
 
   // When new search data comes in, filter it (by eaten or eater) and fetch partner data
   useEffect(() => {
@@ -782,6 +799,21 @@ export const Web = () => {
     }
   }, [isLocationDropdownOpen])
 
+  useEffect(() => {
+    if (!isAdvancedSearchOpen) return
+
+    const handleKey = (evt: KeyboardEvent) => {
+      if (evt.key === 'Escape') {
+        closeAdvancedSearch()
+      }
+    }
+
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [isAdvancedSearchOpen])
+
   // --------------------- ===
   //  HANDLERS
   // ---------------------
@@ -802,27 +834,47 @@ export const Web = () => {
 
   const handleYearChange = (evt: ChangeEvent<HTMLInputElement>) => {
     const { value } = evt.target
-    setShouldDisplayResults(false)
     if (/^\d*$/.test(value)) {
-      setYearFilter(value)
+      setDraftYearFilter(value)
+      setAdvancedSearchError(null)
     } else {
-      setYearFilter('')
+      setDraftYearFilter('')
     }
   }
 
   const handleLocationChange = (evt: ChangeEvent<HTMLInputElement>) => {
     const { value } = evt.target
-    setLocationInput(value)
-    setSelectedPlaceLabel(null)
-    setSelectedPlaceId(null)
+    setDraftLocationInput(value)
+    setDraftSelectedPlaceLabel(null)
+    setDraftSelectedPlaceId(null)
     setPlaceLookupError(null)
-    setShouldDisplayResults(false)
+    setAdvancedSearchError(null)
     const trimmed = value.trim()
     if (trimmed.length < 3) {
       setLocationSuggestions([])
       setIsLocationSuggestionLoading(false)
     }
     setIsLocationDropdownOpen(speciesInputReady && trimmed.length >= 3)
+  }
+
+  const openAdvancedSearch = () => {
+    setDraftYearFilter(yearFilter)
+    setDraftLocationInput(locationInput)
+    setDraftSelectedPlaceId(selectedPlaceId)
+    setDraftSelectedPlaceLabel(selectedPlaceLabel)
+    setPlaceLookupError(null)
+    setAdvancedSearchError(null)
+    setIsLocationDropdownOpen(false)
+    setIsAdvancedSearchOpen(true)
+  }
+
+  const closeAdvancedSearch = () => {
+    setIsAdvancedSearchOpen(false)
+    setIsLocationDropdownOpen(false)
+    setLocationSuggestions([])
+    setIsLocationSuggestionLoading(false)
+    setPlaceLookupError(null)
+    setAdvancedSearchError(null)
   }
 
   const handleSubmit = async (
@@ -832,7 +884,8 @@ export const Web = () => {
       | undefined,
     explicitSearch?: string,
     explicitThumbnail?: string | null,
-    explicitLocation?: { id: number | null; label: string | null }
+    explicitLocation?: { id: number | null; label: string | null },
+    explicitLocationQuery?: string
   ) => {
     evt?.preventDefault()
     setIsDropdownOpen(false)
@@ -849,7 +902,7 @@ export const Web = () => {
       setSearchError('Please enter a species name.')
       setShouldDisplayResults(false)
       setSubmittedSearch('')
-      return
+      return false
     }
     setSearch(trimmedSearch)
 
@@ -868,7 +921,11 @@ export const Web = () => {
     setSearchError(null)
     setIsSearchLoading(true)
 
-    const trimmedLocation = (explicitLocation?.label ?? locationInput).trim()
+    const trimmedLocation = (
+      explicitLocation?.label ??
+      explicitLocationQuery ??
+      locationInput
+    ).trim()
     let resolvedId: number | null = explicitLocation?.id ?? null
     let resolvedLabel: string | null = explicitLocation?.label ?? null
 
@@ -911,7 +968,7 @@ export const Web = () => {
         setPartnerData({})
         setShouldDisplayResults(true)
         setSubmittedSearch('')
-        return
+        return false
       }
     } catch (error) {
       setIsSearchLoading(false)
@@ -921,7 +978,7 @@ export const Web = () => {
         'Unable to resolve that location. Please try another.'
       )
       setShouldDisplayResults(false)
-      return
+      return false
     } finally {
       setIsResolvingPlace(false)
     }
@@ -931,20 +988,67 @@ export const Web = () => {
     setSubmittedSearch(trimmedSearch)
     setSearchNonce((n) => n + 1)
     setShouldDisplayResults(true)
+    return true
   }
 
   const handleLocationSuggestionClick = (place: PlaceResult) => {
     const label = place.display_name || place.name
-    setLocationInput(label || '')
-    setSelectedPlaceId(place.id)
-    setSelectedPlaceLabel(label || null)
+    setDraftLocationInput(label || '')
+    setDraftSelectedPlaceId(place.id)
+    setDraftSelectedPlaceLabel(label || null)
     setPlaceLookupError(null)
     setIsLocationDropdownOpen(false)
-    setShouldDisplayResults(false)
-    void handleSubmit(undefined, search, selectedThumbnail, {
-      id: place.id,
-      label: label || null,
-    })
+  }
+
+  const applyAdvancedFilters = async () => {
+    const nextYear = draftYearFilter.trim()
+    const nextLocation = draftLocationInput.trim()
+
+    if (nextYear && !/^\d{4}$/.test(nextYear)) {
+      setAdvancedSearchError('Please enter a 4-digit year or leave it blank.')
+      return
+    }
+
+    setAdvancedSearchError(null)
+    setPlaceLookupError(null)
+    setYearFilter(nextYear)
+    setLocationInput(nextLocation)
+    setSelectedPlaceId(draftSelectedPlaceId)
+    setSelectedPlaceLabel(draftSelectedPlaceLabel)
+
+    const searchTerm = (submittedSearch || search).trim()
+    if (searchTerm.length < 3) {
+      closeAdvancedSearch()
+      return
+    }
+
+    const didApply = await handleSubmit(
+      undefined,
+      searchTerm,
+      selectedThumbnail,
+      draftSelectedPlaceId !== null
+        ? {
+            id: draftSelectedPlaceId,
+            label: draftSelectedPlaceLabel ?? (nextLocation || null),
+          }
+        : undefined,
+      nextLocation
+    )
+
+    if (didApply) {
+      closeAdvancedSearch()
+    }
+  }
+
+  const clearAdvancedFilters = () => {
+    setDraftYearFilter('')
+    setDraftLocationInput('')
+    setDraftSelectedPlaceId(null)
+    setDraftSelectedPlaceLabel(null)
+    setLocationSuggestions([])
+    setIsLocationDropdownOpen(false)
+    setPlaceLookupError(null)
+    setAdvancedSearchError(null)
   }
 
   const suggestionLookup = useMemo(() => {
@@ -1091,6 +1195,39 @@ export const Web = () => {
 
   const speciesLabel =
     submittedSearch || search.trim() || 'the selected species'
+  const activeAdvancedFiltersLabel = useMemo(() => {
+    const parts: string[] = []
+    if (yearFilter) parts.push(`in ${yearFilter}`)
+    if (selectedPlaceLabel || locationInput.trim()) {
+      parts.push(`in ${selectedPlaceLabel || locationInput.trim()}`)
+    }
+    return parts.join(' • ')
+  }, [yearFilter, selectedPlaceLabel, locationInput])
+
+  const searchSummary = shouldDisplayResults ? (
+    <span className="text-xs text-slate-600 md:text-sm">
+      {isResultsLoading ? (
+        <span>Loading results...</span>
+      ) : (
+        <>
+          <span>
+            {updatedSearchLength == 0 ? 0 : filteredResults.length}{' '}
+            Observations, {updatedSearchLength == 0 ? 0 : totalSpecies} Unique
+            Species
+          </span>
+          {!aggregatedCounterparts.length ? null : (
+            <button
+              type="button"
+              onClick={downloadCsv}
+              className="ml-3 font-medium text-slate-800 underline underline-offset-2 hover:text-black"
+            >
+              Download CSV
+            </button>
+          )}
+        </>
+      )}
+    </span>
+  ) : null
 
   // --------------------- ===
   //  RENDER
@@ -1098,167 +1235,109 @@ export const Web = () => {
   return (
     <>
       <div className="mt-3 sticky top-[72px] z-40 bg-white p-5">
-        <div className="flex flex-col md:flex-row justify-center gap-2 w-full">
-          {/* type selector */}
-          <select
-            className="hidden md:block form-select form-select-lg w-full max-w-[12rem]"
-            value={type}
-            onChange={(evt) => {
-              const { value } = evt.target
-              if (value === 'eaten' || value === 'eater') setType(value)
-            }}
-          >
-            {(Object.keys(types) as Array<Ofv['value']>).map((key) => (
-              <option value={key} key={key}>
-                {types[key].label}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-col gap-2 w-full md:grid md:grid-cols-[minmax(14rem,16rem)_minmax(0,48rem)] md:justify-center md:items-start">
+          {/* select + advanced search */}
+          <div className="hidden md:flex w-full max-w-[14rem] flex-col gap-2 lg:max-w-[16rem]">
+            <select
+              className="form-select form-select-lg w-full"
+              value={type}
+              onChange={(evt) => {
+                const { value } = evt.target
+                if (value === 'eaten' || value === 'eater') setType(value)
+              }}
+            >
+              {(Object.keys(types) as Array<Ofv['value']>).map((key) => (
+                <option value={key} key={key}>
+                  {types[key].label}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          {/* search box + dropdown */}
           <form
-            className="flex w-full max-w-3xl flex-col gap-2 md:flex-row md:items-stretch"
+            className="flex w-full max-w-3xl flex-col gap-2 md:col-start-2 md:w-[min(100%,48rem)]"
             onSubmit={handleSubmit}
           >
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              {/* Adjusting Who Eats bar for smaller screens */}
-              <select
-                className="form-select form-select-lg w-full max-w-[12rem] shrink-0 md:hidden"
-                value={type}
-                onChange={(evt) => {
-                  const { value } = evt.target
-                  if (value === 'eaten' || value === 'eater') setType(value)
-                }}
-              >
-                {(Object.keys(types) as Array<Ofv['value']>).map((key) => (
-                  <option value={key} key={key}>
-                    {types[key].label}
-                  </option>
-                ))}
-              </select>
-              {selectedThumbnail && (
-                <img
-                  src={selectedThumbnail}
-                  alt=""
-                  className="h-10 w-10 rounded object-cover border border-slate-200"
-                />
-              )}
-              <div className="relative min-w-0 flex-1" style={{ zIndex: 2 }}>
-                <input
-                  className={`w-full placeholder-[#bfb6b6] ${
-                    searchError
-                      ? 'border-red-500 text-red-600 placeholder:text-red-500'
-                      : ''
-                  }`}
-                  type="text"
-                  onChange={handleInputChange}
-                  value={search}
-                  placeholder={searchError || 'Organism (ex. Osprey)'}
-                />
-
-                <Dropdown
-                  isLoading={isSuggestionLoading}
-                  isOpen={isDropdownOpen}
-                  suggestions={suggestions}
-                  onClick={(s) => {
-                    setSearch(s.label)
-                    //setSearchSciName(s.sciName)
-                    //setSearchCommonName(s.label)
-                    const match = suggestionSource.find(
-                      (t) => (t.preferred_common_name || t.name) === s.label
-                    )
-                    setSelectedTaxonId(match?.id ?? null)
-                    setSelectedThumbnail(s.thumbnail ?? null)
-                    void handleSubmit(undefined, s.label, s.thumbnail ?? null)
+            <div className="flex min-w-0 items-center gap-2">
+              {/* search input + go button */}
+              <div className="flex flex-col gap-2 md:hidden">
+                <select
+                  className="form-select w-[7rem] text-xs sm:form-select-lg sm:text-sm"
+                  value={type}
+                  onChange={(evt) => {
+                    const { value } = evt.target
+                    if (value === 'eaten' || value === 'eater') setType(value)
                   }}
-                />
+                >
+                  {(Object.keys(types) as Array<Ofv['value']>).map((key) => (
+                    <option value={key} key={key}>
+                      {types[key].label}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={openAdvancedSearch}
+                    className="w-fit text-xs font-medium text-slate-800 underline underline-offset-2 hover:text-black sm:text-sm"
+                  >
+                    Advanced Search
+                  </button>
+                  {activeAdvancedFiltersLabel && (
+                    <span className="text-[13px] leading-tight text-slate-900 sm:text-xs">
+                      {activeAdvancedFiltersLabel}
+                    </span>
+                  )}
+                  {searchSummary}
+                </div>
               </div>
-            </div>
-            <div className="flex w-full flex-col items-start gap-1 md:w-auto md:shrink-0">
-              {placeLookupError && (
-                <p className="text-sm text-red-600 max-w-[16rem] leading-snug">
-                  {placeLookupError}
-                </p>
-              )}
-              <div className="flex w-full items-stretch gap-2 md:w-auto">
+
+              <div className="flex min-w-0 flex-1 items-center">
+                {/* Thumbnail of taxon if available */}
+                {selectedThumbnail && (
+                  <img
+                    src={selectedThumbnail}
+                    alt=""
+                    className="hidden sm:block w-10 h-10 shrink-0 rounded object-cover border mr-2 border-slate-200"
+                  />
+                )}
+                {/* Organism search input */}
                 <div
-                  className="relative min-w-0 flex-[1.35] sm:flex-[1.5] md:w-56 md:flex-none lg:w-64"
-                  style={{ zIndex: 1 }}
-                  ref={locationDropdownRef}
+                  className="relative min-w-0 flex-1 w-full"
+                  style={{ zIndex: 2 }}
                 >
                   <input
-                    className="w-full placeholder-[#bfb6b6]"
+                    className={`w-full placeholder-[#bfb6b6] ${
+                      searchError
+                        ? 'border-red-500 text-red-600 placeholder:text-red-500'
+                        : ''
+                    }`}
                     type="text"
-                    value={locationInput}
-                    onChange={handleLocationChange}
-                    placeholder="Location (ex. Cary, NC)"
-                    onFocus={() => {
-                      if (
-                        speciesInputReady &&
-                        locationInput.trim().length >= 3
-                      ) {
-                        setIsLocationDropdownOpen(true)
-                      }
-                    }}
+                    onChange={handleInputChange}
+                    value={search}
+                    placeholder={searchError || 'Organism (ex. Osprey)'}
                   />
 
-                  {(isLocationDropdownOpen || isLocationSuggestionLoading) &&
-                    speciesInputReady && (
-                      <div className="absolute mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-60 overflow-y-auto text-sm">
-                        {isLocationSuggestionLoading ? (
-                          <p className="p-2 text-slate-500 italic">
-                            Loading...
-                          </p>
-                        ) : locationSuggestions.length ? (
-                          locationSuggestions.map((place) => (
-                            <button
-                              type="button"
-                              key={place.id}
-                              onClick={() =>
-                                handleLocationSuggestionClick(place)
-                              }
-                              className="w-full text-left px-3 py-2 hover:bg-slate-100"
-                            >
-                              <span className="block font-medium">
-                                {place.display_name || place.name}
-                              </span>
-                              {place.place_type_name && (
-                                <span className="text-xs text-slate-500">
-                                  {place.place_type_name}
-                                </span>
-                              )}
-                            </button>
-                          ))
-                        ) : (
-                          <p className="p-2 text-slate-500 italic">
-                            No matching locations
-                          </p>
-                        )}
-                      </div>
-                    )}
-                </div>
-                <div className="flex w-[5.5rem] shrink-0 items-stretch sm:w-24">
-                  <input
-                    className="w-full placeholder-[#bfb6b6]"
-                    type="text"
-                    value={yearFilter}
-                    onChange={handleYearChange}
-                    placeholder="Year"
-                    onFocus={() => {
-                      if (
-                        speciesInputReady &&
-                        locationInput.trim().length >= 3
-                      ) {
-                        setIsLocationDropdownOpen(true)
-                      }
+                  <Dropdown
+                    isLoading={isSuggestionLoading}
+                    isOpen={isDropdownOpen}
+                    suggestions={suggestions}
+                    onClick={(s) => {
+                      setSearch(s.label)
+                      const match = suggestionSource.find(
+                        (t) => (t.preferred_common_name || t.name) === s.label
+                      )
+                      setSelectedTaxonId(match?.id ?? null)
+                      setSelectedThumbnail(s.thumbnail ?? null)
+                      void handleSubmit(undefined, s.label, s.thumbnail ?? null)
                     }}
                   />
                 </div>
-
+                {/* Go button only on wide screens*/}
                 <button
                   type="submit"
                   disabled={isResolvingPlace}
-                  className={`shrink-0 rounded bg-orange-500 px-4 text-white font-semibold ${
+                  className={`ml-1 sm:block hidden shrink-0 rounded bg-orange-500 px-3 py-2 text-white font-semibold sm:ml-2 sm:px-4 ${
                     isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
                   }`}
                 >
@@ -1266,8 +1345,176 @@ export const Web = () => {
                 </button>
               </div>
             </div>
+            {/* Go button only on smaller screens*/}
+            <button
+              type="submit"
+              disabled={isResolvingPlace}
+              className={`ml-1 sm:hidden shrink-0 rounded bg-orange-500 px-3 py-2 text-white font-semibold sm:ml-2 sm:px-4 ${
+                isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
+              }`}
+            >
+              {isResolvingPlace ? 'Loading...' : 'Go'}
+            </button>
           </form>
+          <div className="hidden md:flex md:col-span-2 md:items-center md:gap-2">
+            <div className="flex w-full max-w-[14rem] items-center gap-2 lg:max-w-[16rem]">
+              <button
+                type="button"
+                onClick={openAdvancedSearch}
+                className="w-fit self-start text-sm font-medium text-slate-800 underline underline-offset-2 hover:text-black"
+              >
+                Advanced Filters:
+              </button>
+              {activeAdvancedFiltersLabel && (
+                <span className="text-xs font-bold text-slate-800">
+                  {activeAdvancedFiltersLabel}
+                </span>
+              )}
+            </div>
+            {searchSummary}
+          </div>
         </div>
+        {isAdvancedSearchOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+            <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    Advanced Search
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Adjust the year and location filters for this search.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeAdvancedSearch}
+                  className="rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                  aria-label="Close advanced search"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                <div>
+                  <label
+                    htmlFor="advanced-location"
+                    className="mb-1 block text-sm font-medium text-slate-700"
+                  >
+                    Location
+                  </label>
+                  <div
+                    className="relative"
+                    style={{ zIndex: 1 }}
+                    ref={locationDropdownRef}
+                  >
+                    <input
+                      id="advanced-location"
+                      className="w-full placeholder-[#bfb6b6]"
+                      type="text"
+                      value={draftLocationInput}
+                      onChange={handleLocationChange}
+                      placeholder="Location (ex. Cary, NC)"
+                      onFocus={() => {
+                        if (
+                          speciesInputReady &&
+                          draftLocationInput.trim().length >= 3
+                        ) {
+                          setIsLocationDropdownOpen(true)
+                        }
+                      }}
+                    />
+
+                    {(isLocationDropdownOpen || isLocationSuggestionLoading) &&
+                      speciesInputReady && (
+                        <div className="absolute mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-60 overflow-y-auto text-sm">
+                          {isLocationSuggestionLoading ? (
+                            <p className="p-2 text-slate-500 italic">
+                              Loading...
+                            </p>
+                          ) : locationSuggestions.length ? (
+                            locationSuggestions.map((place) => (
+                              <button
+                                type="button"
+                                key={place.id}
+                                onClick={() =>
+                                  handleLocationSuggestionClick(place)
+                                }
+                                className="w-full text-left px-3 py-2 hover:bg-slate-100"
+                              >
+                                <span className="block font-medium">
+                                  {place.display_name || place.name}
+                                </span>
+                                {place.place_type_name && (
+                                  <span className="text-xs text-slate-500">
+                                    {place.place_type_name}
+                                  </span>
+                                )}
+                              </button>
+                            ))
+                          ) : (
+                            <p className="p-2 text-slate-500 italic">
+                              No matching locations
+                            </p>
+                          )}
+                        </div>
+                      )}
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="advanced-year"
+                    className="mb-1 block text-sm font-medium text-slate-700"
+                  >
+                    Year
+                  </label>
+                  <input
+                    id="advanced-year"
+                    className="w-full placeholder-[#bfb6b6]"
+                    type="text"
+                    value={draftYearFilter}
+                    onChange={handleYearChange}
+                    placeholder="Year (ex. 2026)"
+                    inputMode="numeric"
+                  />
+                </div>
+
+                {advancedSearchError && (
+                  <p className="text-sm text-red-600">{advancedSearchError}</p>
+                )}
+                {placeLookupError && (
+                  <p className="text-sm text-red-600">{placeLookupError}</p>
+                )}
+              </div>
+
+              <div className="mt-6 flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={clearAdvancedFilters}
+                  className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={closeAdvancedSearch}
+                  className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void applyAdvancedFilters()}
+                  className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+                >
+                  Apply Filters
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <div>
           {!search.trim() &&
             recentTaxon &&
@@ -1281,33 +1528,6 @@ export const Web = () => {
               </h2>
             ))}
         </div>
-        {/* Compact search summary replaces the old large summary card. */}
-        {shouldDisplayResults && (
-          <div className="mt-3 flex justify-center">
-            <div className="w-full max-w-[60rem] text-xs text-slate-600 md:text-sm">
-              {isResultsLoading ? (
-                <span>Loading results...</span>
-              ) : (
-                <>
-                  <span>
-                    {updatedSearchLength == 0 ? 0 : filteredResults.length}{' '}
-                    Observations, {updatedSearchLength == 0 ? 0 : totalSpecies}{' '}
-                    Unique Species
-                  </span>
-                  {!aggregatedCounterparts.length ? null : (
-                    <button
-                      type="button"
-                      onClick={downloadCsv}
-                      className="ml-3 font-medium text-slate-800 underline underline-offset-2 hover:text-black"
-                    >
-                      Download CSV
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        )}
       </div>
       {shouldDisplayResults && (
         <div className="col-8 mt-6 space-y-6">
