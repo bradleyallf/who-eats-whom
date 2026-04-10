@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "homepage": "https://NikhilVasudeva25.github.io/who-eats-whom",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
     "start": "nx serve",
     "build": "nx build",
@@ -16,6 +20,7 @@
     "axios": "^1.13.5",
     "d3": "^7.8.5",
     "leaflet": "^1.9.4",
+    "node": "^20.20.2",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-leaflet": "^4.2.1",
@@ -58,7 +63,7 @@
     "eslint-plugin-react": "7.32.2",
     "eslint-plugin-react-hooks": "4.6.0",
     "gh-pages": "^6.3.0",
-    "jsdom": "~22.1.0",
+    "jsdom": "~28.1.0",
     "nx": "22.5.2",
     "postcss": "8.5.6",
     "prettier": "^2.6.2",
