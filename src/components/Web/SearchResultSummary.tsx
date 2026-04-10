@@ -64,11 +64,10 @@ export const SearchResultSummary = (props: Props) => {
               type="button"
               onClick={onDownload}
               disabled={isDownloadDisabled || isLoading}
-              className={`relative inline-flex w-full items-center justify-center gap-2 rounded-md px-7 py-1.5 text-xs font-semibold transition sm:-top-1 sm:px-4 sm:py-2 sm:text-sm lg:w-auto ${
-                isDownloadDisabled || isLoading
+              className={`relative inline-flex w-full items-center justify-center gap-2 rounded-md px-7 py-1.5 text-xs font-semibold transition sm:-top-1 sm:px-4 sm:py-2 sm:text-sm lg:w-auto ${isDownloadDisabled || isLoading
                   ? 'bg-white/10 text-white/60 cursor-not-allowed'
                   : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
+                }`}
             >
               <DownloadIcon />
               Download CSV
