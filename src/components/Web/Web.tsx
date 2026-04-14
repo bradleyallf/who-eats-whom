@@ -1,3 +1,10 @@
+/**
+ * Dimensions for tailwind:
+ * sm - >= 640
+ * md - >= 768
+ * lg - >= 1024
+ * xl - >= 1280
+ */
 import {
   ChangeEvent,
   FormEvent,
@@ -157,6 +164,7 @@ export const Web = () => {
   const debouncedSubSearch = useDebounce(submittedSearch, 500)
   const [recentTaxon, setRecentTaxon] = useState('')
   const [recentTaxDate, setRecentTaxDate] = useState('')
+  const [isRecentTaxonLoading, setIsRecentTaxonLoading] = useState(true)
 
   // The taxonId from the API corresponding to a unique organism
   const [selectedTaxonId, setSelectedTaxonId] = useState<number | null>(null)
@@ -420,6 +428,7 @@ export const Web = () => {
 
   useEffect(() => {
     const loadMostRecentWithResearchPartner = async () => {
+      setIsRecentTaxonLoading(true)
       try {
         const params = new URLSearchParams({
           project_id: String(projectId),
@@ -499,6 +508,8 @@ export const Web = () => {
           'Unable to load the most recent research-grade observation with a research-grade partner',
           error
         )
+      } finally {
+        setIsRecentTaxonLoading(false)
       }
     }
 
@@ -1235,298 +1246,314 @@ export const Web = () => {
   return (
     <>
       <div className="mt-3 sticky top-[72px] z-40 bg-white p-5">
-        <div className="flex flex-col gap-2 w-full md:grid md:grid-cols-[minmax(14rem,16rem)_minmax(0,48rem)] md:justify-center md:items-start">
-          {/* select + advanced search */}
-          <div className="hidden md:flex w-full max-w-[14rem] flex-col gap-2 lg:max-w-[16rem]">
-            <select
-              className="form-select form-select-lg w-full"
-              value={type}
-              onChange={(evt) => {
-                const { value } = evt.target
-                if (value === 'eaten' || value === 'eater') setType(value)
-              }}
-            >
-              {(Object.keys(types) as Array<Ofv['value']>).map((key) => (
-                <option value={key} key={key}>
-                  {types[key].label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <form
-            className="flex w-full max-w-3xl flex-col gap-2 md:col-start-2 md:w-[min(100%,48rem)]"
-            onSubmit={handleSubmit}
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              {/* search input + go button */}
-              <div className="flex flex-col gap-2 md:hidden">
-                <select
-                  className="form-select w-[7rem] text-xs sm:form-select-lg sm:text-sm"
-                  value={type}
-                  onChange={(evt) => {
-                    const { value } = evt.target
-                    if (value === 'eaten' || value === 'eater') setType(value)
-                  }}
-                >
-                  {(Object.keys(types) as Array<Ofv['value']>).map((key) => (
-                    <option value={key} key={key}>
-                      {types[key].label}
-                    </option>
-                  ))}
-                </select>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={openAdvancedSearch}
-                    className="w-fit text-xs font-medium text-slate-800 underline underline-offset-2 hover:text-black sm:text-sm"
-                  >
-                    Advanced Search
-                  </button>
-                  {activeAdvancedFiltersLabel && (
-                    <span className="text-[13px] leading-tight text-slate-900 sm:text-xs">
-                      {activeAdvancedFiltersLabel}
-                    </span>
-                  )}
-                  {searchSummary}
-                </div>
-              </div>
-
-              <div className="flex min-w-0 flex-1 items-center">
-                {/* Thumbnail of taxon if available */}
-                {selectedThumbnail && (
-                  <img
-                    src={selectedThumbnail}
-                    alt=""
-                    className="hidden sm:block w-10 h-10 shrink-0 rounded object-cover border mr-2 border-slate-200"
-                  />
-                )}
-                {/* Organism search input */}
-                <div
-                  className="relative min-w-0 flex-1 w-full"
-                  style={{ zIndex: 2 }}
-                >
-                  <input
-                    className={`w-full placeholder-[#bfb6b6] ${
-                      searchError
-                        ? 'border-red-500 text-red-600 placeholder:text-red-500'
-                        : ''
-                    }`}
-                    type="text"
-                    onChange={handleInputChange}
-                    value={search}
-                    placeholder={searchError || 'Organism (ex. Osprey)'}
-                  />
-
-                  <Dropdown
-                    isLoading={isSuggestionLoading}
-                    isOpen={isDropdownOpen}
-                    suggestions={suggestions}
-                    onClick={(s) => {
-                      setSearch(s.label)
-                      const match = suggestionSource.find(
-                        (t) => (t.preferred_common_name || t.name) === s.label
-                      )
-                      setSelectedTaxonId(match?.id ?? null)
-                      setSelectedThumbnail(s.thumbnail ?? null)
-                      void handleSubmit(undefined, s.label, s.thumbnail ?? null)
-                    }}
-                  />
-                </div>
-                {/* Go button only on wide screens*/}
-                <button
-                  type="submit"
-                  disabled={isResolvingPlace}
-                  className={`ml-1 sm:block hidden shrink-0 rounded bg-orange-500 px-3 py-2 text-white font-semibold sm:ml-2 sm:px-4 ${
-                    isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
-                  }`}
-                >
-                  {isResolvingPlace ? 'Loading...' : 'Go'}
-                </button>
-              </div>
-            </div>
-            {/* Go button only on smaller screens*/}
-            <button
-              type="submit"
-              disabled={isResolvingPlace}
-              className={`ml-1 sm:hidden shrink-0 rounded bg-orange-500 px-3 py-2 text-white font-semibold sm:ml-2 sm:px-4 ${
-                isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
-              }`}
-            >
-              {isResolvingPlace ? 'Loading...' : 'Go'}
-            </button>
-          </form>
-          <div className="hidden md:flex md:col-span-2 md:items-center md:gap-2">
-            <div className="flex w-full max-w-[14rem] items-center gap-2 lg:max-w-[16rem]">
-              <button
-                type="button"
-                onClick={openAdvancedSearch}
-                className="w-fit self-start text-sm font-medium text-slate-800 underline underline-offset-2 hover:text-black"
+        <div className="flex flex-col gap-2 w-full items-center">
+          {/* Main row: Always flex row FOR MOBILE AND WEB, with select and organism search bar. */}
+          <div className="flex w-full flex-row items-center gap-2 md:items-start md:justify-center">
+            {/* select + advanced search FOR WEB */}
+            {/* Who eats bar */}
+            <div className="hidden md:flex md:w-[16rem] md:shrink-0 md:flex-col md:gap-2 md:items-start">
+              <select
+                className="form-select form-select-lg w-full"
+                value={type}
+                onChange={(evt) => {
+                  const { value } = evt.target
+                  if (value === 'eaten' || value === 'eater') setType(value)
+                }}
               >
-                Advanced Filters:
-              </button>
-              {activeAdvancedFiltersLabel && (
-                <span className="text-xs font-bold text-slate-800">
-                  {activeAdvancedFiltersLabel}
-                </span>
-              )}
-            </div>
-            {searchSummary}
-          </div>
-        </div>
-        {isAdvancedSearchOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-            <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">
-                    Advanced Search
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Adjust the year and location filters for this search.
-                  </p>
-                </div>
+                {(Object.keys(types) as Array<Ofv['value']>).map((key) => (
+                  <option value={key} key={key}>
+                    {types[key].label}
+                  </option>
+                ))}
+              </select>
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={closeAdvancedSearch}
-                  className="rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                  aria-label="Close advanced search"
+                  onClick={openAdvancedSearch}
+                  className="w-fit text-xs font-medium text-slate-800 underline underline-offset-2 hover:text-black sm:text-sm"
                 >
-                  Close
+                  Advanced Search
                 </button>
+                {activeAdvancedFiltersLabel && (
+                  <span className="text-[13px] leading-tight text-slate-900 sm:text-xs">
+                    {activeAdvancedFiltersLabel}
+                  </span>
+                )}
               </div>
+            </div>
 
-              <div className="mt-5 space-y-4">
-                <div>
-                  <label
-                    htmlFor="advanced-location"
-                    className="mb-1 block text-sm font-medium text-slate-700"
+            <form
+              className="flex w-full max-w-3xl flex-col gap-2 md:w-[min(100%,48rem)]"
+              onSubmit={handleSubmit}
+            >
+              {/* Needs to be items start since its a column*/}
+              <div className="flex min-w-0 items-start gap-2">
+                {/* search input + go button FOR MOBILE */}
+                <div className="flex flex-col gap-2 md:hidden">
+                  <select
+                    className="form-select w-[8rem] text-[12px] sm:text-xs"
+                    value={type}
+                    onChange={(evt) => {
+                      const { value } = evt.target
+                      if (value === 'eaten' || value === 'eater') setType(value)
+                    }}
                   >
-                    Location
-                  </label>
+                    {(Object.keys(types) as Array<Ofv['value']>).map((key) => (
+                      <option value={key} key={key}>
+                        {types[key].label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex flex-wrap items-center gap-2 sm:text-xs">
+                    <button
+                      type="button"
+                      onClick={openAdvancedSearch}
+                      className="w-fit text-xs font-medium text-slate-800 underline underline-offset-2 hover:text-black sm:text-sm"
+                    >
+                      Advanced Search
+                    </button>
+                    {activeAdvancedFiltersLabel && (
+                      <span className="text-[13px] leading-tight text-slate-900 sm:text-xs">
+                        {activeAdvancedFiltersLabel}
+                      </span>
+                    )}
+                  </div>
+                  <div className="md:hidden">{searchSummary}</div>
+                </div>
+
+                <div className="flex min-w-0 flex-1 items-center">
+                  {/* Thumbnail of taxon if available */}
+                  {selectedThumbnail && (
+                    <img
+                      src={selectedThumbnail}
+                      alt=""
+                      className="hidden sm:block w-10 h-10 shrink-0 rounded object-cover border mr-2 border-slate-200"
+                    />
+                  )}
+                  {/* Organism search input */}
                   <div
-                    className="relative"
-                    style={{ zIndex: 1 }}
-                    ref={locationDropdownRef}
+                    className="relative min-w-0 flex-1 w-full"
+                    style={{ zIndex: 2 }}
                   >
                     <input
-                      id="advanced-location"
-                      className="w-full placeholder-[#bfb6b6]"
+                      className={`w-full placeholder-[#bfb6b6] ${
+                        searchError
+                          ? 'border-red-500 text-red-600 placeholder:text-red-500'
+                          : ''
+                      }`}
                       type="text"
-                      value={draftLocationInput}
-                      onChange={handleLocationChange}
-                      placeholder="Location (ex. Cary, NC)"
-                      onFocus={() => {
-                        if (
-                          speciesInputReady &&
-                          draftLocationInput.trim().length >= 3
-                        ) {
-                          setIsLocationDropdownOpen(true)
-                        }
-                      }}
+                      onChange={handleInputChange}
+                      value={search}
+                      placeholder={searchError || 'Organism (ex. Osprey)'}
                     />
 
-                    {(isLocationDropdownOpen || isLocationSuggestionLoading) &&
-                      speciesInputReady && (
-                        <div className="absolute mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-60 overflow-y-auto text-sm">
-                          {isLocationSuggestionLoading ? (
-                            <p className="p-2 text-slate-500 italic">
-                              Loading...
-                            </p>
-                          ) : locationSuggestions.length ? (
-                            locationSuggestions.map((place) => (
-                              <button
-                                type="button"
-                                key={place.id}
-                                onClick={() =>
-                                  handleLocationSuggestionClick(place)
-                                }
-                                className="w-full text-left px-3 py-2 hover:bg-slate-100"
-                              >
-                                <span className="block font-medium">
-                                  {place.display_name || place.name}
-                                </span>
-                                {place.place_type_name && (
-                                  <span className="text-xs text-slate-500">
-                                    {place.place_type_name}
-                                  </span>
-                                )}
-                              </button>
-                            ))
-                          ) : (
-                            <p className="p-2 text-slate-500 italic">
-                              No matching locations
-                            </p>
-                          )}
-                        </div>
-                      )}
+                    <Dropdown
+                      isLoading={isSuggestionLoading}
+                      isOpen={isDropdownOpen}
+                      suggestions={suggestions}
+                      onClick={(s) => {
+                        setSearch(s.label)
+                        const match = suggestionSource.find(
+                          (t) => (t.preferred_common_name || t.name) === s.label
+                        )
+                        setSelectedTaxonId(match?.id ?? null)
+                        setSelectedThumbnail(s.thumbnail ?? null)
+                        void handleSubmit(
+                          undefined,
+                          s.label,
+                          s.thumbnail ?? null
+                        )
+                      }}
+                    />
                   </div>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="advanced-year"
-                    className="mb-1 block text-sm font-medium text-slate-700"
+                  {/* Go button only on wide screens*/}
+                  <button
+                    type="submit"
+                    disabled={isResolvingPlace}
+                    className={`ml-1 sm:block hidden shrink-0 rounded bg-orange-500 px-3 py-2 text-white font-semibold sm:ml-2 sm:px-4 ${
+                      isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
+                    }`}
                   >
-                    Year
-                  </label>
-                  <input
-                    id="advanced-year"
-                    className="w-full placeholder-[#bfb6b6]"
-                    type="text"
-                    value={draftYearFilter}
-                    onChange={handleYearChange}
-                    placeholder="Year (ex. 2026)"
-                    inputMode="numeric"
-                  />
+                    {isResolvingPlace ? 'Loading...' : 'Go'}
+                  </button>
+                </div>
+              </div>
+              {/* Go button only on smaller screens*/}
+              <button
+                type="submit"
+                disabled={isResolvingPlace}
+                className={`ml-1 sm:hidden shrink-0 rounded bg-orange-500 px-3 py-2 text-white font-semibold sm:ml-2 sm:px-4 ${
+                  isResolvingPlace ? 'opacity-70 cursor-not-allowed' : ''
+                }`}
+              >
+                {isResolvingPlace ? 'Loading...' : 'Go'}
+              </button>
+            </form>
+          </div>
+          {/* Advanced search pop-up ONLY*/}
+          {isAdvancedSearchOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+              <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-900">
+                      Advanced Search
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Adjust the year and location filters for this search.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeAdvancedSearch}
+                    className="rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                    aria-label="Close advanced search"
+                  >
+                    Close
+                  </button>
                 </div>
 
-                {advancedSearchError && (
-                  <p className="text-sm text-red-600">{advancedSearchError}</p>
-                )}
-                {placeLookupError && (
-                  <p className="text-sm text-red-600">{placeLookupError}</p>
-                )}
-              </div>
+                <div className="mt-5 space-y-4">
+                  <div>
+                    <label
+                      htmlFor="advanced-location"
+                      className="mb-1 block text-sm font-medium text-slate-700"
+                    >
+                      Location
+                    </label>
+                    <div
+                      className="relative"
+                      style={{ zIndex: 1 }}
+                      ref={locationDropdownRef}
+                    >
+                      <input
+                        id="advanced-location"
+                        className="w-full placeholder-[#bfb6b6]"
+                        type="text"
+                        value={draftLocationInput}
+                        onChange={handleLocationChange}
+                        placeholder="Location (ex. Cary, NC)"
+                        onFocus={() => {
+                          if (
+                            speciesInputReady &&
+                            draftLocationInput.trim().length >= 3
+                          ) {
+                            setIsLocationDropdownOpen(true)
+                          }
+                        }}
+                      />
 
-              <div className="mt-6 flex flex-wrap justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={clearAdvancedFilters}
-                  className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Clear
-                </button>
-                <button
-                  type="button"
-                  onClick={closeAdvancedSearch}
-                  className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void applyAdvancedFilters()}
-                  className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
-                >
-                  Apply Filters
-                </button>
+                      {(isLocationDropdownOpen ||
+                        isLocationSuggestionLoading) &&
+                        speciesInputReady && (
+                          <div className="absolute mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-60 overflow-y-auto text-sm">
+                            {isLocationSuggestionLoading ? (
+                              <p className="p-2 text-slate-500 italic">
+                                Loading...
+                              </p>
+                            ) : locationSuggestions.length ? (
+                              locationSuggestions.map((place) => (
+                                <button
+                                  type="button"
+                                  key={place.id}
+                                  onClick={() =>
+                                    handleLocationSuggestionClick(place)
+                                  }
+                                  className="w-full text-left px-3 py-2 hover:bg-slate-100"
+                                >
+                                  <span className="block font-medium">
+                                    {place.display_name || place.name}
+                                  </span>
+                                  {place.place_type_name && (
+                                    <span className="text-xs text-slate-500">
+                                      {place.place_type_name}
+                                    </span>
+                                  )}
+                                </button>
+                              ))
+                            ) : (
+                              <p className="p-2 text-slate-500 italic">
+                                No matching locations
+                              </p>
+                            )}
+                          </div>
+                        )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="advanced-year"
+                      className="mb-1 block text-sm font-medium text-slate-700"
+                    >
+                      Year
+                    </label>
+                    <input
+                      id="advanced-year"
+                      className="w-full placeholder-[#bfb6b6]"
+                      type="text"
+                      value={draftYearFilter}
+                      onChange={handleYearChange}
+                      placeholder="Year (ex. 2026)"
+                      inputMode="numeric"
+                    />
+                  </div>
+
+                  {advancedSearchError && (
+                    <p className="text-sm text-red-600">
+                      {advancedSearchError}
+                    </p>
+                  )}
+                  {placeLookupError && (
+                    <p className="text-sm text-red-600">{placeLookupError}</p>
+                  )}
+                </div>
+
+                <div className="mt-6 flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={clearAdvancedFilters}
+                    className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeAdvancedSearch}
+                    className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void applyAdvancedFilters()}
+                    className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+                  >
+                    Apply Filters
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+
         <div>
           {!search.trim() &&
-            recentTaxon &&
-            (vowels.includes(recentTaxon.charAt(0).toLowerCase()) ? (
+            (isRecentTaxonLoading ? (
               <h2 className="mt-2 text-center text-gray-500">
-                An {recentTaxon} was observed {recentTaxDate}
+                Loading most recent observation...
               </h2>
-            ) : (
-              <h2 className="mt-2 text-center text-gray-500">
-                A {recentTaxon} was observed {recentTaxDate}
-              </h2>
-            ))}
+            ) : recentTaxon ? (
+              vowels.includes(recentTaxon.charAt(0).toLowerCase()) ? (
+                <h2 className="mt-2 text-center text-gray-500">
+                  An {recentTaxon} was observed {recentTaxDate}
+                </h2>
+              ) : (
+                <h2 className="mt-2 text-center text-gray-500">
+                  A {recentTaxon} was observed {recentTaxDate}
+                </h2>
+              )
+            ) : null)}
         </div>
       </div>
       {shouldDisplayResults && (
