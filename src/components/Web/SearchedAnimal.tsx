@@ -69,7 +69,7 @@ export const SearchResultGrid = (props: Props) => {
                     ? photoUrl.replace('square', 'medium')
                     : placeholderSrc
                 }
-                alt={commonName || scientificName || 'Observation'}
+                alt={`An image of: ${commonName || scientificName}`}
                 className="h-full w-full object-cover"
                 loading="lazy"
               />

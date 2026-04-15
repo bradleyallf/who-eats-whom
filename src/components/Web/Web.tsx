@@ -1216,7 +1216,7 @@ export const Web = () => {
   }, [yearFilter, selectedPlaceLabel, locationInput])
 
   const searchSummary = shouldDisplayResults ? (
-    <span className="text-xs text-slate-600 md:text-sm">
+    <span className="text-xs leading-tight text-slate-600 md:text-sm">
       {isResultsLoading ? (
         <span>Loading results...</span>
       ) : (
@@ -1289,9 +1289,9 @@ export const Web = () => {
               {/* Needs to be items start since its a column*/}
               <div className="flex min-w-0 items-start gap-2">
                 {/* search input + go button FOR MOBILE */}
-                <div className="flex flex-col gap-2 md:hidden">
+                <div className="flex flex-col md:hidden">
                   <select
-                    className="form-select w-[8rem] text-[12px] sm:text-xs"
+                    className="form-select w-[8rem] px-2 py-1.75 pr-7 text-[12px] sm:text-xs"
                     value={type}
                     onChange={(evt) => {
                       const { value } = evt.target
@@ -1318,7 +1318,6 @@ export const Web = () => {
                       </span>
                     )}
                   </div>
-                  <div className="md:hidden">{searchSummary}</div>
                 </div>
 
                 <div className="flex min-w-0 flex-1 items-center">
@@ -1327,7 +1326,7 @@ export const Web = () => {
                     <img
                       src={selectedThumbnail}
                       alt=""
-                      className="hidden sm:block w-10 h-10 shrink-0 rounded object-cover border mr-2 border-slate-200"
+                      className="w-10 h-10 shrink-0 rounded object-cover border mr-2 border-slate-200"
                     />
                   )}
                   {/* Organism search input */}
@@ -1390,6 +1389,8 @@ export const Web = () => {
               </button>
             </form>
           </div>
+          <div>{searchSummary}</div>
+
           {/* Advanced search pop-up ONLY*/}
           {isAdvancedSearchOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
@@ -1557,31 +1558,21 @@ export const Web = () => {
         </div>
       </div>
       {shouldDisplayResults && (
-        <div className="col-8 mt-6 space-y-6">
+        <div className="col-8 mt-3 space-y-6">
           <div ref={taxonMetaSentinelRef} aria-hidden className="h-px" />
           <div
-            className={`flex justify-center items-start gap-4 transition-[background-color,border-color,box-shadow,padding] duration-300 ease-out ${
-              isTaxonMetaCondensed
-                ? 'bg-white/90 backdrop-blur border border-slate-200 rounded-lg px-3 py-2 shadow-sm'
-                : ''
-            }`}
+            className={`flex justify-center items-start gap-2 transition-[background-color,border-color,box-shadow,padding] duration-300 ease-out`}
           >
             {selectedThumbnail && taxonDesc && (
               <img
-                className={`rounded transition-[width,height,border-radius] duration-300 ease-out ${
-                  isTaxonMetaCondensed ? `w-10 h-10` : `w-24 h-24 rounded`
-                }`}
+                className={`rounded transition-[width,height,border-radius] duration-300 ease-out w-24 h-24 rounded`}
                 src={selectedThumbnail}
                 alt=""
               />
             )}
             {selectedThumbnail && taxonDesc && (
               <h1
-                className={`transition-[font-size,line-height,opacity] duration-300 ease-out ${
-                  isTaxonMetaCondensed
-                    ? `text-sm leading-snug max-w-xl max-h-10 overflow-hidden opacity-95`
-                    : 'max-w-prose'
-                }`}
+                className={`transition-[font-size,line-height,opacity] duration-300 ease-out max-w-prose text-sm md:text-md`}
                 dangerouslySetInnerHTML={{ __html: taxonDesc }}
               />
             )}
