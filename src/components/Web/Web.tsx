@@ -1103,6 +1103,7 @@ export const Web = () => {
           <select
             className="hidden md:block form-select form-select-lg w-full max-w-[12rem]"
             value={type}
+            aria-label='Search for predators or prey'
             onChange={(evt) => {
               const { value } = evt.target
               if (value === 'eaten' || value === 'eater') setType(value)
@@ -1125,6 +1126,7 @@ export const Web = () => {
               <select
                 className="form-select form-select-lg w-full max-w-[12rem] shrink-0 md:hidden"
                 value={type}
+                aria-label='Search for predators or prey'
                 onChange={(evt) => {
                   const { value } = evt.target
                   if (value === 'eaten' || value === 'eater') setType(value)
@@ -1154,6 +1156,7 @@ export const Web = () => {
                   onChange={handleInputChange}
                   value={search}
                   placeholder={searchError || 'Organism (ex. Osprey)'}
+                  aria-label='Species search'
                 />
 
                 <Dropdown
@@ -1192,6 +1195,7 @@ export const Web = () => {
                     value={locationInput}
                     onChange={handleLocationChange}
                     placeholder="Location (ex. Cary, NC)"
+                    aria-label='Location filter'
                     onFocus={() => {
                       if (
                         speciesInputReady &&
@@ -1244,6 +1248,7 @@ export const Web = () => {
                     value={yearFilter}
                     onChange={handleYearChange}
                     placeholder="Year"
+                    aria-label='Year filter'
                     onFocus={() => {
                       if (
                         speciesInputReady &&

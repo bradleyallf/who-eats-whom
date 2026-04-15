@@ -33,6 +33,16 @@ interface LinkDatum {
   count: number
 }
 
+// Represents a node in the network along with its outgoing (eatenBy) and incoming (eats) connections.
+interface NetworkSummaryEntry {
+  nodeId: string
+  label: string
+  categoryLabel: string
+  outgoing: string[]
+  incoming: string[]
+}
+
+
 const getCommonName = (observation?: Observation) =>
   observation?.taxon.preferred_common_name
 
@@ -198,6 +208,60 @@ export const SearchResultNetwork = (props: Props) => {
     }
   }, [partnerData, results, type, focalName])
 
+  // Network summary for accessibility
+  const networkSummary = useMemo<NetworkSummaryEntry[]>(() => {
+    const nodeById = new Map(graph.nodes.map((node) => [node.id, node]))
+    const relationMap = new Map<
+      string,
+      { outgoing: Set<string>; incoming: Set<string> }
+    >()
+
+    graph.nodes.forEach((node) => {
+      relationMap.set(node.id, {
+        outgoing: new Set<string>(),
+        incoming: new Set<string>(),
+      })
+    })
+
+    graph.links.forEach((link) => {
+      const sourceId = typeof link.source === 'object' ? link.source.id : link.source
+      const targetId = typeof link.target === 'object' ? link.target.id : link.target
+
+      relationMap.get(sourceId)?.outgoing.add(targetId)
+      relationMap.get(targetId)?.incoming.add(sourceId)
+    })
+
+    return graph.nodes
+      .map((node) => {
+        const relations = relationMap.get(node.id)
+        return {
+          nodeId: node.id,
+          label: formatNodeLabelText(node),
+          categoryLabel: categoryLabelMap.get(node.category) || 'Other',
+          outgoing: Array.from(relations?.outgoing || []).map(
+            (targetId) =>
+              formatNodeLabelText(
+                nodeById.get(targetId) || { ...node, id: targetId, label: targetId }
+              )
+          ),
+          incoming: Array.from(relations?.incoming || []).map(
+            (sourceId) =>
+              formatNodeLabelText(
+                nodeById.get(sourceId) || { ...node, id: sourceId, label: sourceId }
+              )
+          ),
+        }
+      })
+      .sort((a, b) => {
+        const aIsFocal = labelsMatch(a.nodeId, focalName)
+        const bIsFocal = labelsMatch(b.nodeId, focalName)
+        if (aIsFocal && !bIsFocal) return -1
+        if (!aIsFocal && bIsFocal) return 1
+        return a.label.localeCompare(b.label)
+      })
+  }, [categoryLabelMap, focalName, graph.nodes, graph.links, showCommonNames, showScientificNames])
+  // Network summary for accessibility
+
   useEffect(() => {
     const handleFullscreenChange = () => {
       const target = containerRef.current
@@ -292,6 +356,16 @@ export const SearchResultNetwork = (props: Props) => {
       .selectAll('g')
       .data(nodes)
       .join('g')
+    // Enabling keys on network
+    // makes node focusable
+      .attr('tabindex', 0)
+    // adds ARIA role and label for accessibility
+      .attr('role', 'button')
+      .attr(
+        'aria-label',
+        (d: NodeDatum) => `${formatNodeLabelText(d)} network node`
+      )
+      // ---
 
     node
       .append('circle')
@@ -485,6 +559,78 @@ export const SearchResultNetwork = (props: Props) => {
 
     resetStyles()
 
+    // Enabling keys on network
+    const adjacentNodeIds = new Map<string, string[]>()
+    const adjacentFocusIndex = new Map<string, number>()
+
+    links.forEach((currentLink) => {
+      const sourceId =
+        typeof currentLink.source === 'object'
+          ? currentLink.source.id
+          : currentLink.source
+      const targetId =
+        typeof currentLink.target === 'object'
+          ? currentLink.target.id
+          : currentLink.target
+
+      if (!adjacentNodeIds.has(sourceId)) adjacentNodeIds.set(sourceId, [])
+      if (!adjacentNodeIds.has(targetId)) adjacentNodeIds.set(targetId, [])
+      if (!adjacentNodeIds.get(sourceId)?.includes(targetId)) {
+        adjacentNodeIds.get(sourceId)?.push(targetId)
+      }
+      if (!adjacentNodeIds.get(targetId)?.includes(sourceId)) {
+        adjacentNodeIds.get(targetId)?.push(sourceId)
+      }
+    })
+
+    const focusNodeById = (nodeId: string) => {
+      const nextNode = nodeById.get(nodeId)
+      if (!nextNode) return
+
+      highlight(nodeId)
+      ;(
+        node
+          .filter((d: NodeDatum) => d.id === nodeId)
+          .node() as SVGGElement | null
+      )?.focus()
+    }
+
+    node.on('keydown', (event: KeyboardEvent, d: NodeDatum) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        highlight(d.id)
+        return
+      }
+// Only allow arrow keys for navigation
+      if (
+        event.key !== 'ArrowRight' &&
+        event.key !== 'ArrowDown' &&
+        event.key !== 'ArrowLeft' &&
+        event.key !== 'ArrowUp'
+      ) {
+        return
+      }
+// Get adjacent nodes for the current node
+      const neighbors = adjacentNodeIds.get(d.id) || []
+      if (!neighbors.length) return
+
+      event.preventDefault()
+// Determine navigation direction based on arrow key
+      const step =
+        event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1
+      const currentIndex = adjacentFocusIndex.get(d.id) ?? -1
+      const nextIndex =
+        currentIndex === -1
+          ? step > 0
+            ? 0
+            : neighbors.length - 1
+          : (currentIndex + step + neighbors.length) % neighbors.length
+
+      adjacentFocusIndex.set(d.id, nextIndex)
+      focusNodeById(neighbors[nextIndex])
+    })
+    // Enabling keys on network
+
     const searchInput = document.getElementById('searchBox') as
       | HTMLInputElement
       | null
@@ -528,47 +674,6 @@ export const SearchResultNetwork = (props: Props) => {
 
       focusNode(match)
     }
-
-    // ---- Keyboard accessibility for network nodes --------------
-    // const adjacentNodeIds = new Map<string, string[]>()
-    // links.forEach((link) => {
-    //   const s = typeof link.source === 'object' ? (link.source as NodeDatum).id : link.source as string
-    //   const t = typeof link.target === 'object' ? (link.target as NodeDatum).id : link.target as string
-    //   if (!adjacentNodeIds.has(s)) adjacentNodeIds.set(s, [])
-    //   if (!adjacentNodeIds.has(t)) adjacentNodeIds.set(t, [])
-    //   if (!adjacentNodeIds.get(s)!.includes(t)) adjacentNodeIds.get(s)!.push(t)
-    //   if (!adjacentNodeIds.get(t)!.includes(s)) adjacentNodeIds.get(t)!.push(s)
-    // })
-
-    // const adjFocusIndex = new Map<string, number>()
-
-    // nodeCircles.on('keydown', (event: KeyboardEvent, d: NodeDatum) => {
-    //   if (event.key === 'Enter' || event.key === ' ') {
-    //     event.preventDefault()
-    //     highlight(d.id)
-    //   } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-    //     event.preventDefault()
-    //     const adjIds = adjacentNodeIds.get(d.id) || []
-    //     if (!adjIds.length) return
-    //     const next = ((adjFocusIndex.get(d.id) ?? -1) + 1) % adjIds.length
-    //     adjFocusIndex.set(d.id, next)
-    //     ;(nodeCircles
-    //       .filter((n: NodeDatum) => n.id === adjIds[next])
-    //       .node() as SVGCircleElement | null)
-    //       ?.focus()
-    //   } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-    //     event.preventDefault()
-    //     const adjIds = adjacentNodeIds.get(d.id) || []
-    //     if (!adjIds.length) return
-    //     const prev = ((adjFocusIndex.get(d.id) ?? 0) - 1 + adjIds.length) % adjIds.length
-    //     adjFocusIndex.set(d.id, prev)
-    //     ;(nodeCircles
-    //       .filter((n: NodeDatum) => n.id === adjIds[prev])
-    //       .node() as SVGCircleElement | null)
-    //       ?.focus()
-    //   }
-    // })
-    // //
 
     const handleButtonClick = () => {
       if (!searchInput) return
@@ -632,76 +737,103 @@ export const SearchResultNetwork = (props: Props) => {
   }
 
   return (
-    <div ref={containerRef} className={containerClass}>
-      <div className={`relative ${svgWrapperClass}`}>
-        <svg ref={svgRef} className="w-full h-full" role="img" aria-label="Search result network" />
-        <div className="absolute top-3 right-3 flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={() => handleZoom(1.2)}
-            className="rounded-md bg-slate-800 text-white px-3 py-1 text-sm shadow"
-          >
-            +
-          </button>
-          <button
-            type="button"
-            onClick={() => handleZoom(1 / 1.2)}
-            className="rounded-md bg-slate-800 text-white px-3 py-1 text-sm shadow"
-          >
-            -
-          </button>
-          <button
-            type="button"
-            onClick={handleFullscreenToggle}
-            className="rounded-md bg-white/90 text-slate-900 px-2 py-1 text-xs shadow"
-          >
-            {isFullScreen ? 'Exit Fullscreen' : 'Fullscreen'}
-          </button>
+    <div ref={containerRef} className="flex flex-col gap-6">
+      <div className={containerClass}>
+        <div className={`relative ${svgWrapperClass}`}>
+          <svg ref={svgRef} className="w-full h-full" role="img" aria-label="Search result network" />
+          <div className="absolute top-3 right-3 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => handleZoom(1.2)}
+              className="rounded-md bg-slate-800 text-white px-3 py-1 text-sm shadow"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              onClick={() => handleZoom(1 / 1.2)}
+              className="rounded-md bg-slate-800 text-white px-3 py-1 text-sm shadow"
+            >
+              -
+            </button>
+            <button
+              type="button"
+              onClick={handleFullscreenToggle}
+              className="rounded-md bg-white/90 text-slate-900 px-2 py-1 text-xs shadow"
+            >
+              {isFullScreen ? 'Exit Fullscreen' : 'Fullscreen'}
+            </button>
+          </div>
+        </div>
+        <aside className="w-full lg:w-64">
+          <div className="space-y-4">
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900 mb-2">Name display</h4>
+              <div className="flex flex-col gap-2 text-sm text-slate-700">
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={showCommonNames}
+                    onChange={(evt) =>
+                      handleLabelPreferenceChange('common', evt.target.checked)
+                    }
+                  />
+                  Common names
+                </label>
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={showScientificNames}
+                    onChange={(evt) =>
+                      handleLabelPreferenceChange('scientific', evt.target.checked)
+                    }
+                  />
+                  Scientific names
+                </label>
+              </div>
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900 mb-2">Legend</h4>
+              <div className="flex flex-col gap-3 text-sm text-slate-700">
+                {NETWORK_LEGEND.map((entry) => (
+                  <div key={entry.key} className="flex items-center gap-3">
+                    <span
+                      className="inline-block h-3 w-3 rounded"
+                      style={{ backgroundColor: entry.color }}
+                    />
+                    <span>{entry.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+      {/* Display of network summary */}
+      <div>
+        <h4 className="text-sm font-semibold text-slate-900 mb-2">Summary</h4>
+        <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+          <ul className="space-y-3">
+            {networkSummary.map((entry) => (
+              <li key={entry.nodeId} className="leading-5">
+                <span className="font-semibold text-slate-900">
+                  {entry.label}
+                </span>{' '}
+                <span>({entry.categoryLabel})</span>
+                {entry.outgoing.length > 0 && (
+                  <p>Eaten by: {entry.outgoing.join(', ')}.</p>
+                )}
+                {entry.incoming.length > 0 && (
+                  <p>Eats: {entry.incoming.join(', ')}.</p>
+                )}
+                {entry.outgoing.length === 0 && entry.incoming.length === 0 && (
+                  <p>No linked species shown in this network.</p>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
-      <aside className="w-full lg:w-64">
-        <div className="space-y-4">
-          <div>
-            <h4 className="text-sm font-semibold text-slate-900 mb-2">Name display</h4>
-            <div className="flex flex-col gap-2 text-sm text-slate-700">
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={showCommonNames}
-                  onChange={(evt) =>
-                    handleLabelPreferenceChange('common', evt.target.checked)
-                  }
-                />
-                Common names
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={showScientificNames}
-                  onChange={(evt) =>
-                    handleLabelPreferenceChange('scientific', evt.target.checked)
-                  }
-                />
-                Scientific names
-              </label>
-            </div>
-          </div>
-          <div>
-            <h4 className="text-sm font-semibold text-slate-900 mb-2">Legend</h4>
-            <div className="flex flex-col gap-3 text-sm text-slate-700">
-              {NETWORK_LEGEND.map((entry) => (
-                <div key={entry.key} className="flex items-center gap-3">
-                  <span
-                    className="inline-block h-3 w-3 rounded"
-                    style={{ backgroundColor: entry.color }}
-                  />
-                  <span>{entry.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </aside>
     </div>
   )
 }

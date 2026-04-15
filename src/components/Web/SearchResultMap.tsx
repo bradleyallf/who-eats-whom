@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useId, useMemo } from 'react'
 import {
   CircleMarker,
   MapContainer,
@@ -81,6 +81,22 @@ const MapBoundsHandler = ({ points }: { points: MarkerPoint[] }) => {
   return null
 }
 
+// Map keyboard accessibility
+const MapAccessibilityHandler = ({ helpTextId }: { helpTextId: string }) => {
+  const map = useMap()
+
+  useEffect(() => {
+    const container = map.getContainer()
+    container.setAttribute('tabindex', '0')
+    container.setAttribute('role', 'region')
+    container.setAttribute('aria-label', 'Search results map')
+    container.setAttribute('aria-describedby', helpTextId)
+  }, [helpTextId, map])
+
+  return null
+}
+// Map keyboard accessibility
+
 interface Props {
   results: Observation[]
   partnerData: Record<string, Observation>
@@ -88,6 +104,10 @@ interface Props {
 }
 
 export const SearchResultMap = ({ results, partnerData }: Props) => {
+  // Map keyboard accessibility
+  const mapHelpTextId = useId()
+  // Map keyboard accessibility
+
   const markerPoints = useMemo<MarkerPoint[]>(() => {
     return results.flatMap((result) => {
       const partner = partnerData[result.id]
@@ -115,15 +135,18 @@ export const SearchResultMap = ({ results, partnerData }: Props) => {
     })
   }, [partnerData, results])
 
+  // Map keyboard accessibility
   const mapProps: MapContainerProps = useMemo(
     () => ({
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
+      keyboard: true,
       scrollWheelZoom: true,
       className: 'h-full w-full',
     }),
     []
   )
+  // Map keyboard accessibility
 
   const tileLayerProps: TileLayerProps = useMemo(
     () => ({
@@ -153,14 +176,38 @@ export const SearchResultMap = ({ results, partnerData }: Props) => {
 
   return (
     <div className="w-full h-[32rem] border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+      {/* Map keyboard accessibility */}
+      <p id={mapHelpTextId} className="sr-only">
+        This map supports keyboard navigation. Focus the map, then use arrow
+        keys to pan and plus or minus to zoom. Tab again to move to map markers.
+      </p>
       <MapContainer {...mapProps}>
         <TileLayer {...tileLayerProps} />
         <MapBoundsHandler points={markerPoints} />
+        <MapAccessibilityHandler helpTextId={mapHelpTextId} />
         {markerPoints.map((marker) => (
           <CircleMarker
             key={marker.id}
             center={[marker.lat, marker.lng]}
             radius={8}
+            // Map keyboard accessibility
+            // Make each circle on map focusable via keyboard
+            eventHandlers={{
+              add: (event) => {
+                const element = event.target.getElement()
+                if (!element) return
+                element.setAttribute('tabindex', '0')
+                element.setAttribute('role', 'button')
+                element.setAttribute('aria-label', `${marker.label} map marker`)
+                element.addEventListener('keydown', (keyboardEvent: KeyboardEvent) => {
+                  if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
+                    keyboardEvent.preventDefault()
+                    event.target.openPopup()
+                  }
+                })
+              },
+            }}
+            // ---
             pathOptions={{
               color: '#0f172a',
               weight: 1,
@@ -187,6 +234,7 @@ export const SearchResultMap = ({ results, partnerData }: Props) => {
           </CircleMarker>
         ))}
       </MapContainer>
+      {/* Map keyboard accessibility */}
     </div>
   )
 }
