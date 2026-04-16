@@ -1251,7 +1251,7 @@ export const Web = () => {
           <div className="flex w-full flex-row items-center gap-2 md:items-start md:justify-center">
             {/* select + advanced search FOR WEB */}
             {/* Who eats bar */}
-            <div className="hidden md:flex md:w-[16rem] md:shrink-0 md:gap-2 md:items-start">
+            <div className="hidden md:flex md:w-[16rem] md:shrink-0 md:flex-col md:gap-2 md:items-start">
               <select
                 className="form-select form-select-lg w-full"
                 value={type}
@@ -1266,6 +1266,20 @@ export const Web = () => {
                   </option>
                 ))}
               </select>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={openAdvancedSearch}
+                  className="w-fit text-xs font-medium text-slate-800 underline underline-offset-2 hover:text-black sm:text-sm"
+                >
+                  Advanced Search
+                </button>
+                {activeAdvancedFiltersLabel && (
+                  <span className="text-[13px] leading-tight text-slate-900 sm:text-xs">
+                    {activeAdvancedFiltersLabel}
+                  </span>
+                )}
+              </div>
             </div>
 
             <form
@@ -1574,87 +1588,86 @@ export const Web = () => {
             </div>
           ) : hasResults ? (
             <>
-              <div className="items-center">
-                <div className="flex flex-nowrap gap-2 text-sm overflow-x-auto sticky top-[150px] items-center z-40 bg-white p-2">
-                  {(
-                    [
-                      {
-                        key: 'grid',
-                        label: 'Grid',
-                        disabled: false,
-                        icon: IconGrid,
-                      },
-                      {
-                        key: 'graph',
-                        label: 'Graph',
-                        disabled: false,
-                        icon: IconGraph,
-                      },
-                      {
-                        key: 'network',
-                        label: 'Network',
-                        disabled: false,
-                        icon: IconNetwork,
-                      },
-                      {
-                        key: 'map',
-                        label: 'Map',
-                        disabled: false,
-                        icon: IconMap,
-                      },
-                    ] as const
-                  ).map(({ key, label, disabled, icon: Icon }) => (
-                    <button
-                      key={key}
-                      type="button"
-                      disabled={disabled}
-                      title={disabled ? 'Coming soon' : undefined}
-                      onClick={() => {
-                        if (!disabled) setSelectedView(key)
-                      }}
-                      className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${
-                        selectedView === key
-                          ? 'bg-slate-900 text-white border-slate-900'
-                          : 'bg-white text-slate-700 border-slate-200'
-                      } ${disabled ? 'cursor-not-allowed opacity-70' : ''}`}
-                    >
-                      <Icon active={selectedView === key && !disabled} />
-                      <span>{label}</span>
-                    </button>
-                  ))}
-                  <div className="mt-1">{searchSummary}</div>
-                </div>
-                {selectedView === 'grid' && (
-                  <SearchResultGrid
-                    results={filteredResults}
-                    partnerData={partnerData}
-                    type={type}
-                  />
-                )}
-                {selectedView === 'graph' && (
-                  <SearchResultGraph
-                    results={filteredResults}
-                    partnerData={partnerData}
-                    type={type}
-                    focalName={speciesLabel}
-                  />
-                )}
-                {selectedView === 'network' && (
-                  <SearchResultNetwork
-                    results={filteredResults}
-                    partnerData={partnerData}
-                    type={type}
-                    focalName={focalName}
-                  />
-                )}
-                {selectedView === 'map' && (
-                  <SearchResultMap
-                    results={filteredResults}
-                    partnerData={partnerData}
-                    type={type}
-                  />
-                )}
+              <div className="items-center"></div>
+              <div className="flex flex-nowrap gap-2 text-sm overflow-x-auto sticky top-[180px] items-center z-40 bg-white p-2">
+                {(
+                  [
+                    {
+                      key: 'grid',
+                      label: 'Grid',
+                      disabled: false,
+                      icon: IconGrid,
+                    },
+                    {
+                      key: 'graph',
+                      label: 'Graph',
+                      disabled: false,
+                      icon: IconGraph,
+                    },
+                    {
+                      key: 'network',
+                      label: 'Network',
+                      disabled: false,
+                      icon: IconNetwork,
+                    },
+                    {
+                      key: 'map',
+                      label: 'Map',
+                      disabled: false,
+                      icon: IconMap,
+                    },
+                  ] as const
+                ).map(({ key, label, disabled, icon: Icon }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={disabled}
+                    title={disabled ? 'Coming soon' : undefined}
+                    onClick={() => {
+                      if (!disabled) setSelectedView(key)
+                    }}
+                    className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${
+                      selectedView === key
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-slate-700 border-slate-200'
+                    } ${disabled ? 'cursor-not-allowed opacity-70' : ''}`}
+                  >
+                    <Icon active={selectedView === key && !disabled} />
+                    <span>{label}</span>
+                  </button>
+                ))}
+                <div className="mt-2">{searchSummary}</div>
               </div>
+              {selectedView === 'grid' && (
+                <SearchResultGrid
+                  results={filteredResults}
+                  partnerData={partnerData}
+                  type={type}
+                />
+              )}
+              {selectedView === 'graph' && (
+                <SearchResultGraph
+                  results={filteredResults}
+                  partnerData={partnerData}
+                  type={type}
+                  focalName={speciesLabel}
+                />
+              )}
+              {selectedView === 'network' && (
+                <SearchResultNetwork
+                  results={filteredResults}
+                  partnerData={partnerData}
+                  type={type}
+                  focalName={focalName}
+                />
+              )}
+              {selectedView === 'map' && (
+                <SearchResultMap
+                  results={filteredResults}
+                  partnerData={partnerData}
+                  type={type}
+                />
+              )}
             </>
           ) : (
             <div className="p-4 border border-slate-200 rounded text-sm text-slate-600">
