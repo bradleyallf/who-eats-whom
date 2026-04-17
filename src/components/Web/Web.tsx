@@ -19,7 +19,7 @@ import { apiClient } from '../../utils'
 import { SearchResultGrid } from './SearchedAnimal'
 import { SearchResultGraph } from './SearchResultGraph'
 import { Observation, Ofv } from './types'
-import { Dropdown, Suggestion } from './Dropdown'
+import { Dropdown, Suggestion, titleCase } from './Dropdown'
 import { SearchResultNetwork } from './SearchResultNetwork'
 import { SearchResultMap } from './SearchResultMap'
 
@@ -1224,7 +1224,12 @@ export const Web = () => {
           <span>
             {updatedSearchLength == 0 ? 0 : filteredResults.length}{' '}
             Observations, {updatedSearchLength == 0 ? 0 : totalSpecies} Unique
-            Species
+            Species{' '}
+            {activeAdvancedFiltersLabel && (
+              <span className="text-xs text-slate-600 md:text-sm">
+                {activeAdvancedFiltersLabel}
+              </span>
+            )}
           </span>
           {!aggregatedCounterparts.length ? null : (
             <button
@@ -1245,13 +1250,23 @@ export const Web = () => {
   // ---------------------
   return (
     <>
-      <div className="mt-3 sticky top-[72px] z-40 bg-white p-5">
+      <div className="sticky top-[72px] z-40 bg-white p-5">
         <div className="flex flex-col gap-2 w-full items-center">
+          <div className="flex flex-row gap-10 mb-6">
+            {/* Advanced Search button for web*/}
+            <button
+              type="button"
+              onClick={openAdvancedSearch}
+              className="absolute right-[160px] w-fit text-xs lm-10 font-medium text-slate-800 underline underline-offset-2 hover:text-black sm:text-sm"
+            >
+              Advanced Search
+            </button>
+          </div>
           {/* Main row: Always flex row FOR MOBILE AND WEB, with select and organism search bar. */}
           <div className="flex w-full flex-row items-center gap-2 md:items-start md:justify-center">
             {/* select + advanced search FOR WEB */}
             {/* Who eats bar */}
-            <div className="hidden md:flex md:w-[16rem] md:shrink-0 md:flex-col md:gap-2 md:items-start">
+            <div className="hidden md:flex md:w-[16rem] md:shrink-0 md:flex-col md:gap-2 md:items-centers">
               <select
                 className="form-select form-select-lg w-full"
                 value={type}
@@ -1266,20 +1281,6 @@ export const Web = () => {
                   </option>
                 ))}
               </select>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={openAdvancedSearch}
-                  className="w-fit text-xs font-medium text-slate-800 underline underline-offset-2 hover:text-black sm:text-sm"
-                >
-                  Advanced Search
-                </button>
-                {activeAdvancedFiltersLabel && (
-                  <span className="text-[13px] leading-tight text-slate-900 sm:text-xs">
-                    {activeAdvancedFiltersLabel}
-                  </span>
-                )}
-              </div>
             </div>
 
             <form
@@ -1321,7 +1322,7 @@ export const Web = () => {
                 </div>
 
                 <div className="flex min-w-0 flex-1 items-center">
-                  {/* Thumbnail of taxon if available */}
+                  {/* Mini thumbnail of taxon if available */}
                   {selectedThumbnail && (
                     <img
                       src={selectedThumbnail}
@@ -1332,7 +1333,7 @@ export const Web = () => {
                   {/* Organism search input */}
                   <div
                     className="relative min-w-0 flex-1 w-full"
-                    style={{ zIndex: 2 }}
+                    style={{ zIndex: 1 }}
                   >
                     <input
                       className={`w-full placeholder-[#bfb6b6] ${
@@ -1535,49 +1536,126 @@ export const Web = () => {
               </div>
             </div>
           )}
-        </div>
 
-        <div>
-          {!search.trim() &&
-            (isRecentTaxonLoading ? (
-              <h2 className="mt-2 text-center text-gray-500">
-                Loading most recent observation...
-              </h2>
-            ) : recentTaxon ? (
-              vowels.includes(recentTaxon.charAt(0).toLowerCase()) ? (
+          {/* Most recent observation (only when no searches being made) */}
+          <div className="flex flex-row gap-12">
+            {!search.trim() &&
+              (isRecentTaxonLoading ? (
                 <h2 className="mt-2 text-center text-gray-500">
-                  An {recentTaxon} was observed {recentTaxDate}
+                  Loading most recent observation...
                 </h2>
-              ) : (
-                <h2 className="mt-2 text-center text-gray-500">
-                  A {recentTaxon} was observed {recentTaxDate}
-                </h2>
-              )
-            ) : null)}
+              ) : recentTaxon ? (
+                vowels.includes(recentTaxon.charAt(0).toLowerCase()) ? (
+                  <h2 className="mt-2 text-center text-gray-500">
+                    An {titleCase(recentTaxon)} was observed {recentTaxDate}
+                  </h2>
+                ) : (
+                  <h2 className="mt-2 text-center text-gray-500">
+                    A {titleCase(recentTaxon)} was observed {recentTaxDate}
+                  </h2>
+                )
+              ) : null)}
+          </div>
         </div>
       </div>
-      {shouldDisplayResults && (
-        <div className="col-8 mt-3 space-y-6">
-          <div ref={taxonMetaSentinelRef} aria-hidden className="h-px" />
-          <div
-            className={`flex justify-center items-start gap-2 transition-[background-color,border-color,box-shadow,padding] duration-300 ease-out`}
-          >
-            {selectedThumbnail && taxonDesc && (
-              <img
-                className={`rounded transition-[width,height,border-radius] duration-300 ease-out w-24 h-24 rounded`}
-                src={selectedThumbnail}
-                alt=""
-              />
-            )}
-            {selectedThumbnail && taxonDesc && (
-              <h1
-                className={`transition-[font-size,line-height,opacity] duration-300 ease-out max-w-prose text-sm md:text-md`}
-                dangerouslySetInnerHTML={{ __html: taxonDesc }}
-              />
+      {/* Sticky ends here*/}
+      <div ref={taxonMetaSentinelRef} aria-hidden className="h-px static" />
+      <div
+        className={`flex justify-center items-start gap-2 transition-[background-color,border-color,box-shadow,padding] duration-300 ease-out`}
+      >
+        {selectedThumbnail && taxonDesc && (
+          <img
+            className={`rounded transition-[width,height,border-radius] duration-300 ease-out w-24 h-24 rounded`}
+            src={selectedThumbnail}
+            alt=""
+          />
+        )}
+        {selectedThumbnail && taxonDesc && (
+          <h1
+            className={`transition-[font-size,line-height,opacity] duration-300 ease-out max-w-prose text-sm md:text-md`}
+            dangerouslySetInnerHTML={{ __html: taxonDesc }}
+          />
+        )}
+      </div>
+      {shouldDisplayResults && !isAdvancedSearchOpen && (
+        <div className="sticky top-[170px] bg-white z-40 items-center flex flex-col">
+          {/* Results summary and toolbar, not actual results*/}
+          <div className="flex flex-row items-center gap-2">
+            {isResultsLoading ? (
+              <div className="p-4 border border-slate-200 rounded text-sm text-slate-700 flex items-center gap-3">
+                <span
+                  className="inline-block h-5 w-5 rounded-full border-2 border-slate-300 border-t-slate-700 animate-spin"
+                  aria-label="Loading results"
+                />
+                <span>Loading results…</span>
+              </div>
+            ) : hasResults ? (
+              <>
+                <div className="hidden md:flex flex-wrap gap-2 text-sm overflow-x-auto sticky top-[180px] items-center z-50 bg-white p-2">
+                  {(
+                    [
+                      {
+                        key: 'grid',
+                        label: 'Grid',
+                        disabled: false,
+                        icon: IconGrid,
+                      },
+                      {
+                        key: 'graph',
+                        label: 'Graph',
+                        disabled: false,
+                        icon: IconGraph,
+                      },
+                      {
+                        key: 'network',
+                        label: 'Network',
+                        disabled: false,
+                        icon: IconNetwork,
+                      },
+                      {
+                        key: 'map',
+                        label: 'Map',
+                        disabled: false,
+                        icon: IconMap,
+                      },
+                    ] as const
+                  ).map(({ key, label, disabled, icon: Icon }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      disabled={disabled}
+                      title={disabled ? 'Coming soon' : undefined}
+                      onClick={() => {
+                        if (!disabled) setSelectedView(key)
+                      }}
+                      className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${
+                        selectedView === key
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-white text-slate-700 border-slate-200'
+                      } ${disabled ? 'cursor-not-allowed opacity-70' : ''}`}
+                    >
+                      <Icon active={selectedView === key && !disabled} />
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                  <div className="mt-2">{searchSummary}</div>
+                </div>
+              </>
+            ) : search.trim() ? (
+              <div className="p-4 border border-slate-200 rounded text-sm text-slate-600">
+                No results were found for this search.
+              </div>
+            ) : (
+              ''
             )}
           </div>
-          {/* Replaced the old summary card with one line sticky summary above. */}
+        </div>
+      )}
 
+      {/* Taxon desc and image after search*/}
+      {shouldDisplayResults && (
+        <div className="col-8 mt-3 space-y-6">
+          {/* Search results, toolbar(grid, map etc) */}
           {isResultsLoading ? (
             <div className="p-4 border border-slate-200 rounded text-sm text-slate-700 flex items-center gap-3">
               <span
@@ -1588,56 +1666,6 @@ export const Web = () => {
             </div>
           ) : hasResults ? (
             <>
-              <div className="items-center"></div>
-              <div className="flex flex-nowrap gap-2 text-sm overflow-x-auto sticky top-[180px] items-center z-40 bg-white p-2">
-                {(
-                  [
-                    {
-                      key: 'grid',
-                      label: 'Grid',
-                      disabled: false,
-                      icon: IconGrid,
-                    },
-                    {
-                      key: 'graph',
-                      label: 'Graph',
-                      disabled: false,
-                      icon: IconGraph,
-                    },
-                    {
-                      key: 'network',
-                      label: 'Network',
-                      disabled: false,
-                      icon: IconNetwork,
-                    },
-                    {
-                      key: 'map',
-                      label: 'Map',
-                      disabled: false,
-                      icon: IconMap,
-                    },
-                  ] as const
-                ).map(({ key, label, disabled, icon: Icon }) => (
-                  <button
-                    key={key}
-                    type="button"
-                    disabled={disabled}
-                    title={disabled ? 'Coming soon' : undefined}
-                    onClick={() => {
-                      if (!disabled) setSelectedView(key)
-                    }}
-                    className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${
-                      selectedView === key
-                        ? 'bg-slate-900 text-white border-slate-900'
-                        : 'bg-white text-slate-700 border-slate-200'
-                    } ${disabled ? 'cursor-not-allowed opacity-70' : ''}`}
-                  >
-                    <Icon active={selectedView === key && !disabled} />
-                    <span>{label}</span>
-                  </button>
-                ))}
-                <div className="mt-2">{searchSummary}</div>
-              </div>
               {selectedView === 'grid' && (
                 <SearchResultGrid
                   results={filteredResults}
