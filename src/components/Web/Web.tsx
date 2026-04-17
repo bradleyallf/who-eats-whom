@@ -1252,21 +1252,21 @@ export const Web = () => {
     <>
       <div className="sticky top-[72px] z-40 bg-white p-5">
         <div className="flex flex-col gap-2 w-full items-center">
-          <div className="flex flex-row gap-10 mb-6">
+          <div className="hidden xl:flex sm:flex flex-row gap-10 mb-6">
             {/* Advanced Search button for web*/}
             <button
               type="button"
               onClick={openAdvancedSearch}
-              className="absolute right-[160px] w-fit text-xs lm-10 font-medium text-slate-800 underline underline-offset-2 hover:text-black sm:text-sm"
+              className="absolute xl:right-[10rem] sm:right-[2rem] w-fit text-xs lm-10 font-medium text-slate-800 underline underline-offset-2 hover:text-black sm:text-sm"
             >
               Advanced Search
             </button>
           </div>
           {/* Main row: Always flex row FOR MOBILE AND WEB, with select and organism search bar. */}
           <div className="flex w-full flex-row items-center gap-2 md:items-start md:justify-center">
-            {/* select + advanced search FOR WEB */}
+            {/* select*/}
             {/* Who eats bar */}
-            <div className="hidden md:flex md:w-[16rem] md:shrink-0 md:flex-col md:gap-2 md:items-centers">
+            <div className="hidden sm:flex sm:w-[16rem] sm:shrink-0 sm:flex-col sm:gap-2 sm:items-centers">
               <select
                 className="form-select form-select-lg w-full"
                 value={type}
@@ -1289,10 +1289,10 @@ export const Web = () => {
             >
               {/* Needs to be items start since its a column*/}
               <div className="flex min-w-0 items-start gap-2">
-                {/* search input + go button FOR MOBILE */}
-                <div className="flex flex-col md:hidden">
+                {/* who eats bar + search input + go button FOR MOBILE */}
+                <div className="flex flex-col sm:hidden">
                   <select
-                    className="form-select w-[8rem] px-2 py-1.75 pr-7 text-[12px] sm:text-xs"
+                    className="form-select w-[8rem] px-2 py-1.75 pr-7 text-[12px] text-xs"
                     value={type}
                     onChange={(evt) => {
                       const { value } = evt.target
@@ -1305,11 +1305,12 @@ export const Web = () => {
                       </option>
                     ))}
                   </select>
-                  <div className="flex flex-wrap items-center gap-2 sm:text-xs">
+                  {/* Advanced Search MOBILE*/}
+                  <div className="flex flex-wrap items-center gap-2 text-xs sm:text-md">
                     <button
                       type="button"
                       onClick={openAdvancedSearch}
-                      className="w-fit text-xs font-medium text-slate-800 underline underline-offset-2 hover:text-black sm:text-sm"
+                      className="sm:hidden w-fit text-xs font-medium text-slate-800 underline underline-offset-2 hover:text-black sm:text-sm"
                     >
                       Advanced Search
                     </button>
@@ -1330,13 +1331,13 @@ export const Web = () => {
                       className="w-10 h-10 shrink-0 rounded object-cover border mr-2 border-slate-200"
                     />
                   )}
-                  {/* Organism search input */}
+                  {/* Organism search input for both */}
                   <div
                     className="relative min-w-0 flex-1 w-full"
                     style={{ zIndex: 1 }}
                   >
                     <input
-                      className={`w-full placeholder-[#bfb6b6] ${
+                      className={`w-full placeholder-[#bfb6b6] text-xs text-md sm:text-base ${
                         searchError
                           ? 'border-red-500 text-red-600 placeholder:text-red-500'
                           : ''
