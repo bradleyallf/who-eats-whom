@@ -4,6 +4,7 @@
  * md - >= 768
  * lg - >= 1024
  * xl - >= 1280
+ * 2xl ->= 1536
  */
 import {
   ChangeEvent,
@@ -217,6 +218,7 @@ export const Web = () => {
   )
   const [searchNonce, setSearchNonce] = useState(0)
   const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false)
+  const [isMiniToolBarOpen, setMiniToolBarOpen] = useState(false)
 
   const [type, setType] = useState(types.eaten.key)
   const [selectedView, setSelectedView] = useState<
@@ -1253,11 +1255,85 @@ export const Web = () => {
       <div className="sticky top-[72px] z-40 bg-white p-5">
         <div className="flex flex-col gap-2 w-full items-center">
           <div className="flex flex-row gap-10 mb-4 -mt-2">
+            <div className="sm:hidden">
+              {/* Results tool bar button for small screens*/}
+              {shouldDisplayResults && !isResultsLoading && hasResults && (
+                <button
+                  type="button"
+                  onClick={() => setMiniToolBarOpen(!isMiniToolBarOpen)}
+                  className="absolute left-[2rem] w-fit text-xs lm-10 font-medium text-slate-800 underline underline-offset-2 hover:text-black sm:text-sm"
+                >
+                  Results Toolbar
+                </button>
+              )}
+              {isMiniToolBarOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+                  <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl">
+                    <div className="flex flex-col items-center justify-between gap-4">
+                      <h1>Select your view of the search results:</h1>
+
+                      <div className="flex flex-row gap-3 items-center">
+                        {(
+                          [
+                            {
+                              key: 'grid',
+                              label: 'Grid',
+                              disabled: false,
+                              icon: IconGrid,
+                            },
+                            {
+                              key: 'graph',
+                              label: 'Graph',
+                              disabled: false,
+                              icon: IconGraph,
+                            },
+                            {
+                              key: 'network',
+                              label: 'Network',
+                              disabled: false,
+                              icon: IconNetwork,
+                            },
+                            {
+                              key: 'map',
+                              label: 'Map',
+                              disabled: false,
+                              icon: IconMap,
+                            },
+                          ] as const
+                        ).map(({ key, label, disabled, icon: Icon }) => (
+                          <button
+                            key={key}
+                            type="button"
+                            disabled={disabled}
+                            title={disabled ? 'Coming soon' : undefined}
+                            onClick={() => {
+                              if (!disabled) setSelectedView(key)
+                              setMiniToolBarOpen(false)
+                            }}
+                            className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${
+                              selectedView === key
+                                ? 'bg-slate-900 text-white border-slate-900'
+                                : 'bg-white text-slate-700 border-slate-200'
+                            } ${
+                              disabled ? 'cursor-not-allowed opacity-70' : ''
+                            }`}
+                          >
+                            <Icon active={selectedView === key && !disabled} />
+                            <span>{label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Advanced Search button*/}
             <button
               type="button"
               onClick={openAdvancedSearch}
-              className="absolute xl:right-[10rem] right-[2rem] w-fit text-xs lm-10 font-medium text-slate-800 underline underline-offset-2 hover:text-black sm:text-sm"
+              className="absolute xl:right-[10rem] 2xl:right-[20rem] right-[2rem] w-fit text-xs lm-10 font-medium text-slate-800 underline underline-offset-2 hover:text-black sm:text-sm"
             >
               Advanced Search
             </button>
@@ -1374,6 +1450,7 @@ export const Web = () => {
               >
                 {isResolvingPlace ? 'Loading...' : 'Go'}
               </button>
+              <div className="items-center sm:hidden">{searchSummary}</div>
             </form>
           </div>
 
@@ -1549,35 +1626,43 @@ export const Web = () => {
       <div
         className={`flex justify-center items-start gap-2 transition-[background-color,border-color,box-shadow,padding] duration-300 ease-out`}
       >
-        {selectedThumbnail && taxonDesc && (
-          <img
-            className={`rounded transition-[width,height,border-radius] duration-300 ease-out w-14 h-14 sm:w-24 sm:h-24 rounded`}
-            src={selectedThumbnail}
-            alt=""
-          />
-        )}
-        {selectedThumbnail && taxonDesc && (
-          <h1
-            className={`transition-[font-size,line-height,opacity] duration-300 ease-out max-w-prose text-sm md:text-md`}
-            dangerouslySetInnerHTML={{ __html: taxonDesc }}
-          />
+        {isTaxonMetaLoading ? (
+          <div className="flex items-start gap-4">
+            <div className="relative flex items-center justify-center w-14 h-14 sm:w-18 sm:h-18 md:w-24 md:h-24">
+              <div className="absolute inset-0 rounded-full border-2 border-slate-200" />
+              <div className="absolute inset-0 rounded-full border-t-2 border-slate-500 border-r-transparent border-b-transparent border-l-transparent animate-spin" />
+            </div>
+            <div className="space-y-2">
+              <div className="h-4 w-40 rounded bg-slate-200" />
+              <div className="h-4 w-56 rounded bg-slate-200 md:w-72" />
+              <div className="h-4 w-48 rounded bg-slate-200" />
+            </div>
+          </div>
+        ) : (
+          <>
+            {selectedThumbnail && taxonDesc && (
+              <img
+                className={`rounded transition-[width,height,border-radius] duration-300 ease-out w-14 h-14 sm:w-18 sm:h-18 md:w-24 md:h-24 rounded`}
+                src={selectedThumbnail}
+                alt=""
+              />
+            )}
+            {selectedThumbnail && taxonDesc && (
+              <h1
+                className={`transition-[font-size,line-height,opacity] duration-300 ease-out max-w-prose text-sm md:text-md`}
+                dangerouslySetInnerHTML={{ __html: taxonDesc }}
+              />
+            )}
+          </>
         )}
       </div>
       {shouldDisplayResults && !isAdvancedSearchOpen && (
-        <div className="sticky top-[170px] bg-white z-40 items-center flex flex-col">
+        <div className="sticky top-[160px] bg-white z-40 items-center flex flex-col mt-2">
           {/* Results summary and toolbar, not actual results*/}
           <div className="flex flex-row items-center gap-2">
-            {isResultsLoading ? (
-              <div className="p-4 border border-slate-200 rounded text-sm text-slate-700 flex items-center gap-3">
-                <span
-                  className="inline-block h-5 w-5 rounded-full border-2 border-slate-300 border-t-slate-700 animate-spin"
-                  aria-label="Loading results"
-                />
-                <span>Loading results…</span>
-              </div>
-            ) : hasResults ? (
-              <>
-                <div className="hidden md:flex flex-wrap gap-2 text-sm overflow-x-auto sticky top-[180px] items-center z-50 bg-white p-2">
+            <div className="hidden sm:flex flex-wrap gap-2 text-sm overflow-x-auto sticky top-[180px] items-center justify-center z-50 bg-white p-2">
+              {hasResults && (
+                <>
                   {(
                     [
                       {
@@ -1624,16 +1709,12 @@ export const Web = () => {
                       <span>{label}</span>
                     </button>
                   ))}
-                  <div className="mt-2">{searchSummary}</div>
-                </div>
-              </>
-            ) : search.trim() ? (
-              <div className="p-4 border border-slate-200 rounded text-sm text-slate-600">
-                No results were found for this search.
-              </div>
-            ) : (
-              ''
-            )}
+                </>
+              )}
+              {/*Search summary web*/}
+
+              <div className="mt-2 hidden sm:flex">{searchSummary}</div>
+            </div>
           </div>
         </div>
       )}
