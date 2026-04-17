@@ -1252,12 +1252,12 @@ export const Web = () => {
     <>
       <div className="sticky top-[72px] z-40 bg-white p-5">
         <div className="flex flex-col gap-2 w-full items-center">
-          <div className="hidden xl:flex sm:flex flex-row gap-10 mb-6">
-            {/* Advanced Search button for web*/}
+          <div className="flex flex-row gap-10 mb-4 -mt-2">
+            {/* Advanced Search button*/}
             <button
               type="button"
               onClick={openAdvancedSearch}
-              className="absolute xl:right-[10rem] sm:right-[2rem] w-fit text-xs lm-10 font-medium text-slate-800 underline underline-offset-2 hover:text-black sm:text-sm"
+              className="absolute xl:right-[10rem] right-[2rem] w-fit text-xs lm-10 font-medium text-slate-800 underline underline-offset-2 hover:text-black sm:text-sm"
             >
               Advanced Search
             </button>
@@ -1290,7 +1290,7 @@ export const Web = () => {
               {/* Needs to be items start since its a column*/}
               <div className="flex min-w-0 items-start gap-2">
                 {/* who eats bar + search input + go button FOR MOBILE */}
-                <div className="flex flex-col sm:hidden">
+                <div className="sm:hidden">
                   <select
                     className="form-select w-[8rem] px-2 py-1.75 pr-7 text-[12px] text-xs"
                     value={type}
@@ -1305,21 +1305,6 @@ export const Web = () => {
                       </option>
                     ))}
                   </select>
-                  {/* Advanced Search MOBILE*/}
-                  <div className="flex flex-wrap items-center gap-2 text-xs sm:text-md">
-                    <button
-                      type="button"
-                      onClick={openAdvancedSearch}
-                      className="sm:hidden w-fit text-xs font-medium text-slate-800 underline underline-offset-2 hover:text-black sm:text-sm"
-                    >
-                      Advanced Search
-                    </button>
-                    {activeAdvancedFiltersLabel && (
-                      <span className="text-[13px] leading-tight text-slate-900 sm:text-xs">
-                        {activeAdvancedFiltersLabel}
-                      </span>
-                    )}
-                  </div>
                 </div>
 
                 <div className="flex min-w-0 flex-1 items-center">
@@ -1328,7 +1313,7 @@ export const Web = () => {
                     <img
                       src={selectedThumbnail}
                       alt=""
-                      className="w-10 h-10 shrink-0 rounded object-cover border mr-2 border-slate-200"
+                      className="w-7 h-7 sm:w-10 sm:h-10 shrink-0 rounded object-cover border mr-2 border-slate-200"
                     />
                   )}
                   {/* Organism search input for both */}
@@ -1547,12 +1532,12 @@ export const Web = () => {
                 </h2>
               ) : recentTaxon ? (
                 vowels.includes(recentTaxon.charAt(0).toLowerCase()) ? (
-                  <h2 className="mt-2 text-center text-gray-500">
-                    An {titleCase(recentTaxon)} was observed {recentTaxDate}
+                  <h2 className="mt-2 text-center text-gray-500 text-sm sm:text-base">
+                    An {titleCase(recentTaxon)} was observed {recentTaxDate}.
                   </h2>
                 ) : (
-                  <h2 className="mt-2 text-center text-gray-500">
-                    A {titleCase(recentTaxon)} was observed {recentTaxDate}
+                  <h2 className="mt-2 text-center text-gray-500 text-sm sm:text-base">
+                    A {titleCase(recentTaxon)} was observed {recentTaxDate}.
                   </h2>
                 )
               ) : null)}
@@ -1566,7 +1551,7 @@ export const Web = () => {
       >
         {selectedThumbnail && taxonDesc && (
           <img
-            className={`rounded transition-[width,height,border-radius] duration-300 ease-out w-24 h-24 rounded`}
+            className={`rounded transition-[width,height,border-radius] duration-300 ease-out w-14 h-14 sm:w-24 sm:h-24 rounded`}
             src={selectedThumbnail}
             alt=""
           />
