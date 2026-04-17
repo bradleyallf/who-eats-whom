@@ -1267,12 +1267,14 @@ export const Web = () => {
                 </button>
               )}
               {isMiniToolBarOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-                  <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl">
-                    <div className="flex flex-col items-center justify-between gap-4">
-                      <h1>Select your view of the search results:</h1>
+                <div className="fixed inset-0 z-50 flex flex-auto items-center justify-center bg-slate-900/40 px-4">
+                  <div className="flex flex-auto rounded-2xl bg-white p-5 shadow-2xl">
+                    <div className="flex flex-col w-full items-center justify-center gap-4">
+                      <h1 className="text-center w-full">
+                        Select your view of the search results:
+                      </h1>
 
-                      <div className="flex flex-row gap-3 items-center">
+                      <div className="flex flex-row gap-3 justify-center items-center w-full">
                         {(
                           [
                             {
@@ -1310,7 +1312,7 @@ export const Web = () => {
                               if (!disabled) setSelectedView(key)
                               setMiniToolBarOpen(false)
                             }}
-                            className={`flex items-center gap-2 rounded-md border px-4 py-2 text-xs transition-colors sm:gap-2 sm:px-4 sm:py-2 sm:text-sm ${
+                            className={`flex justify-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors text-sm ${
                               selectedView === key
                                 ? 'bg-slate-900 text-white border-slate-900'
                                 : 'bg-white text-slate-700 border-slate-200'
@@ -1649,7 +1651,7 @@ export const Web = () => {
             )}
             {selectedThumbnail && taxonDesc && (
               <h1
-                className={`transition-[font-size,line-height,opacity] duration-300 ease-out max-w-prose text-sm md:text-md`}
+                className={`transition-[font-size,line-height,opacity] duration-300 ease-out max-w-prose text-sm md:text-md max-h-16 md:max-h-none overflow-hidden line-clamp-3 md:line-clamp-none`}
                 dangerouslySetInnerHTML={{ __html: taxonDesc }}
               />
             )}
