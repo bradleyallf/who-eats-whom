@@ -14,7 +14,7 @@ interface Props {
   onClick: (s: Suggestion) => void
 }
 
-const titleCase = (value: string) => {
+export const titleCase = (value: string) => {
   const minorWords = new Set(['and', 'or', 'but'])
 
   return value

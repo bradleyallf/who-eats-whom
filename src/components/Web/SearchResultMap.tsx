@@ -27,7 +27,9 @@ const DEFAULT_CENTER: LatLngExpression = [20, 0]
 const DEFAULT_ZOOM = 2
 
 const getObservationLabel = (observation?: Observation) =>
-  observation?.taxon.preferred_common_name || observation?.taxon.name || 'Unknown species'
+  observation?.taxon.preferred_common_name ||
+  observation?.taxon.name ||
+  'Unknown species'
 
 const getScientificName = (observation?: Observation) => observation?.taxon.name
 
@@ -74,7 +76,9 @@ const MapBoundsHandler = ({ points }: { points: MarkerPoint[] }) => {
       return
     }
 
-    const bounds = L.latLngBounds(points.map(({ lat, lng }) => [lat, lng] as [number, number]))
+    const bounds = L.latLngBounds(
+      points.map(({ lat, lng }) => [lat, lng] as [number, number])
+    )
     map.fitBounds(bounds, { padding: [40, 40], maxZoom: 8 })
   }, [map, points])
 
@@ -95,10 +99,9 @@ export const SearchResultMap = ({ results, partnerData }: Props) => {
       if (!coords) return []
 
       const label = getObservationLabel(result) || getObservationLabel(partner)
-      const scientificName = getScientificName(result) || getScientificName(partner)
-      const colorSource = result?.taxon?.iconic_taxon_name
-        ? result
-        : partner
+      const scientificName =
+        getScientificName(result) || getScientificName(partner)
+      const colorSource = result?.taxon?.iconic_taxon_name ? result : partner
       const color = getCategoryColor(colorSource?.taxon?.iconic_taxon_name)
 
       return [
@@ -145,14 +148,14 @@ export const SearchResultMap = ({ results, partnerData }: Props) => {
   if (!markerPoints.length) {
     return (
       <div className="p-4 border border-slate-200 rounded text-sm text-slate-600">
-        None of the observations include map-ready coordinates. Try a different search or
-        remove location filters.
+        None of the observations include map-ready coordinates. Try a different
+        search or remove location filters.
       </div>
     )
   }
 
   return (
-    <div className="w-full h-[32rem] border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+    <div className="sticky top-40 w-full h-[32rem] border border-slate-200 rounded-lg overflow-hidden shadow-sm z-0">
       <MapContainer {...mapProps}>
         <TileLayer {...tileLayerProps} />
         <MapBoundsHandler points={markerPoints} />
@@ -172,7 +175,9 @@ export const SearchResultMap = ({ results, partnerData }: Props) => {
               <div className="space-y-1">
                 <p className="font-semibold text-sm">{marker.label}</p>
                 {marker.scientificName && (
-                  <p className="text-xs italic text-slate-600">{marker.scientificName}</p>
+                  <p className="text-xs italic text-slate-600">
+                    {marker.scientificName}
+                  </p>
                 )}
                 <a
                   href={marker.url}
