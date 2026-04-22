@@ -3,10 +3,10 @@ import { Item } from './Item'
 
 const routes = [
   // removing home link because of redundancy
-  // {
-  //   to: '/',
-  //   label: 'Home',
-  // },
+  {
+    to: '/',
+    label: 'Home',
+  },
   {
     to: '/about',
     label: 'About',
