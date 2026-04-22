@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useId, useMemo } from 'react'
 import {
   CircleMarker,
   MapContainer,
@@ -27,7 +27,9 @@ const DEFAULT_CENTER: LatLngExpression = [20, 0]
 const DEFAULT_ZOOM = 2
 
 const getObservationLabel = (observation?: Observation) =>
-  observation?.taxon.preferred_common_name || observation?.taxon.name || 'Unknown species'
+  observation?.taxon.preferred_common_name ||
+  observation?.taxon.name ||
+  'Unknown species'
 
 const getScientificName = (observation?: Observation) => observation?.taxon.name
 
@@ -74,12 +76,30 @@ const MapBoundsHandler = ({ points }: { points: MarkerPoint[] }) => {
       return
     }
 
-    const bounds = L.latLngBounds(points.map(({ lat, lng }) => [lat, lng] as [number, number]))
+    const bounds = L.latLngBounds(
+      points.map(({ lat, lng }) => [lat, lng] as [number, number])
+    )
     map.fitBounds(bounds, { padding: [40, 40], maxZoom: 8 })
   }, [map, points])
 
   return null
 }
+
+// Map keyboard accessibility
+const MapAccessibilityHandler = ({ helpTextId }: { helpTextId: string }) => {
+  const map = useMap()
+
+  useEffect(() => {
+    const container = map.getContainer()
+    container.setAttribute('tabindex', '0')
+    container.setAttribute('role', 'region')
+    container.setAttribute('aria-label', 'Search results map')
+    container.setAttribute('aria-describedby', helpTextId)
+  }, [helpTextId, map])
+
+  return null
+}
+// Map keyboard accessibility
 
 interface Props {
   results: Observation[]
@@ -88,6 +108,10 @@ interface Props {
 }
 
 export const SearchResultMap = ({ results, partnerData }: Props) => {
+  // Map keyboard accessibility
+  const mapHelpTextId = useId()
+  // Map keyboard accessibility
+
   const markerPoints = useMemo<MarkerPoint[]>(() => {
     return results.flatMap((result) => {
       const partner = partnerData[result.id]
@@ -95,10 +119,9 @@ export const SearchResultMap = ({ results, partnerData }: Props) => {
       if (!coords) return []
 
       const label = getObservationLabel(result) || getObservationLabel(partner)
-      const scientificName = getScientificName(result) || getScientificName(partner)
-      const colorSource = result?.taxon?.iconic_taxon_name
-        ? result
-        : partner
+      const scientificName =
+        getScientificName(result) || getScientificName(partner)
+      const colorSource = result?.taxon?.iconic_taxon_name ? result : partner
       const color = getCategoryColor(colorSource?.taxon?.iconic_taxon_name)
 
       return [
@@ -115,15 +138,18 @@ export const SearchResultMap = ({ results, partnerData }: Props) => {
     })
   }, [partnerData, results])
 
+  // Map keyboard accessibility
   const mapProps: MapContainerProps = useMemo(
     () => ({
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
+      keyboard: true,
       scrollWheelZoom: true,
       className: 'h-full w-full',
     }),
     []
   )
+  // Map keyboard accessibility
 
   const tileLayerProps: TileLayerProps = useMemo(
     () => ({
@@ -145,22 +171,46 @@ export const SearchResultMap = ({ results, partnerData }: Props) => {
   if (!markerPoints.length) {
     return (
       <div className="p-4 border border-slate-200 rounded text-sm text-slate-600">
-        None of the observations include map-ready coordinates. Try a different search or
-        remove location filters.
+        None of the observations include map-ready coordinates. Try a different
+        search or remove location filters.
       </div>
     )
   }
 
   return (
     <div className="w-full h-[32rem] border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+      {/* Map keyboard accessibility */}
+      <p id={mapHelpTextId} className="sr-only">
+        This map supports keyboard navigation. Focus the map, then use arrow
+        keys to pan and plus or minus to zoom. Tab again to move to map markers.
+      </p>
       <MapContainer {...mapProps}>
         <TileLayer {...tileLayerProps} />
         <MapBoundsHandler points={markerPoints} />
+        <MapAccessibilityHandler helpTextId={mapHelpTextId} />
         {markerPoints.map((marker) => (
           <CircleMarker
             key={marker.id}
             center={[marker.lat, marker.lng]}
             radius={8}
+            // Map keyboard accessibility
+            // Make each circle on map focusable via keyboard
+            eventHandlers={{
+              add: (event) => {
+                const element = event.target.getElement()
+                if (!element) return
+                element.setAttribute('tabindex', '0')
+                element.setAttribute('role', 'button')
+                element.setAttribute('aria-label', `${marker.label} map marker`)
+                element.addEventListener('keydown', (keyboardEvent: KeyboardEvent) => {
+                  if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
+                    keyboardEvent.preventDefault()
+                    event.target.openPopup()
+                  }
+                })
+              },
+            }}
+            // ---
             pathOptions={{
               color: '#0f172a',
               weight: 1,
@@ -172,7 +222,9 @@ export const SearchResultMap = ({ results, partnerData }: Props) => {
               <div className="space-y-1">
                 <p className="font-semibold text-sm">{marker.label}</p>
                 {marker.scientificName && (
-                  <p className="text-xs italic text-slate-600">{marker.scientificName}</p>
+                  <p className="text-xs italic text-slate-600">
+                    {marker.scientificName}
+                  </p>
                 )}
                 <a
                   href={marker.url}
@@ -187,6 +239,7 @@ export const SearchResultMap = ({ results, partnerData }: Props) => {
           </CircleMarker>
         ))}
       </MapContainer>
+      {/* Map keyboard accessibility */}
     </div>
   )
 }

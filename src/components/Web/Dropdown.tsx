@@ -14,6 +14,19 @@ interface Props {
   onClick: (s: Suggestion) => void
 }
 
+export const titleCase = (value: string) => {
+  const minorWords = new Set(['and', 'or', 'but'])
+
+  return value
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word, index) => {
+      if (index > 0 && minorWords.has(word)) return word
+      return word.charAt(0).toUpperCase() + word.slice(1)
+    })
+    .join(' ')
+}
+
 export const Dropdown = (props: Props) => {
   // --------------------- ===
   //  PROPS
@@ -26,7 +39,7 @@ export const Dropdown = (props: Props) => {
   return (
     (isOpen || isLoading) && (
       <div
-        className="absolute p-4 flex flex-col gap-2 bg-white"
+        className="absolute p-4 flex flex-col gap-2 bg-white overflow-y-auto max-h-[250px] md:max-h-[350px]"
         style={{
           top: '100%',
           left: 0,
@@ -48,7 +61,7 @@ export const Dropdown = (props: Props) => {
                 key={s.label}
                 onClick={() => onClick(s)}
                 type="button"
-                className="flex items-center gap-2 text-start hover:bg-slate-100 rounded p-1"
+                className="flex items-center gap-2 text-start hover:bg-slate-100 rounded md:p-1 text-xs md:text-md lg:text-base"
               >
                 {s.thumbnail && (
                   <img
@@ -58,7 +71,7 @@ export const Dropdown = (props: Props) => {
                   />
                 )}
                 <span>
-                  {s.label}
+                  {titleCase(s.label)}
                   {s.sciName && (
                     <span className="text-gray-600 italic"> ({s.sciName})</span>
                   )}

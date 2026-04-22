@@ -6,7 +6,7 @@ export const Header = () => {
   //  RENDER
   // ---------------------
   return (
-    <header>
+    <header className="sticky top-0 z-50">
       <section className="w-full bg-slate-100 flex justify-between p-4">
         <div>
           <Link to="/" className="no-underline text-inherit">
