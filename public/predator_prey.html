@@ -194,6 +194,16 @@
       .node.highlight circle {
         stroke: #f97316;
         stroke-width: 3px;
+        opacity: 1 !important;
+      }
+      .node.highlight text {
+        opacity: 1 !important;
+      }
+      .node-dimmed circle {
+         opacity: 0.15 !important;
+       }
+      .node-dimmed text {
+         opacity: 0.15 !important;
       }
       .link {
         stroke: rgba(30, 41, 59, 0.35);
@@ -235,7 +245,7 @@
       const legendItems = [{"label": "Plants & Fungi", "color": "#9BD6A5", "taxa": ["Fungi", "Plantae"]}, {"label": "Vertebrates", "color": "#8FBCEA", "taxa": ["Actinopterygii", "Amphibia", "Aves", "Mammalia", "Reptilia"]}, {"label": "Invertebrates", "color": "#F5B97B", "taxa": ["Animalia", "Arachnida", "Chromista", "Insecta", "Mollusca", "Protozoa"]}];
       const dpr = window.devicePixelRatio || 1;
 
-      const svg = d3.select('#network');
+       const svg = d3.select('#network');
       const tooltip = d3.select('#tooltip');
       const containerEl = document.getElementById('graph-container');
       let showCommonNames = true;
@@ -260,21 +270,23 @@
         .attr('fill', 'rgba(30, 41, 59, 0.65)');
 
       const projectLink = (source, target) => {
-        if (!source || !target) {
-          return { x1: 0, y1: 0, x2: 0, y2: 0 };
-        }
-        const dx = target.x - source.x;
-        const dy = target.y - source.y;
-        const distance = Math.sqrt(dx * dx + dy * dy) || 1;
-        const offsetX = (dx / distance) * 8;
-        const offsetY = (dy / distance) * 8;
-        return {
-          x1: source.x + offsetX,
-          y1: source.y + offsetY,
-          x2: target.x - offsetX,
-          y2: target.y - offsetY,
+            if (!source || !target) return { x1: 0, y1: 0, x2: 0, y2: 0 };
+            const dx = target.x - source.x;
+            const dy = target.y - source.y;
+            const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+            const sourceRadius = (source.nodeRadius || 9) + 1.5;
+            const targetRadius = (target.nodeRadius || 9) + 5;
+            const offsetX = (dx / distance) * sourceRadius;
+            const offsetY = (dy / distance) * sourceRadius;
+            const targetOffsetX = (dx / distance) * targetRadius;
+            const targetOffsetY = (dy / distance) * targetRadius;
+            return {
+                x1: source.x + offsetX,
+                y1: source.y + offsetY,
+                x2: target.x - targetOffsetX,
+                y2: target.y - targetOffsetY,
+            };
         };
-      };
 
       const formatLabel = (node) => {
         const common = node.commonName || node.label;
@@ -304,8 +316,25 @@
         .data(graphData.links)
         .join('line')
         .attr('class', 'link')
-        .attr('stroke-width', d => Math.max(0.03 + d.count, 0.75))
+        .attr('stroke-width', d => Math.max(0.75))
         .attr('marker-end', 'url(#arrowhead)');
+
+        graphData.nodes.forEach(node => { 
+            const preyCount = graphData.links.filter(link => {
+            const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+            return targetId === node.id;
+        }).length;
+  
+        const totalObservations = graphData.links.filter(link => {
+        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+        return targetId === node.id;
+        }).reduce((sum, link) => sum + link.count, 0);
+  
+        node.childrenCount = preyCount;
+        node.totalPreyObservations = totalObservations;
+  
+        node.nodeRadius = Math.max(6, Math.min(20, 10 + preyCount * 2.5));
+        });
 
       const node = zoomLayer.append('g')
         .selectAll('g')
@@ -318,8 +347,10 @@
           .on('end', dragended));
 
       node.append('circle')
-        .attr('r', 8)
-        .attr('fill', d => (categoryColors[d.category]?.color) || '#C8C8C8');
+        .attr('r', d => d.nodeRadius || 9)  
+        .attr('fill', d => (categoryColors[d.category]?.color) || '#C8C8C8')
+        .attr('stroke', 'none')
+        .attr('stroke-width', 0);
 
       const labels = node.append('text')
         .attr('fill', '#0f172a')
@@ -347,7 +378,9 @@ Iconic taxa in group: ${taxaList}`;
               ? 1
               : (scale - minScale) / (maxScale - minScale);
         labels.style('opacity', clamped);
+        labels.style("visibility", scale > .35 ? "visible" : "hidden");
       };
+      
 
       const updateLabels = () => {
         labels.text(d => formatLabel(d));
@@ -398,6 +431,47 @@ Iconic taxa in group: ${taxaList}`;
           .attr('x', d => (d.x >= width / 2 ? 8 + 4 : -(8 + 4)))
           .attr('text-anchor', d => (d.x >= width / 2 ? 'start' : 'end'));
       });
+
+      let isDimmed = false;
+
+      node.on('click', function (event, d) {
+        if (isDimmed) {
+          // Reset everything
+        link.style('opacity', null);
+        node.classed('node-dimmed', false);
+        node.classed('node.highlight', false);
+        isDimmed = false;
+      } else {
+          // Dim all links
+        link.style('opacity', 0.1);
+        
+        node.classed('node-dimmed', true);
+        
+        const clickedId = typeof d === 'object' ? d.id : d;
+        const connectedIds = new Set([clickedId]);
+        
+        graphData.links.forEach(l => {
+            const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+            const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+            if (sourceId === clickedId) connectedIds.add(targetId);
+            if (targetId === clickedId) connectedIds.add(sourceId);
+        });
+        
+        link.filter(function (l) {
+            const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+            const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+            return sourceId === clickedId || targetId === clickedId;
+        }).style('opacity', 1);
+        
+        node.filter(function (n) {
+            const nodeId = typeof n === 'object' ? n.id : n;
+            return connectedIds.has(nodeId);
+        }).classed('node-dimmed', false).classed('node.highlight', true);
+        
+        isDimmed = true;
+      }
+     });
+
 
       const zoomBehaviour = d3.zoom()
         .scaleExtent([0.005, 8])
