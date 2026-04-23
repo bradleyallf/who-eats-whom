@@ -55,6 +55,39 @@
         line-height: 1.4;
         color: #334155;
       }
+      .controls-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        user-select: none;
+        margin: -0.2rem 0 -0.2rem 0;
+      }
+      .controls-header h1 {
+        margin: 0;
+        font-size: 1.2rem;
+        font-weight: 700;
+      }
+      .collapse-indicator {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #475569;
+        transition: transform 0.4s;
+        line-height: 1;
+        width: 1.4rem;
+        text-align: center;
+      }
+       .controls.collapsed .controls-content {
+        display: none;
+      }
+      .controls.collapsed .controls-header {
+        margin: 0;
+      }
+      .controls-content {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
       .zoom-panel {
         position: absolute;
         top: 1rem;
@@ -203,23 +236,35 @@
         stroke: #f97316;
         stroke-opacity: 0.9;
       }
+      @media (max-width: 640px) {
+        .toolbar {
+          top: 0.6rem;
+          left: 0.6rem;
+          max-width: calc(100vw - 1.8rem);
+          background: rgba(255, 255, 255, 0.97);
+        }
     </style>
   </head>
   <body>
     <div id="graph-container">
-      <div class="controls">
-        <h1>Predator/Prey Network</h1>
-        <p>Arrows run from prey → predator. Edge thickness shows how many observations recorded that interaction.</p>
-        <div class="search">
-          <input id="searchBox" placeholder="Search by common or scientific name" />
-          <button id="searchButton">Go</button>
+      <div class="controls" id="mainControls">
+        <div class="controls-header" id="controlsHeader">
+          <h1>Predator/Prey Network</h1>
+          <span class="collapse-indicator" id="collapseIcon">−</span>
         </div>
-        <div class="legend" id="legend"></div>
-        <div class="label-options">
-          <label><input type="checkbox" id="toggleCommon" checked /> Common names</label>
-          <label><input type="checkbox" id="toggleScientific" /> Scientific names</label>
+        <div class="controls-content">
+          <p>Arrows run from prey → predator. Edge thickness shows how many observations recorded that interaction.</p>
+          <div class="search">
+            <input id="searchBox" placeholder="Search by common or scientific name" />
+            <button id="searchButton">Go</button>
+          </div>
+          <div class="legend" id="legend"></div>
+          <div class="label-options">
+            <label><input type="checkbox" id="toggleCommon" checked /> Common names</label>
+            <label><input type="checkbox" id="toggleScientific" /> Scientific names</label>
+          </div>
+          <button id="downloadNetworkBtn" class="download-btn">Download network</button>
         </div>
-        <button id="downloadNetworkBtn" class="download-btn">Download network</button>
       </div>
       <div class="zoom-panel">
         <button id="zoomInBtn" aria-label="Zoom in">+</button>
@@ -601,6 +646,28 @@ Iconic taxa in group: ${taxaList}`;
         d.fy = null;
       }
 
+      const controlsMC = document.getElementById('mainControls');
+      const collapseIconSpan = document.getElementById('collapseIcon');
+      const controlsHeader = document.getElementById('controlsHeader');
+      
+      function toggleControls() {
+        const isCollapsed = controlsMC.classList.contains('collapsed');
+        if (isCollapsed) {
+          controlsMC.classList.remove('collapsed');
+          collapseIconSpan.textContent = '-';
+        } else {
+          controlsMC.classList.add('collapsed');
+          collapseIconSpan.textContent = '+';
+        }
+      }
+      
+      if (controlsHeader) {
+        controlsHeader.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleControls();
+        });
+      }
+      
       window.addEventListener('resize', () => {
         const newWidth = window.innerWidth;
         const newHeight = window.innerHeight;
