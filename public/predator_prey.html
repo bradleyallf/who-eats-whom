@@ -77,10 +77,15 @@
         width: 1.4rem;
         text-align: center;
       }
+      .controls.collapsed {
+        width: var(--controls-width, auto);
+        min-width: min(22rem, 80vw);
+      }
        .controls.collapsed .controls-content {
         display: none;
       }
       .controls.collapsed .controls-header {
+        
         margin: 0;
       }
       .controls-content {
@@ -236,13 +241,30 @@
         stroke: #f97316;
         stroke-opacity: 0.9;
       }
-      @media (max-width: 640px) {
-        .toolbar {
-          top: 0.6rem;
-          left: 0.6rem;
-          max-width: calc(100vw - 1.8rem);
-          background: rgba(255, 255, 255, 0.97);
+      .search-box{
+        width: 100;
+      }
+      @media (max-width: 400px) {
+        .search-box{
+            max-width: 45%;
         }
+        .controls {
+          max-width: 50%;
+          background: rgba(255, 255, 255, 0.97)
+        }
+        .controls.collapsed {
+          width: auto;
+          min-width: auto;
+          max-width: none;
+          right: auto;
+        }
+        .zoom-panel {
+          top: auto;
+          bottom: 1rem;
+          right: 1rem;
+          left: auto;
+        }
+    }
     </style>
   </head>
   <body>
@@ -255,7 +277,7 @@
         <div class="controls-content">
           <p>Arrows run from prey → predator. Edge thickness shows how many observations recorded that interaction.</p>
           <div class="search">
-            <input id="searchBox" placeholder="Search by common or scientific name" />
+            <input class="search-box" id="searchBox" placeholder="Search by common or scientific name" />
             <button id="searchButton">Go</button>
           </div>
           <div class="legend" id="legend"></div>
