@@ -23,8 +23,38 @@ import { Observation, Ofv } from './types'
 import { Dropdown, Suggestion, titleCase } from './Dropdown'
 import { SearchResultNetwork } from './SearchResultNetwork'
 import { SearchResultMap } from './SearchResultMap'
+import { useScreenSize } from '../../hooks'
 
 const getLastLetter = (str: string) => str[str.length - 1]
+
+const getTaxonDescPreviewMaxLength = (width: number) => {
+  if (width < 640) return 100 // Mobile
+  if (width < 1024) return 150 // Tablet
+  return 220 // Desktop
+}
+
+const stripHtml = (value: string) => {
+  if (typeof document === 'undefined') {
+    return value
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
+  const container = document.createElement('div')
+  container.innerHTML = value
+  return container.textContent?.replace(/\s+/g, ' ').trim() ?? ''
+}
+
+const truncateWithEllipsis = (value: string, maxLength: number) => {
+  if (value.length <= maxLength) return value
+
+  const truncated = value
+    .slice(0, maxLength)
+    .replace(/\s+\S*$/, '')
+    .trimEnd()
+  return `${truncated}...`
+}
 
 const vowels = ['a', 'e', 'i', 'o', 'u']
 
@@ -151,6 +181,9 @@ export const Web = () => {
   const taxonMetaSentinelRef = useRef<HTMLDivElement | null>(null)
   const [isTaxonMetaCondensed, setIsTaxonMetaCondensed] = useState(false)
 
+  const { width } = useScreenSize()
+  const taxonDescPreviewMaxLength = getTaxonDescPreviewMaxLength(width)
+
   const [data, setData] = useState<Observation[]>([])
   const [partnerData, setPartnerData] = useState<Record<string, Observation>>(
     {}
@@ -171,6 +204,7 @@ export const Web = () => {
   const [selectedTaxonId, setSelectedTaxonId] = useState<number | null>(null)
   const [isTaxonMetaLoading, setIsTaxonMetaLoading] = useState(false)
   const [taxonDesc, setTaxonDesc] = useState<string | null>()
+  const [taxonWikiUrl, setTaxonWikiUrl] = useState<string>('')
 
   // State representing the updated amount of results from API on each year update
   // Added to handle year adjustments to properly display 0 results
@@ -752,6 +786,7 @@ export const Web = () => {
   useEffect(() => {
     if (!selectedTaxonId) {
       setTaxonDesc('')
+      setTaxonWikiUrl('')
       setIsTaxonMetaLoading(false)
       return
     }
@@ -761,9 +796,11 @@ export const Web = () => {
       .get(`/taxa/${selectedTaxonId.toString()}`)
       .then((d) => {
         setTaxonDesc(d.data.results[0].wikipedia_summary)
+        setTaxonWikiUrl(d.data.results[0].wikipedia_url)
       })
       .catch(() => {
         setTaxonDesc('')
+        setTaxonWikiUrl('')
       })
       .finally(() => {
         setIsTaxonMetaLoading(false)
@@ -835,6 +872,7 @@ export const Web = () => {
     setSearch(value)
     setSelectedTaxonId(null)
     setTaxonDesc('')
+    setTaxonWikiUrl('')
     setIsDropdownOpen(value.trim().length >= 1)
     setSearchError(null)
     setShouldDisplayResults(false)
@@ -1217,8 +1255,14 @@ export const Web = () => {
     return parts.join(' • ')
   }, [yearFilter, selectedPlaceLabel, locationInput])
 
+  const taxonDescPreview = useMemo(() => {
+    if (!taxonDesc) return ''
+
+    return truncateWithEllipsis(stripHtml(taxonDesc), taxonDescPreviewMaxLength)
+  }, [taxonDesc, taxonDescPreviewMaxLength])
+
   const searchSummary = shouldDisplayResults ? (
-    <span className="text-xs leading-tight text-slate-600 md:text-sm">
+    <span className="text-xs leading-tight text-slate-600 font-bold md:text-sm">
       {isResultsLoading ? (
         <span>Loading results...</span>
       ) : (
@@ -1271,7 +1315,7 @@ export const Web = () => {
                   <div className="flex flex-auto rounded-2xl bg-white p-5 shadow-2xl">
                     <div className="flex flex-col w-full items-center justify-center gap-4">
                       <h1 className="text-center w-full">
-                        Select your view of the search results:
+                        Select a view of the search results:
                       </h1>
 
                       <div className="flex flex-row gap-3 justify-center items-center w-full">
@@ -1612,11 +1656,13 @@ export const Web = () => {
               ) : recentTaxon ? (
                 vowels.includes(recentTaxon.charAt(0).toLowerCase()) ? (
                   <h2 className="mt-2 text-center text-gray-500 text-sm sm:text-base">
-                    An {titleCase(recentTaxon)} was observed {recentTaxDate}.
+                    Latest observation: An {titleCase(recentTaxon)} was observed{' '}
+                    {recentTaxDate}.
                   </h2>
                 ) : (
                   <h2 className="mt-2 text-center text-gray-500 text-sm sm:text-base">
-                    A {titleCase(recentTaxon)} was observed {recentTaxDate}.
+                    Latest observation: A {titleCase(recentTaxon)} was observed{' '}
+                    {recentTaxDate}.
                   </h2>
                 )
               ) : null)}
@@ -1642,18 +1688,26 @@ export const Web = () => {
           </div>
         ) : (
           <>
-            {selectedThumbnail && taxonDesc && (
-              <img
-                className={`rounded transition-[width,height,border-radius] duration-300 ease-out w-14 h-14 sm:w-18 sm:h-18 md:w-24 md:h-24 rounded`}
-                src={selectedThumbnail}
-                alt=""
-              />
-            )}
-            {selectedThumbnail && taxonDesc && (
-              <h1
-                className={`transition-[font-size,line-height,opacity] duration-300 ease-out max-w-prose text-sm md:text-md max-h-16 md:max-h-none overflow-hidden line-clamp-3 md:line-clamp-none`}
-                dangerouslySetInnerHTML={{ __html: taxonDesc }}
-              />
+            {selectedThumbnail && taxonDesc && taxonWikiUrl && (
+              <div className="flex flex-row gap-2">
+                <img
+                  className={`rounded transition-[width,height,border-radius] duration-300 ease-out w-14 h-14 sm:w-18 sm:h-18 md:w-24 md:h-24 rounded`}
+                  src={selectedThumbnail}
+                  alt=""
+                />
+                <p className="max-w-prose text-sm md:text-md line-clamp-3">
+                  {taxonDescPreview}{' '}
+                  <a
+                    href={taxonWikiUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-blue-600 underline hover:text-blue-800"
+                  >
+                    (Wikipedia)
+                  </a>
+                </p>
+              </div>
             )}
           </>
         )}
