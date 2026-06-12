@@ -13,7 +13,7 @@
   "dependencies": {
     "@nx/devkit": "^22.5.2",
     "@swc/helpers": "~0.5.2",
-    "axios": "^1.15.0",
+    "axios": "^1.17.0",
     "d3": "^7.8.5",
     "leaflet": "^1.9.4",
     "react": "18.2.0",
