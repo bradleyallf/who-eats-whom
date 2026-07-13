@@ -7,8 +7,12 @@ import {
 import { routes } from './routes';
 import 'leaflet/dist/leaflet.css';
 
+const baseName = import.meta.env.BASE_URL === '/'
+  ? '/'
+  : import.meta.env.BASE_URL.replace(/\/$/, '');
+
 const router = createBrowserRouter(routes, {
-  basename: '/',
+  basename: baseName,
 });
 
 const root = ReactDOM.createRoot(
