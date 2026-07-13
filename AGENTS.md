@@ -26,9 +26,11 @@
 
 - Once the scope of a requested code or repo change is clear, create a new branch before editing.
 - Use short, descriptive branch names. Prefer `ai-<task-name>` when no naming convention is specified.
+- At the start of new work, start the local dev server with `npm exec nx -- serve who-eats-whom` unless it is already running, and remind the user that the app is on `http://localhost:4200/`.
 - Do not commit directly to `production`; use `production` as the PR base branch.
 - Commit completed work automatically, including repo notes such as `.codex/repo-notes.md`.
 - Open a ready-for-review PR when the task is complete. Do not open draft PRs unless checks are blocked by unrelated failures or external constraints.
+- After the user approves a PR and asks to merge it, merge the PR, switch to `production`, pull the latest `production`, and report the updated commit.
 - Try to make relevant checks pass before opening a PR. If failures are unrelated or cannot be resolved in scope, document them in the PR.
 - For app changes, default to `npm exec nx -- run-many -t lint test build -p who-eats-whom --nxBail --outputStyle=static`.
 - For UI, routing, or user-flow changes, also run `npm exec nx -- e2e e2e --outputStyle=static`.
