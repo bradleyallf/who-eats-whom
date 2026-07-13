@@ -87,14 +87,6 @@ export const SearchResultGraph = (props: Props) => {
     return aggregated
   }, [partnerData, results, type])
 
-  if (!stats.length) {
-    return (
-      <div className="p-4 text-sm text-slate-600">
-        No graph is available for this search yet.
-      </div>
-    )
-  }
-
   const totalObservations = stats.reduce(
     (sum, item) => sum + item.observations,
     0
@@ -126,6 +118,14 @@ export const SearchResultGraph = (props: Props) => {
     )
     return `${subject} ${action} ${fragments.join(', ')}.`
   }, [focalName, stats, totalObservations, type])
+
+  if (!stats.length) {
+    return (
+      <div className="p-4 text-sm text-slate-600">
+        No graph is available for this search yet.
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8 pb-10">

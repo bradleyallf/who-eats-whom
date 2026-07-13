@@ -943,7 +943,7 @@ export const Web = () => {
     setIsLocationDropdownOpen(false)
     setPlaceLookupError(null)
     // reset partner loading in case a previous search was mid-flight
-    setIsSuggestionLoading
+    setIsSuggestionLoading(false)
     setIsPartnerLoading(false)
 
     const rawSearch = explicitSearch ?? search

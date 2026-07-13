@@ -1,6 +1,6 @@
 {
   "ignorePatterns": ["!**/*"],
-  "plugin": ["@nx"],
+  "plugins": ["@nx"],
   "overrides": [
     {
       "files": ["*.ts", "*.tsx"],
