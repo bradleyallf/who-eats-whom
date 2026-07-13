@@ -65,7 +65,7 @@ export const HowToSubmit = () => {
           <li>Add the observation to <strong>Who Eats Whom</strong>.</li>
         </ol>
         <p className="text-lg text-slate-900">Do this for both the “eater” and the “eatee.”</p>
-        <div className="w-full max-w-2xl rounded-md border border-slate-200 overflow-hidden shadow-sm">
+        <div className="w-full max-w-lg rounded-md border border-slate-200 overflow-hidden shadow-sm">
           <img src={projectsImg} alt="Add observation to Who Eats Whom project" className="w-full h-auto object-contain" loading="lazy" />
         </div>
       </section>

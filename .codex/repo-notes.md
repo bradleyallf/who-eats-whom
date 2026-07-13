@@ -57,5 +57,6 @@ Last explored: 2026-07-13
 
 - Invoke the `nx-workspace` skill before exploring workspace structure.
 - Invoke `nx-generate` before scaffolding apps/libs/project structure.
+- Frequently pull the latest `production` from `origin` during work to stay current and reduce merge conflicts.
 - Prefer Nx tasks over direct tool commands.
 - Check Nx docs or `--help` before using unfamiliar Nx flags.

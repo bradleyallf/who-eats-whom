@@ -6,8 +6,9 @@
   "scripts": {
     "start": "nx serve",
     "build": "nx build",
+    "build:github-pages": "VITE_BASE_PATH=/who-eats-whom/ nx build --skipNxCache",
     "test": "nx test",
-    "deploy": "gh-pages -d dist/who-eats-whom"
+    "deploy": "npm run build:github-pages && gh-pages -d dist/who-eats-whom"
   },
   "private": true,
   "dependencies": {

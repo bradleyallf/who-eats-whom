@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 
 export default defineConfig({
-  base: '/',
+  base: process.env.VITE_BASE_PATH ?? '/',
   cacheDir: './node_modules/.vite/who-eats-whom',
   
   server: {
