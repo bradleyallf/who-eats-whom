@@ -30,7 +30,7 @@
     "@nx/eslint-plugin": "^22.5.2",
     "@nx/js": "22.5.2",
     "@nx/linter": "19.8.4",
-    "@nx/react": "22.5.2",
+    "@nx/react": "22.7.7",
     "@nx/vite": "22.5.2",
     "@nx/workspace": "22.5.2",
     "@swc/cli": "~0.1.62",
