@@ -157,7 +157,7 @@ const observationFieldsParam = [
 ].join(',')
 
 interface PlaceResult {
-  id: number
+  id: number | string
   name: string
   display_name?: string
   place_type_name?: string
@@ -167,6 +167,9 @@ interface TaxonSuggestion {
   id: number
   name: string
   preferred_common_name?: string
+  scientific_name?: string
+  common_name?: string
+  taxon_id?: number
   default_photo?: {
     url?: string
     small_url?: string
@@ -294,20 +297,13 @@ export const Web = () => {
     }
 
     const params = new URLSearchParams({
-      id: uniqueIds.join(','),
-      quality_grade: 'research',
-      per_page: '200',
-      fields: observationFieldsParam,
-      photo_licensed: 'true',
-      licensed: 'true',
+      ids: uniqueIds.join(','),
+      limit: '200',
     })
-    if (selectedPlaceId) {
-      params.append('place_id', String(selectedPlaceId))
-    }
 
     try {
-      const d = await apiClient.get(`/observations?${params.toString()}`)
-      setEatenByData(d.data.results)
+      const d = await apiClient.get(`/v1/interactions?${params.toString()}`)
+      setEatenByData(d.data.results || [])
     } catch (error) {
       setPartnerLoadingFailed()
       return
@@ -318,24 +314,15 @@ export const Web = () => {
   const fetchPlaceCandidates = async (
     query: string
   ): Promise<PlaceResult[]> => {
-    const params = new URLSearchParams({ q: query, per_page: '10' })
+    const params = new URLSearchParams({ q: query, limit: '10' })
 
     try {
       const response = await apiClient.get(
-        `/places/autocomplete?${params.toString()}`
+        `/v1/locations/search?${params.toString()}`
       )
-      if (response.data?.results?.length) {
-        return response.data.results
-      }
-    } catch (error) {
-      console.error('Place autocomplete failed, falling back to /places', error)
-    }
-
-    try {
-      const response = await apiClient.get(`/places?${params.toString()}`)
       return response.data?.results || []
     } catch (error) {
-      console.error('Fallback place lookup failed', error)
+      console.error('Location search failed', error)
       throw error
     }
   }
@@ -467,18 +454,11 @@ export const Web = () => {
       setIsRecentTaxonLoading(true)
       try {
         const params = new URLSearchParams({
-          project_id: String(projectId),
-          quality_grade: 'research',
-          per_page: '25',
-          fields: observationFieldsParam,
-          photo_licensed: 'true',
-          licensed: 'true',
-          order_by: 'observed_on',
-          order: 'desc',
+          limit: '25',
         })
 
         const response = await apiClient.get(
-          `/observations?${params.toString()}`
+          `/v1/interactions?${params.toString()}`
         )
         const recentResults = response.data.results || []
 
@@ -498,16 +478,12 @@ export const Web = () => {
         if (!allPartnerIds.length) return
 
         const partnerParams = new URLSearchParams({
-          id: allPartnerIds.join(','),
-          quality_grade: 'research',
-          per_page: String(allPartnerIds.length),
-          fields: observationFieldsParam,
-          photo_licensed: 'true',
-          licensed: 'true',
+          ids: allPartnerIds.join(','),
+          limit: String(allPartnerIds.length),
         })
 
         const partnerResponse = await apiClient.get(
-          `/observations?${partnerParams.toString()}`
+          `/v1/interactions?${partnerParams.toString()}`
         )
 
         const researchPartnerIds = new Set(
@@ -541,7 +517,7 @@ export const Web = () => {
         setRecentTaxDate(readable)
       } catch (error) {
         console.error(
-          'Unable to load the most recent research-grade observation with a research-grade partner',
+          'Unable to load the most recent observation with a partner',
           error
         )
       } finally {
@@ -568,17 +544,21 @@ export const Web = () => {
 
     const params = new URLSearchParams({
       q: query,
-      per_page: '25',
+      limit: '25',
     })
-    if (selectedPlaceId) {
-      params.append('place_id', String(selectedPlaceId))
-    }
 
     apiClient
-      .get(`/taxa/autocomplete?${params.toString()}`)
+      .get(`/v1/species/search?${params.toString()}`)
       .then((d) => {
         if (!canceled) {
-          setSuggestionSource(d.data.results || [])
+          const mapped =
+            d.data.results?.map((result: TaxonSuggestion & { taxon_id?: number }) => ({
+              id: result.taxon_id ?? result.id,
+              name: result.scientific_name ?? result.name,
+              preferred_common_name: result.common_name ?? result.preferred_common_name,
+              default_photo: result.default_photo,
+            })) || []
+          setSuggestionSource(mapped)
           setIsSuggestionLoading(false)
         }
       })
@@ -592,7 +572,7 @@ export const Web = () => {
     return () => {
       canceled = true
     }
-  }, [search, selectedPlaceId])
+  }, [search])
 
   // Fetch location suggestions when user types in the location box,
   // but only if the species input is ready (to avoid unnecessary calls)
@@ -704,8 +684,13 @@ export const Web = () => {
       })
     })
     setPartnerData(partnerD)
+    if (!observationIds.length) {
+      setEatenByData(filteredData)
+      setIsPartnerLoading(false)
+      return
+    }
     getPartnerData(observationIds)
-  }, [data, type, shouldDisplayResults, selectedPlaceId, isSearchLoading])
+  }, [data, type, shouldDisplayResults, isSearchLoading])
 
   // When search parameters change (search term, place filter, year filter), fetch new data from API
   // MAIN SEARCH EFFECT / API CALL / QUERY
@@ -734,40 +719,33 @@ export const Web = () => {
     setIsSearchLoading(true)
 
     const params = new URLSearchParams({
-      project_id: String(projectId),
-      //taxon_name: submittedSearch,
-      quality_grade: 'research',
-      per_page: '200',
-      fields: observationFieldsParam,
-      photo_licensed: 'true',
-      licensed: 'true',
+      limit: '200',
     })
     if (selectedTaxonId) {
       params.append('taxon_id', String(selectedTaxonId))
     } else {
       params.append('taxon_name', submittedSearch)
     }
-    if (selectedPlaceId) {
-      params.append('place_id', String(selectedPlaceId))
+    const roleParam =
+      type === types.eaten.key ? types.eaten.value : types.eater.value
+    params.append('role', roleParam)
+    if (selectedPlaceLabel) {
+      params.append('location', selectedPlaceLabel)
     }
     if (yearFilter && /^\d{4}$/.test(yearFilter)) {
-      params.append('d1', `${yearFilter}-01-01`)
-      params.append('d2', `${yearFilter}-12-31`)
+      params.append('year', yearFilter)
     }
 
     apiClient
-      .get(`/observations?${params.toString()}`)
+      .get(`/v1/interactions?${params.toString()}`)
       .then((d) => {
-        setUpdatedSearchLength(d.data.results?.length || 0)
-        if (!canceled && d.data?.results != 0) {
-          setData(d.data.results || [])
-          setIsSearchLoading(false)
-          setIsPartnerLoading(false)
-          setShouldDisplayResults(true)
-        } else {
-          setIsSearchLoading(false)
-          setShouldDisplayResults(true)
-        }
+        if (canceled) return
+        const results = d.data?.results || []
+        setUpdatedSearchLength(results.length)
+        setData(results)
+        setIsSearchLoading(false)
+        setIsPartnerLoading(false)
+        setShouldDisplayResults(true)
       })
       .catch(() => {
         if (!canceled) {
@@ -780,7 +758,7 @@ export const Web = () => {
     return () => {
       canceled = true
     }
-  }, [submittedSearch, selectedPlaceId, searchNonce, yearFilter])
+  }, [submittedSearch, selectedPlaceLabel, searchNonce, yearFilter, type])
 
   // Separate use effect for the about organism information
   useEffect(() => {
@@ -793,10 +771,11 @@ export const Web = () => {
 
     setIsTaxonMetaLoading(true)
     apiClient
-      .get(`/taxa/${selectedTaxonId.toString()}`)
+      .get(`/v1/species/${selectedTaxonId.toString()}`)
       .then((d) => {
-        setTaxonDesc(d.data.results[0].wikipedia_summary)
-        setTaxonWikiUrl(d.data.results[0].wikipedia_url)
+        const species = d.data.results?.[0]
+        setTaxonDesc(species?.wikipedia_summary || '')
+        setTaxonWikiUrl(species?.wikipedia_url || '')
       })
       .catch(() => {
         setTaxonDesc('')
@@ -1005,11 +984,12 @@ export const Web = () => {
         setUpdatedSearchLength(0)
         setIsResolvingPlace(true)
         const place = await resolvePlace(trimmedLocation)
-        resolvedId = place?.id ?? null
+        resolvedId =
+          typeof place?.id === 'number' ? place.id : null
         resolvedLabel = place?.display_name || place?.name || trimmedLocation
       }
 
-      if (trimmedLocation && resolvedId === null) {
+      if (trimmedLocation && !resolvedLabel) {
         setIsSearchLoading(false)
         setIsPartnerLoading(false)
         setSelectedPlaceId(null)
@@ -1045,7 +1025,9 @@ export const Web = () => {
   const handleLocationSuggestionClick = (place: PlaceResult) => {
     const label = place.display_name || place.name
     setDraftLocationInput(label || '')
-    setDraftSelectedPlaceId(place.id)
+    setDraftSelectedPlaceId(
+      typeof place.id === 'number' ? place.id : null
+    )
     setDraftSelectedPlaceLabel(label || null)
     setPlaceLookupError(null)
     setIsLocationDropdownOpen(false)
