@@ -32,6 +32,9 @@ ALTER TABLE species ADD COLUMN IF NOT EXISTS wikipedia_summary TEXT;
 ALTER TABLE species ADD COLUMN IF NOT EXISTS wikipedia_url TEXT;
 ALTER TABLE species ADD COLUMN IF NOT EXISTS image_url TEXT;
 
+ALTER TABLE species ADD COLUMN IF NOT EXISTS license_code TEXT;
+ALTER TABLE species ADD COLUMN IF NOT EXISTS attribution TEXT;
+
 CREATE TABLE IF NOT EXISTS observations (
   observation_id BIGINT PRIMARY KEY,
   observed_at TIMESTAMPTZ,

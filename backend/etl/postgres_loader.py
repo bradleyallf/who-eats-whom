@@ -107,6 +107,8 @@ def upsert_species(cur: psycopg.Cursor, rows: List[Dict[str, Any]]) -> None:
       row.get("wikipedia_summary"),
       row.get("wikipedia_url"),
       row.get("image_url"),
+      row.get("license_code"),
+      row.get("attribution"),
     )
 
   cur.executemany(
@@ -125,8 +127,10 @@ def upsert_species(cur: psycopg.Cursor, rows: List[Dict[str, Any]]) -> None:
       genus_name,
       wikipedia_summary,
       wikipedia_url,
-      image_url
-    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+      image_url,
+      license_code,
+      attribution
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     ON CONFLICT (taxon_id) DO UPDATE SET
       scientific_name = EXCLUDED.scientific_name,
       common_name = EXCLUDED.common_name,
@@ -141,6 +145,8 @@ def upsert_species(cur: psycopg.Cursor, rows: List[Dict[str, Any]]) -> None:
       wikipedia_summary = EXCLUDED.wikipedia_summary,
       wikipedia_url = EXCLUDED.wikipedia_url,
       image_url = EXCLUDED.image_url,
+      license_code = EXCLUDED.license_code,
+      attribution = EXCLUDED.attribution,
       updated_at = NOW()
     """,
     list(species_records.values()),
