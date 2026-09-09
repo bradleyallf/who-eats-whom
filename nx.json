@@ -57,5 +57,6 @@
       }
     }
   },
-  "defaultProject": "who-eats-whom"
+  "defaultProject": "who-eats-whom",
+  "analytics": false
 }

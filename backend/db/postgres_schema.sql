@@ -21,9 +21,16 @@ CREATE TABLE IF NOT EXISTS species (
   order_name TEXT,
   family_name TEXT,
   genus_name TEXT,
+  wikipedia_summary TEXT,
+  wikipedia_url TEXT,
+  image_url TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE species ADD COLUMN IF NOT EXISTS wikipedia_summary TEXT;
+ALTER TABLE species ADD COLUMN IF NOT EXISTS wikipedia_url TEXT;
+ALTER TABLE species ADD COLUMN IF NOT EXISTS image_url TEXT;
 
 CREATE TABLE IF NOT EXISTS observations (
   observation_id BIGINT PRIMARY KEY,

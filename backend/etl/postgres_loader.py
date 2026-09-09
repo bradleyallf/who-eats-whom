@@ -46,6 +46,15 @@ def canonical_role(raw_value: Optional[str]) -> str:
   normalized = (raw_value or "").strip().lower()
   return ROLE_MAPPING.get(normalized, "eater")
 
+def is_confirmed_eater(raw_value: Optional[str]) -> bool:
+  """Strict check used only when building predator/prey pairs. Unlike
+  canonical_role(), a blank or unrecognized role field is NOT treated as an
+  eater here -- it's excluded entirely, matching the old CSV-based Neo4j
+  loader's behavior of dropping anything that isn't a recognized eater
+  value, so missing data can't silently fabricate an interaction."""
+  normalized = (raw_value or "").strip().lower()
+  return ROLE_MAPPING.get(normalized) == "eater"
+
 
 def parse_timestamp(value: str | None) -> Optional[datetime]:
   if not value:
@@ -95,6 +104,9 @@ def upsert_species(cur: psycopg.Cursor, rows: List[Dict[str, Any]]) -> None:
       row.get("taxon_order_name"),
       row.get("taxon_family_name"),
       row.get("taxon_genus_name"),
+      row.get("wikipedia_summary"),
+      row.get("wikipedia_url"),
+      row.get("image_url"),
     )
 
   cur.executemany(
@@ -110,8 +122,11 @@ def upsert_species(cur: psycopg.Cursor, rows: List[Dict[str, Any]]) -> None:
       class_name,
       order_name,
       family_name,
-      genus_name
-    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+      genus_name,
+      wikipedia_summary,
+      wikipedia_url,
+      image_url
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     ON CONFLICT (taxon_id) DO UPDATE SET
       scientific_name = EXCLUDED.scientific_name,
       common_name = EXCLUDED.common_name,
@@ -123,6 +138,9 @@ def upsert_species(cur: psycopg.Cursor, rows: List[Dict[str, Any]]) -> None:
       order_name = EXCLUDED.order_name,
       family_name = EXCLUDED.family_name,
       genus_name = EXCLUDED.genus_name,
+      wikipedia_summary = EXCLUDED.wikipedia_summary,
+      wikipedia_url = EXCLUDED.wikipedia_url,
+      image_url = EXCLUDED.image_url,
       updated_at = NOW()
     """,
     list(species_records.values()),
@@ -133,8 +151,8 @@ def build_interactions(rows: List[Dict[str, Any]]) -> List[Tuple[Dict[str, Any],
   lookup = {row.get("url", "").strip(): row for row in rows if row.get("url")}
   interactions = []
   for row in rows:
-    role = canonical_role(row.get(ROLE_FIELD))
-    if role != "eater":
+    role = is_confirmed_eater(row.get(ROLE_FIELD))
+    if not role:
       continue
     partner_url = (row.get(PARTNER_URL_FIELD) or "").strip()
     if not partner_url:
