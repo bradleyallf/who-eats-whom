@@ -384,7 +384,9 @@ async def search_species(
           s.scientific_name,
           s.common_name,
           s.iconic_taxon_name,
-          s.image_url
+          s.image_url,
+          s.license_code,
+          s.attribution
         FROM species s
         WHERE s.scientific_name ILIKE %s OR s.common_name ILIKE %s
         ORDER BY COALESCE(s.common_name, s.scientific_name)
@@ -397,8 +399,16 @@ async def search_species(
       for row in rows:
         r = dict(row)
         image_url = r.pop("image_url", None)
+        license_code = r.pop("license_code", None)
+        attribution = r.pop("attribution", None)
         if image_url:
-          r["default_photo"] = {"square_url": image_url, "small_url": image_url, "url": image_url}
+          r["default_photo"] = {
+            "square_url": image_url,
+            "small_url": image_url,
+            "url": image_url,
+            "license_code": license_code,
+            "attribution": attribution,
+          }
         results.append(r)
       return {"results": results}
 
@@ -410,8 +420,16 @@ async def species_detail(request: Request, taxon_id: int):
     async with conn.cursor(row_factory=dict_row) as cur:
       await cur.execute(
         """
-        SELECT taxon_id, scientific_name, common_name, iconic_taxon_name,
-        wikipedia_summary, wikipedia_url, image_url
+        SELECT 
+          taxon_id,
+          scientific_name,
+          common_name,
+          iconic_taxon_name,
+          wikipedia_summary,
+          wikipedia_url,
+          image_url,
+          license_code,
+          attribution
         FROM species
         WHERE taxon_id = %s
         """,
@@ -431,6 +449,8 @@ async def species_detail(request: Request, taxon_id: int):
         "wikipedia_summary": row["wikipedia_summary"],
         "wikipedia_url": row["wikipedia_url"],
         "image_url": row["image_url"],
+        "license_code": row["license_code"],
+        "attribution": row["attribution"],
       }
     ]
   }

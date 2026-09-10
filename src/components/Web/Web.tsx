@@ -174,6 +174,8 @@ interface TaxonSuggestion {
     url?: string
     small_url?: string
     square_url?: string
+    license_code?: string | null
+    attribution?: string | null
   }
 }
 
@@ -208,6 +210,9 @@ export const Web = () => {
   const [isTaxonMetaLoading, setIsTaxonMetaLoading] = useState(false)
   const [taxonDesc, setTaxonDesc] = useState<string | null>()
   const [taxonWikiUrl, setTaxonWikiUrl] = useState<string>('')
+  const [taxonLicenseCode, setTaxonLicenseCode] = useState<string>('')
+  const [taxonAttribution, setTaxonAttribution] = useState<string>('')
+  const [isTaxonAttributionOpen, setIsTaxonAttributionOpen] = useState(false)
 
   // State representing the updated amount of results from API on each year update
   // Added to handle year adjustments to properly display 0 results
@@ -765,6 +770,9 @@ export const Web = () => {
     if (!selectedTaxonId) {
       setTaxonDesc('')
       setTaxonWikiUrl('')
+      setTaxonLicenseCode('')
+      setTaxonAttribution('')
+      setIsTaxonAttributionOpen(false)
       setIsTaxonMetaLoading(false)
       return
     }
@@ -776,10 +784,14 @@ export const Web = () => {
         const species = d.data.results?.[0]
         setTaxonDesc(species?.wikipedia_summary || '')
         setTaxonWikiUrl(species?.wikipedia_url || '')
+        setTaxonLicenseCode(species?.license_code || '')
+        setTaxonAttribution(species?.attribution || '')
       })
       .catch(() => {
         setTaxonDesc('')
         setTaxonWikiUrl('')
+        setTaxonLicenseCode('')
+        setTaxonAttribution('')
       })
       .finally(() => {
         setIsTaxonMetaLoading(false)
@@ -1273,6 +1285,10 @@ export const Web = () => {
     </span>
   ) : null
 
+  const photographerName = taxonAttribution
+        ?.replace(/^\(c\)\s*/, '')
+        .split(',')[0]
+
   // --------------------- ===
   //  RENDER
   // ---------------------
@@ -1670,25 +1686,57 @@ export const Web = () => {
           </div>
         ) : (
           <>
-            {selectedThumbnail && taxonDesc && taxonWikiUrl && (
+            {selectedThumbnail && (
               <div className="flex flex-row gap-2">
-                <img
-                  className={`rounded transition-[width,height,border-radius] duration-300 ease-out w-14 h-14 sm:w-18 sm:h-18 md:w-24 md:h-24 rounded`}
-                  src={selectedThumbnail}
-                  alt=""
-                />
-                <p className="max-w-prose text-sm md:text-md line-clamp-3">
-                  {taxonDescPreview}{' '}
-                  <a
-                    href={taxonWikiUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-blue-600 underline hover:text-blue-800"
-                  >
-                    (Wikipedia)
-                  </a>
-                </p>
+                <div className="relative shrink-0">
+                    <img
+                      className={`rounded transition-[width,height,border-radius] duration-300 ease-out w-14 h-14 sm:w-18 sm:h-18 md:w-24 md:h-24 rounded`}
+                      src={selectedThumbnail}
+                      alt=""
+                    />
+                    {taxonLicenseCode && (
+                      <div className="absolute top-0 right-0 group">
+                        <button
+                          type="button"
+                          onClick={(evt) => {
+                              evt.preventDefault()
+                              evt.stopPropagation()
+                              setIsTaxonAttributionOpen((prev) => !prev)
+                          }}
+                          aria-expanded={isTaxonAttributionOpen}
+                          aria-label="Toggle image attribution"
+                          className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-slate-900 text-[9px] font-semibold border border-black hover:bg-slate-100"
+                        >
+                          CC
+                        </button>
+
+                        {isTaxonAttributionOpen && (
+                          <div className="absolute top-full right-0 mt-1 z-10 w-48 rounded border border-slate-300 bg-white px-2 py-1 text-[10px] leading-tight text-slate-700 shadow-md">
+                              {photographerName ||
+                                'No attribution available for this image.'}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                </div>
+                
+                {(taxonDesc || taxonWikiUrl) && (
+                  <p className="max-w-prose text-sm md:text-md line-clamp-3">
+                    {taxonDescPreview}{' '}
+
+                    {taxonWikiUrl && (
+                      <a
+                        href={taxonWikiUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-blue-600 underline hover:text-blue-800"
+                      >
+                        (Wikipedia)
+                      </a>
+                    )}
+                  </p>
+              )}
               </div>
             )}
           </>

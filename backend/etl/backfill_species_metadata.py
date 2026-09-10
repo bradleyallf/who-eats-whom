@@ -30,7 +30,6 @@ import psycopg
 
 INATURALIST_TAXA_URL = "https://api.inaturalist.org/v1/taxa/{}"
 BATCH_SIZE = 30
-COMMIT_EVERY_BATCHES = 5
 
 
 def parse_args() -> argparse.Namespace:
@@ -108,11 +107,15 @@ def get_species_metadata(
         or default_photo.get("square_url")
         or default_photo.get("url")
     )
+    license_code = default_photo.get("license_code")
+    attribution = default_photo.get("attribution")
 
     return (
         wikipedia_summary,
         wikipedia_url,
         image_url,
+        license_code,
+        attribution
     )
 
 
@@ -159,6 +162,8 @@ def main() -> None:
                         wikipedia_summary,
                         wikipedia_url,
                         image_url,
+                        license_code,
+                        attribution,
                     ) = get_species_metadata(taxon)
 
                     cur.execute(
@@ -168,6 +173,8 @@ def main() -> None:
                             wikipedia_summary = %s,
                             wikipedia_url = %s,
                             image_url = %s,
+                            license_code = %s,
+                            attribution = %s,
                             updated_at = NOW()
                         WHERE taxon_id = %s;
                         """,
@@ -175,18 +182,14 @@ def main() -> None:
                             wikipedia_summary,
                             wikipedia_url,
                             image_url,
+                            license_code,
+                            attribution,
                             taxon_id,
                         ),
                     )
 
                     successful += 1
 
-                # Checkpoint every few batches instead of only at the very
-                # end, so an interruption partway through only loses work
-                # back to the last checkpoint.
-                if batch_index % COMMIT_EVERY_BATCHES == 0:
-                    conn.commit()
-                    print(f"  (committed progress through batch {batch_index})")
 
                 # One delay per batch (not per species)
                 time.sleep(args.delay)
