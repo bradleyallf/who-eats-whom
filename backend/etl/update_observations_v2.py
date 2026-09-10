@@ -1,7 +1,7 @@
 import requests
 
 import psycopg
-from postgres_api_loader import load_records_to_postgres
+from postgres_loader_api_v2 import load_records_to_postgres
 
 import os
 
@@ -14,10 +14,10 @@ DSN = os.getenv(
 INATURALIST_TAXA_URL = "https://api.inaturalist.org/v1/taxa/{}"
 
 def fetch_taxon_metadata(taxon_id):
-    """Fetch Wikipedia metadata and representative image for a taxon."""
+    """Fetch Wikipedia, image, and licensing metadata for a taxon."""
 
     if not taxon_id:
-        return None, None, None
+        return None, None, None, None, None
 
     url = INATURALIST_TAXA_URL.format(taxon_id)
 
@@ -33,7 +33,7 @@ def fetch_taxon_metadata(taxon_id):
 
     if not results:
         print(f"No taxon data found for taxon_id={taxon_id}")
-        return None, None, None
+        return None, None, None, None, None
 
     taxon = results[0]
 
@@ -49,8 +49,16 @@ def fetch_taxon_metadata(taxon_id):
         or default_photo.get("url")
     )
 
-    return wikipedia_summary, wikipedia_url, image_url
+    license_code = default_photo.get("license_code")
+    attribution = default_photo.get("attribution")
 
+    return (
+        wikipedia_summary,
+        wikipedia_url,
+        image_url,
+        license_code,
+        attribution,
+    )
 
 def get_ofv(obs, field_name):
     target = field_name.strip().lower()
@@ -72,6 +80,8 @@ def normalize(obs):
         wikipedia_summary,
         wikipedia_url,
         species_image_url,
+        license_code,
+        attribution,
     ) = fetch_taxon_metadata(taxon.get("id"))
 
     # photo = {}
@@ -109,6 +119,8 @@ def normalize(obs):
         "wikipedia_summary": wikipedia_summary,
         "wikipedia_url": wikipedia_url,
         "image_url": species_image_url,
+        "license_code": license_code,
+        "attribution": attribution,
         "sound_url": None,
         "tag_list": ",".join(obs.get("tags", [])),
         "description": obs.get("description"),
