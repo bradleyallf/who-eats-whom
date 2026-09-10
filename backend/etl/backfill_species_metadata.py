@@ -6,14 +6,25 @@ The script:
 1. Gets all taxon IDs currently in the species table.
 2. Fetches taxa from the iNaturalist API in batches of up to 30 IDs per
    request (iNaturalist's own recommended practice -- see
-   https://www.inaturalist.org/pages/api+recommended+practices -- fetching
+   https://www.inaturalist.org/pages/api+recommended_practices -- fetching
    4,753 species one at a time would take ~100 minutes at their 1 req/sec
    guidance; batching cuts that to a few minutes).
-3. Extracts Wikipedia information and each taxon's default photo.
+3. Extracts Wikipedia information and a licensed representative species
+   image.
 4. Updates the corresponding species rows in Postgres.
 
-Run this after the species table already contains the existing taxa using
-python3 -u backend/etl/backfill_species_metadata.py --dsn postgresql://whodba:whopass@localhost:5433/who_eats_whom --delay 1.0
+Only photos with an allowed license are stored. If the default photo does
+not have an allowed license, the script looks for another licensed photo
+in taxon_photos. If no usable photo is found, the image fields are stored
+as NULL.
+
+Temporary network failures are retried up to 3 times per batch.
+
+Run this after the species table already contains the existing taxa using:
+
+python3 -u backend/etl/backfill_species_metadata.py \
+    --dsn postgresql://whodba:whopass@localhost:5433/who_eats_whom \
+    --delay 1.0
 """
 
 from __future__ import annotations
@@ -21,6 +32,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
+from http.client import RemoteDisconnected
 from typing import Any, Dict, List, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -30,6 +42,14 @@ import psycopg
 
 INATURALIST_TAXA_URL = "https://api.inaturalist.org/v1/taxa/{}"
 BATCH_SIZE = 30
+
+ALLOWED_LICENSES = {
+    "cc0",
+    "cc-by",
+    "cc-by-sa",
+    "cc-by-nc",
+    "cc-by-nc-sa",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -57,65 +77,133 @@ def chunk(items: List[int], size: int) -> List[List[int]]:
     return [items[i : i + size] for i in range(0, len(items), size)]
 
 
-def fetch_taxa_batch(taxon_ids: List[int]) -> Dict[int, Dict[str, Any]]:
-    """Fetch a batch of taxa from iNaturalist in a single request.
+def fetch_taxa_batch(
+    taxon_ids: List[int],
+    max_retries: int = 3,
+) -> Dict[int, Dict[str, Any]]:
+    """
+    Fetch a batch of taxa from iNaturalist in a single request.
+
+    Retries temporary network failures before giving up.
+
     Returns a dict keyed by taxon_id, since the response order/completeness
     isn't guaranteed to match the request (e.g. deleted/inactive taxa may
-    be silently omitted)."""
+    be silently omitted).
+    """
 
     ids_param = ",".join(str(t) for t in taxon_ids)
     url = INATURALIST_TAXA_URL.format(ids_param)
 
-    try:
-        request = Request(
-            url,
-            headers={"User-Agent": "Who-Eats-Whom/1.0"},
-        )
+    for attempt in range(1, max_retries + 1):
+        try:
+            request = Request(
+                url,
+                headers={"User-Agent": "Who-Eats-Whom/1.0"},
+            )
 
-        with urlopen(request, timeout=30) as response:
-            data = json.loads(response.read().decode("utf-8"))
+            with urlopen(request, timeout=30) as response:
+                data = json.loads(response.read().decode("utf-8"))
 
-    except (HTTPError, URLError, TimeoutError) as exc:
-        print(f"  ERROR fetching batch {taxon_ids}: {exc}")
-        return {}
+            results = data.get("results", [])
 
-    results = data.get("results", [])
+            if not results:
+                print(f"  No iNaturalist results for batch {taxon_ids}")
+                return {}
 
-    if not results:
-        print(f"  No iNaturalist results for batch {taxon_ids}")
-        return {}
+            return {
+                taxon["id"]: taxon
+                for taxon in results
+                if "id" in taxon
+            }
 
-    return {taxon["id"]: taxon for taxon in results if "id" in taxon}
+        except (
+            HTTPError,
+            URLError,
+            TimeoutError,
+            RemoteDisconnected,
+        ) as exc:
+            print(
+                f"  ERROR fetching batch "
+                f"{taxon_ids} (attempt {attempt}/{max_retries}): {exc}"
+            )
+
+            if attempt < max_retries:
+                wait_time = 2 ** (attempt - 1)
+                print(f"  Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+
+    print(
+        f"  FAILED batch after {max_retries} attempts: "
+        f"{taxon_ids}"
+    )
+
+    return {}
+
+
+def is_usable_photo(photo: Dict[str, Any]) -> bool:
+    """
+    Return True if the photo has a license that the project allows.
+    """
+    return photo.get("license_code") in ALLOWED_LICENSES
 
 
 def get_species_metadata(
     taxon: Dict[str, Any],
-) -> tuple[Optional[str], Optional[str], Optional[str]]:
+) -> tuple[
+    Optional[str],
+    Optional[str],
+    Optional[str],
+    Optional[str],
+    Optional[str],
+]:
     """
-    Extract Wikipedia information and the representative
+    Extract Wikipedia information and a licensed representative
     species image from an iNaturalist taxon response.
     """
 
     wikipedia_summary = taxon.get("wikipedia_summary")
     wikipedia_url = taxon.get("wikipedia_url")
 
+    # Prefer the default photo if it has an allowed license.
     default_photo = taxon.get("default_photo") or {}
 
+    photo = default_photo if is_usable_photo(default_photo) else None
+
+    # If the default photo is not usable, look for another licensed photo.
+    if photo is None:
+        for taxon_photo in taxon.get("taxon_photos", []):
+            candidate = taxon_photo.get("photo") or {}
+
+            if is_usable_photo(candidate):
+                photo = candidate
+                break
+
+    # No usable photo was found.
+    if photo is None:
+        return (
+            wikipedia_summary,
+            wikipedia_url,
+            None,
+            None,
+            None,
+        )
+
     image_url = (
-        default_photo.get("medium_url")
-        or default_photo.get("small_url")
-        or default_photo.get("square_url")
-        or default_photo.get("url")
+        photo.get("medium_url")
+        or photo.get("small_url")
+        or photo.get("square_url")
+        or photo.get("url")
     )
-    license_code = default_photo.get("license_code")
-    attribution = default_photo.get("attribution")
+
+    license_code = photo.get("license_code")
+    attribution = photo.get("attribution")
 
     return (
         wikipedia_summary,
         wikipedia_url,
         image_url,
         license_code,
-        attribution
+        attribution,
     )
 
 
@@ -146,7 +234,10 @@ def main() -> None:
             failed = 0
 
             for batch_index, batch_ids in enumerate(batches, start=1):
-                print(f"[batch {batch_index}/{len(batches)}] Fetching {len(batch_ids)} taxa...")
+                print(
+                    f"[batch {batch_index}/{len(batches)}] "
+                    f"Fetching {len(batch_ids)} taxa..."
+                )
 
                 taxa_by_id = fetch_taxa_batch(batch_ids)
 
@@ -154,7 +245,10 @@ def main() -> None:
                     taxon = taxa_by_id.get(taxon_id)
 
                     if taxon is None:
-                        print(f"  MISSING taxon {taxon_id} (not returned by this batch)")
+                        print(
+                            f"  MISSING taxon {taxon_id} "
+                            f"(not returned by this batch)"
+                        )
                         failed += 1
                         continue
 
@@ -190,8 +284,7 @@ def main() -> None:
 
                     successful += 1
 
-
-                # One delay per batch (not per species)
+                # One delay per batch (not per species).
                 time.sleep(args.delay)
 
             conn.commit()
