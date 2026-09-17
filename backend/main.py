@@ -48,21 +48,21 @@ def canonical_role_value(value: Optional[str]) -> str:
   return ROLE_MAPPING.get(normalized, "eater")
 
 
-def build_photo_payload(raw: Dict[str, Any], observation_id: int, photo_license_code: Optional[str], photo_attribution: Optional[str]) -> List[Dict[str, Any]]:
-  image_url = raw.get("image_url") or raw.get("photo_url")
-  if not image_url:
-    return []
+def build_photo_payload(image_url: Optional[str], observation_id: int, photo_license_code: Optional[str], photo_attribution: Optional[str]) -> List[Dict[str, Any]]:
+  if not image_url or not photo_license_code:
+        return []
+
   return [
-    {
-      "attribution": photo_attribution or "",
-      "flags": [],
-      "hidden": False,
-      "id": observation_id,
-      "license_code": (photo_license_code or "").lower(),
-      "original_dimensions": {"width": 0, "height": 0},
-      "url": image_url,
-    }
-  ]
+      {
+          "attribution": photo_attribution or "",
+          "flags": [],
+          "hidden": False,
+          "id": observation_id,
+          "license_code": photo_license_code.lower(),
+          "original_dimensions": {"width": 0, "height": 0},
+          "url": image_url,
+      }
+]
 
 
 def build_user_stub(raw: Dict[str, Any]) -> Dict[str, Any]:
@@ -118,6 +118,8 @@ def build_observation_payload(row: Dict[str, Any]) -> Dict[str, Any]:
   if latitude is not None and longitude is not None:
     geojson = {"type": "Point", "coordinates": [longitude, latitude]}
 
+  image_url = row.get("image_url")
+
   return {
     "community_taxon_id": taxon_id,
     "created_at": raw.get("created_at") or (row.get("observed_at").isoformat() if row.get("observed_at") else None),
@@ -135,12 +137,12 @@ def build_observation_payload(row: Dict[str, Any]) -> Dict[str, Any]:
         "medium_url": raw.get("image_url"),
         "small_url": raw.get("image_url"),
       }
-      if raw.get("image_url")
+      if image_url
       else None,
     },
     "id": observation_id,
     "uri": row.get("inaturalist_url") or row.get("iNaturalist_url") or raw.get("url"),
-    "photos": build_photo_payload(raw, observation_id, row.get("photo_license_code"), row.get("photo_attribution")),
+    "photos": build_photo_payload(image_url, observation_id, row.get("photo_license_code"), row.get("photo_attribution")),
     "uuid": raw.get("uuid") or str(observation_id),
     "place_country_name": raw.get("place_country_name"),
     "place_state_name": raw.get("place_state_name"),
@@ -762,6 +764,7 @@ async def interaction_search(
           o.iNaturalist_url,
           o.etl_version_id,
           o.raw,
+          o.image_url,
           o.photo_license_code,
           o.photo_attribution,
           s.scientific_name,
