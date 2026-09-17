@@ -48,17 +48,17 @@ def canonical_role_value(value: Optional[str]) -> str:
   return ROLE_MAPPING.get(normalized, "eater")
 
 
-def build_photo_payload(raw: Dict[str, Any], observation_id: int) -> List[Dict[str, Any]]:
+def build_photo_payload(raw: Dict[str, Any], observation_id: int, photo_license_code: Optional[str], photo_attribution: Optional[str]) -> List[Dict[str, Any]]:
   image_url = raw.get("image_url") or raw.get("photo_url")
   if not image_url:
     return []
   return [
     {
-      "attribution": raw.get("user_name") or "",
+      "attribution": photo_attribution or "",
       "flags": [],
       "hidden": False,
       "id": observation_id,
-      "license_code": (raw.get("license") or "").lower(),
+      "license_code": (photo_license_code or "").lower(),
       "original_dimensions": {"width": 0, "height": 0},
       "url": image_url,
     }
@@ -140,7 +140,7 @@ def build_observation_payload(row: Dict[str, Any]) -> Dict[str, Any]:
     },
     "id": observation_id,
     "uri": row.get("inaturalist_url") or row.get("iNaturalist_url") or raw.get("url"),
-    "photos": build_photo_payload(raw, observation_id),
+    "photos": build_photo_payload(raw, observation_id, row.get("photo_license_code"), row.get("photo_attribution")),
     "uuid": raw.get("uuid") or str(observation_id),
     "place_country_name": raw.get("place_country_name"),
     "place_state_name": raw.get("place_state_name"),
@@ -762,6 +762,8 @@ async def interaction_search(
           o.iNaturalist_url,
           o.etl_version_id,
           o.raw,
+          o.photo_license_code,
+          o.photo_attribution,
           s.scientific_name,
           s.common_name,
           s.iconic_taxon_name

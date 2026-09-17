@@ -51,6 +51,10 @@ ALLOWED_LICENSES = {
     "cc-by-sa",
     "cc-by-nc",
     "cc-by-nc-sa",
+    "cc-by-nd",
+    "cc-by-nc-nd",
+    "pd",
+    "gfdl"
 }
 
 # Number of observations to request when looking for a fallback image.
