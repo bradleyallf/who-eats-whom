@@ -104,11 +104,11 @@ def upsert_species(cur: psycopg.Cursor, rows: List[Dict[str, Any]]) -> None:
       row.get("taxon_order_name"),
       row.get("taxon_family_name"),
       row.get("taxon_genus_name"),
-      row.get("wikipedia_summary"),
-      row.get("wikipedia_url"),
-      row.get("image_url"),
-      row.get("license_code"),
-      row.get("attribution"),
+      None, # wikipedia_summary
+      None, # wikipedia_url
+      None, # image_url
+      None, # license
+      None, # attribution
     )
 
   cur.executemany(
@@ -142,11 +142,6 @@ def upsert_species(cur: psycopg.Cursor, rows: List[Dict[str, Any]]) -> None:
       order_name = EXCLUDED.order_name,
       family_name = EXCLUDED.family_name,
       genus_name = EXCLUDED.genus_name,
-      wikipedia_summary = EXCLUDED.wikipedia_summary,
-      wikipedia_url = EXCLUDED.wikipedia_url,
-      image_url = EXCLUDED.image_url,
-      license_code = EXCLUDED.license_code,
-      attribution = EXCLUDED.attribution,
       updated_at = NOW()
     """,
     list(species_records.values()),
@@ -192,6 +187,9 @@ def insert_observations(cur: psycopg.Cursor, rows: List[Dict[str, Any]], etl_ver
         url,
         etl_version_id,
         json.dumps(row),
+        None, # image_url
+        None, # photo_license_code
+        None, # photo_attribution
       )
     )
 
@@ -209,8 +207,11 @@ def insert_observations(cur: psycopg.Cursor, rows: List[Dict[str, Any]], etl_ver
       taxon_id,
       iNaturalist_url,
       etl_version_id,
-      raw
-    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+      raw,
+      image_url,
+      photo_license_code,
+      photo_attribution
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     ON CONFLICT (observation_id) DO UPDATE SET
       observed_at = EXCLUDED.observed_at,
       latitude = EXCLUDED.latitude,
