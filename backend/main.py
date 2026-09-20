@@ -132,10 +132,10 @@ def build_observation_payload(row: Dict[str, Any]) -> Dict[str, Any]:
       "iconic_taxon_name": row.get("iconic_taxon_name"),
       "default_photo": {
         "id": taxon_id,
-        "square_url": raw.get("image_url"),
-        "url": raw.get("image_url"),
-        "medium_url": raw.get("image_url"),
-        "small_url": raw.get("image_url"),
+        "square_url": image_url,
+        "url": image_url,
+        "medium_url": image_url,
+        "small_url": image_url,
       }
       if image_url
       else None,

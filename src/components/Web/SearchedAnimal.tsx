@@ -7,7 +7,7 @@ interface Props {
   partnerData: Record<string, Observation>
 }
 
-const placeholderSrc = 'https://via.placeholder.com/400x300.png?text=No+Image'
+
 
 const getCommonName = (observation?: Observation) =>
   observation?.taxon.preferred_common_name || observation?.taxon.name
@@ -38,18 +38,20 @@ export const SearchResultGrid = (props: Props) => {
     )
   }
 
+  const displayResults = results.filter((result) => {
+          const partner = partnerData[result.id]
+
+          return !!partner && !!result.photos?.length
+        })
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-      {results.map((result) => {
-        const partner = partnerData[result.id]
-        if (!partner) return null
+      {displayResults.map((result) => {
 
         const displayObservation = result
         const commonName = getCommonName(displayObservation)
         const scientificName = getScientificName(displayObservation)
-        const licensedPhoto = displayObservation.photos?.find(
-          (photo) => photo.license_code
-        )
+        const licensedPhoto = displayObservation.photos?.[0]
         const photoUrl = licensedPhoto?.url
         const attribution = licensedPhoto?.attribution
         const roleLabel = type === 'eater' ? 'Prey' : 'Predator'
@@ -62,18 +64,17 @@ export const SearchResultGrid = (props: Props) => {
             rel="noopener noreferrer"
             className="block rounded-lg overflow-hidden bg-white border border-slate-200 shadow-sm transition hover:border-slate-300 hover:shadow"
           >
-            <div className="h-48 w-full overflow-hidden bg-slate-100 relative">
-              <img
-                src={
-                  photoUrl
-                    ? photoUrl.replace('square', 'medium')
-                    : placeholderSrc
-                }
-                alt={`An image of: ${commonName || scientificName}`}
-                className="h-full w-full object-cover"
-                loading="lazy"
-              />
-            </div>
+            {photoUrl && (
+              <div className="h-48 w-full overflow-hidden bg-slate-100 relative">
+                <img
+                  src={photoUrl.replace('square', 'medium')}
+                  alt={`An image of: ${commonName || scientificName}`}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+            )}
+
             <div className="p-4">
               <span className="sr-only">{roleLabel}</span>
               <div className="flex items-center justify-start gap-2">
