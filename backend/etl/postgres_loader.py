@@ -187,9 +187,11 @@ def insert_observations(cur: psycopg.Cursor, rows: List[Dict[str, Any]], etl_ver
         url,
         etl_version_id,
         json.dumps(row),
-        None, # image_url
-        None, # photo_license_code
-        None, # photo_attribution
+        None,  # image_url - populated by photo backfill
+        None,  # photo_license_code - populated by photo backfill
+        None,  # photo_attribution - populated by photo backfill
+        None,  # inat_pulled_at - populated by photo/API backfill
+        None,  # inat_api_call - populated by photo/API backfill
       )
     )
 
@@ -210,8 +212,10 @@ def insert_observations(cur: psycopg.Cursor, rows: List[Dict[str, Any]], etl_ver
       raw,
       image_url,
       photo_license_code,
-      photo_attribution
-    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+      photo_attribution,
+      inat_pulled_at,
+      inat_api_call
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     ON CONFLICT (observation_id) DO UPDATE SET
       observed_at = EXCLUDED.observed_at,
       latitude = EXCLUDED.latitude,

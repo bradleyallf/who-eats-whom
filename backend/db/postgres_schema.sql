@@ -56,6 +56,9 @@ ALTER TABLE observations ADD COLUMN image_url TEXT;
 ALTER TABLE observations ADD COLUMN IF NOT EXISTS photo_license_code TEXT;
 ALTER TABLE observations ADD COLUMN IF NOT EXISTS photo_attribution TEXT;
 
+ALTER TABLE observations ADD COLUMN IF NOT EXISTS inat_pulled_at TIMESTAMPTZ;
+ALTER TABLE observations ADD COLUMN IF NOT EXISTS inat_api_call TEXT;
+
 
 CREATE TABLE IF NOT EXISTS predator_prey_aggregates (
   predator_taxon_id BIGINT NOT NULL REFERENCES species (taxon_id),

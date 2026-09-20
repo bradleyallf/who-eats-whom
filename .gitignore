@@ -48,3 +48,6 @@ Thumbs.db
 __pycache__/
 *.pyc
 .env.local
+
+#inat log files from backfill script
+inat_logs/
