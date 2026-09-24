@@ -1197,6 +1197,27 @@ export const Web = () => {
     return speciesSet.size
   }, [filteredResults])
 
+  const gridDisplayResults = useMemo(
+    () =>
+        filteredResults.filter(
+        (observation) =>
+            !!partnerData[observation.id] &&
+            !!observation.photos?.[0]?.url
+        ),
+    [filteredResults, partnerData]
+  )
+
+  const gridTotalSpecies = useMemo(() => {
+    const speciesSet = new Set<string>()
+
+    gridDisplayResults.forEach((observation) => {
+        const label = getObservationLabel(observation)
+        if (label) speciesSet.add(label)
+    })
+
+    return speciesSet.size
+  }, [gridDisplayResults])
+
   const downloadCsv = () => {
     if (!aggregatedCounterparts.length) return
     const roleLabel = type === 'eaten' ? 'Predator' : 'Prey'
@@ -1262,15 +1283,19 @@ export const Web = () => {
       ) : (
         <>
           <span>
-            {updatedSearchLength == 0 ? 0 : filteredResults.length}{' '}
-            Observations, {updatedSearchLength == 0 ? 0 : totalSpecies} Unique
+            {selectedView === 'grid'
+              ? gridDisplayResults.length
+              : filteredResults.length}{' '}
+            Observations,{' '}
+            {selectedView === 'grid' ? gridTotalSpecies : totalSpecies} Unique
             Species{' '}
             {activeAdvancedFiltersLabel && (
               <span className="text-xs text-slate-600 md:text-sm">
-                {activeAdvancedFiltersLabel}
+              {activeAdvancedFiltersLabel}
               </span>
             )}
           </span>
+          
           {!aggregatedCounterparts.length ? null : (
             <button
               type="button"

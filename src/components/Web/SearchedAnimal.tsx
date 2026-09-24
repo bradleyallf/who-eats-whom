@@ -41,7 +41,7 @@ export const SearchResultGrid = (props: Props) => {
   const displayResults = results.filter((result) => {
           const partner = partnerData[result.id]
 
-          return !!partner && !!result.photos?.length
+          return !!partner && !!result.photos?.[0]?.url
         })
 
   return (
