@@ -28,10 +28,12 @@ CREATE TABLE IF NOT EXISTS species (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- New columns to store wikipedia_summary, wikipedia_url and image_url for a specie pulled from iNaturalist
 ALTER TABLE species ADD COLUMN IF NOT EXISTS wikipedia_summary TEXT;
 ALTER TABLE species ADD COLUMN IF NOT EXISTS wikipedia_url TEXT;
 ALTER TABLE species ADD COLUMN IF NOT EXISTS image_url TEXT;
 
+-- Columns to hold the license_code and attribution for the above image
 ALTER TABLE species ADD COLUMN IF NOT EXISTS license_code TEXT;
 ALTER TABLE species ADD COLUMN IF NOT EXISTS attribution TEXT;
 
@@ -52,10 +54,12 @@ CREATE TABLE IF NOT EXISTS observations (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- New columns for observations image_url, license_code and attribution pulled from iNaturalist
 ALTER TABLE observations ADD COLUMN image_url TEXT;
 ALTER TABLE observations ADD COLUMN IF NOT EXISTS photo_license_code TEXT;
 ALTER TABLE observations ADD COLUMN IF NOT EXISTS photo_attribution TEXT;
 
+-- Columns to keep track when the above fields are pulled from iNaturalist
 ALTER TABLE observations ADD COLUMN IF NOT EXISTS inat_pulled_at TIMESTAMPTZ;
 ALTER TABLE observations ADD COLUMN IF NOT EXISTS inat_api_call TEXT;
 
