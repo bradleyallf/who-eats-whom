@@ -1,0 +1,75 @@
+{
+  "ignorePatterns": ["!**/*"],
+  "plugin": ["@nx"],
+  "overrides": [
+    {
+      "files": ["*.ts", "*.tsx"],
+      "rules": {}
+    },
+    {
+      "files": ["*.js", "*.jsx"],
+      "rules": {}
+    }
+  ],
+  "rules": {
+    "@nx/enforce-module-boundaries": [
+      "error",
+      {
+        "allow": [],
+        // update depConstraints based on your tags
+        "depConstraints": [
+          {
+            "sourceTag": "scope:app",
+            "onlyDependOnLibsWithTags": ["scope:app", "scope:libs"]
+          },
+          {
+            "sourceTag": "scope:libs",
+            "onlyDependOnLibsWithTags": ["scope:libs"]
+          },
+          {
+            "sourceTag": "type:app",
+            "onlyDependOnLibsWithTags": [
+              "type:feature",
+              "type:ui",
+              "type:util",
+              "type:asset",
+              "type:styles"
+            ]
+          },
+          {
+            "sourceTag": "type:feature",
+            "onlyDependOnLibsWithTags": [
+              "type:feature",
+              "type:ui",
+              "type:util",
+              "type:asset",
+              "type:styles"
+            ]
+          },
+          {
+            "sourceTag": "type:ui",
+            "onlyDependOnLibsWithTags": [
+              "type:ui",
+              "type:util",
+              "type:asset",
+              "type:styles"
+            ]
+          },
+          {
+            "sourceTag": "type:util",
+            "onlyDependOnLibsWithTags": ["type:util", "type:asset"]
+          },
+          {
+            "sourceTag": "type:asset",
+            "onlyDependOnLibsWithTags": []
+          },
+          {
+            "sourceTag": "type:styles",
+            "onlyDependOnLibsWithTags": ["type:asset"]
+          }
+        ]
+      }
+    ]
+  },
+  "extends": ["plugin:@nx/react", "./.eslintrc.base.json"]
+}
