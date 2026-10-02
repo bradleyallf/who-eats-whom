@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Item } from './Item'
 
 const routes = [
-  // removing home link because of redundancy
   {
     to: '/',
     label: 'Home',

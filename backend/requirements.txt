@@ -1,0 +1,5 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.5
+psycopg[binary,pool]==3.2.12
+neo4j==5.23.1
+redis==5.0.7

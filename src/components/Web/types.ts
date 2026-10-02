@@ -27,7 +27,7 @@ export interface Ofv {
   user: User
   user_id: number
   uuid: string
-  value: 'eaten' | 'eater'
+  value: string
   value_ci: string
 }
 
@@ -49,7 +49,6 @@ export interface Taxon {
 export interface Observation {
   community_taxon_id: number
   created_at: string
-  observed_on?: string
   description?: string
   ofvs: Ofv[]
   taxon: Taxon
