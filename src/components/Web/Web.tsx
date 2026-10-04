@@ -1122,7 +1122,18 @@ export const Web = () => {
     [search, suggestionLookup]
   )
 
-  const filteredResults = shouldDisplayResults ? eatenByData || [] : []
+  // Every view shows only partner observations that are linked to a searched
+  // observation and have a photo, so counts, CSV and all four views agree.
+  const filteredResults = useMemo(
+    () =>
+      shouldDisplayResults
+        ? (eatenByData || []).filter(
+            (observation) =>
+              !!partnerData[observation.id] && !!observation.photos?.[0]?.url
+          )
+        : [],
+    [shouldDisplayResults, eatenByData, partnerData]
+  )
 
   const hasResults = filteredResults.length > 0 && updatedSearchLength > 0
   const isResultsLoading = isSearchLoading || isPartnerLoading
@@ -1197,26 +1208,6 @@ export const Web = () => {
     return speciesSet.size
   }, [filteredResults])
 
-  const gridDisplayResults = useMemo(
-    () =>
-        filteredResults.filter(
-        (observation) =>
-            !!partnerData[observation.id] &&
-            !!observation.photos?.[0]?.url
-        ),
-    [filteredResults, partnerData]
-  )
-
-  const gridTotalSpecies = useMemo(() => {
-    const speciesSet = new Set<string>()
-
-    gridDisplayResults.forEach((observation) => {
-        const label = getObservationLabel(observation)
-        if (label) speciesSet.add(label)
-    })
-
-    return speciesSet.size
-  }, [gridDisplayResults])
 
   const downloadCsv = () => {
     if (!aggregatedCounterparts.length) return
@@ -1283,11 +1274,7 @@ export const Web = () => {
       ) : (
         <>
           <span>
-            {selectedView === 'grid'
-              ? gridDisplayResults.length
-              : filteredResults.length}{' '}
-            Observations,{' '}
-            {selectedView === 'grid' ? gridTotalSpecies : totalSpecies} Unique
+            {filteredResults.length} Observations, {totalSpecies} Unique
             Species{' '}
             {activeAdvancedFiltersLabel && (
               <span className="text-xs text-slate-600 md:text-sm">

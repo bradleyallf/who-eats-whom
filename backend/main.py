@@ -48,21 +48,48 @@ def canonical_role_value(value: Optional[str]) -> str:
   return ROLE_MAPPING.get(normalized, "eater")
 
 
-def build_photo_payload(image_url: Optional[str], observation_id: int, photo_license_code: Optional[str], photo_attribution: Optional[str]) -> List[Dict[str, Any]]:
-  if not image_url or not photo_license_code:
-        return []
+# Licenses that may be displayed. Edit this set to change what counts as "allowed".
+ALLOWED_LICENSES = {
+  "cc0",
+  "cc-by",
+  "cc-by-nc",
+  "cc-by-sa",
+  "cc-by-nd",
+  "cc-by-nc-sa",
+  "cc-by-nc-nd",
+  "pd",
+  "gfdl"
+}
+
+
+def is_allowed_license(code: Optional[str]) -> bool:
+  return (code or "").strip().lower() in ALLOWED_LICENSES
+
+
+def build_photo_payload(
+  image_url: Optional[str],
+  observation_id: int,
+  photo_license_code: Optional[str],
+  photo_attribution: Optional[str],
+  observation_license_code: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+  # Both the photo's license and the observation's license must be allowed.
+  if not image_url:
+    return []
+  if not (is_allowed_license(photo_license_code) and is_allowed_license(observation_license_code)):
+    return []
 
   return [
-      {
-          "attribution": photo_attribution or "",
-          "flags": [],
-          "hidden": False,
-          "id": observation_id,
-          "license_code": photo_license_code.lower(),
-          "original_dimensions": {"width": 0, "height": 0},
-          "url": image_url,
-      }
-]
+    {
+      "attribution": photo_attribution or "",
+      "flags": [],
+      "hidden": False,
+      "id": observation_id,
+      "license_code": photo_license_code.strip().lower(),
+      "original_dimensions": {"width": 0, "height": 0},
+      "url": image_url,
+    }
+  ]
 
 
 def build_user_stub(raw: Dict[str, Any]) -> Dict[str, Any]:
@@ -124,6 +151,9 @@ def build_observation_payload(row: Dict[str, Any]) -> Dict[str, Any]:
     "community_taxon_id": taxon_id,
     "created_at": raw.get("created_at") or (row.get("observed_at").isoformat() if row.get("observed_at") else None),
     "description": row.get("description"),
+    "observed_on": raw.get("observed_on") or (
+      row["observed_at"].date().isoformat() if row.get("observed_at") else None
+    ),
     "ofvs": ofvs,
     "taxon": {
       "id": taxon_id,
@@ -142,7 +172,13 @@ def build_observation_payload(row: Dict[str, Any]) -> Dict[str, Any]:
     },
     "id": observation_id,
     "uri": row.get("inaturalist_url") or row.get("iNaturalist_url") or raw.get("url"),
-    "photos": build_photo_payload(image_url, observation_id, row.get("photo_license_code"), row.get("photo_attribution")),
+    "photos": build_photo_payload(
+      image_url,
+      observation_id,
+      row.get("photo_license_code"),
+      row.get("photo_attribution"),
+      raw.get("license"),
+    ),
     "uuid": raw.get("uuid") or str(observation_id),
     "place_country_name": raw.get("place_country_name"),
     "place_state_name": raw.get("place_state_name"),
