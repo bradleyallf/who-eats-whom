@@ -1,3 +1,25 @@
+"""Incremental iNaturalist importer for the Who Eats Whom project.
+ 
+This module pulls observations from the "who-eats-whom" iNaturalist project,
+skips the ones that already exist in PostgreSQL, enriches the new ones with
+species-level metadata (Wikipedia summary, species photo), normalizes them
+into the flat record shape expected by the database loader, and hands them off
+to ``load_records_to_postgres``.
+ 
+Pipeline overview:
+    update_database()
+        -> fetch_and_update_observations()   # query API, filter out known IDs
+            -> normalize()                   # one record per new observation
+                -> fetch_taxon_metadata()    # extra API call per observation
+                -> find_allowed_photo()      # pick a license-compatible photo
+                -> get_ofv()                 # read custom observation fields
+        -> load_records_to_postgres()        # write to PostgreSQL
+ 
+Environment variables:
+    POSTGRES_DSN: PostgreSQL connection string. Defaults to the local Docker
+        Compose database (port 5433).
+"""
+
 import requests
 import os
 from datetime import datetime, timezone
@@ -5,17 +27,19 @@ from datetime import datetime, timezone
 import psycopg
 from postgres_loader_api_v3 import load_records_to_postgres
 
-
+# PostgreSQL connection string. Override with the POSTGRES_DSN environment
+# variable; the default matches the postgres service in docker-compose.yml.
 DSN = os.getenv(
     "POSTGRES_DSN",
     "postgresql://whodba:whopass@localhost:5433/who_eats_whom"
 )
 
-
+# iNaturalist API endpoint for a single taxon. Use .format(taxon_id).
 INATURALIST_TAXA_URL = (
     "https://api.inaturalist.org/v1/taxa/{}"
 )
 
+# iNaturalist API endpoint for searching observations.
 INATURALIST_OBSERVATIONS_URL = (
     "https://api.inaturalist.org/v1/observations"
 )
@@ -71,6 +95,7 @@ def fetch_taxon_metadata(taxon_id):
         or default_photo.get("url")
     )
 
+    # Licensing/credit info for the species photo, needed for display. 
     species_license_code = default_photo.get("license_code")
     species_attribution = default_photo.get("attribution")
 
@@ -84,7 +109,16 @@ def fetch_taxon_metadata(taxon_id):
 
 
 def find_allowed_photo(photos):
-    """Return the first photo with an allowed license."""
+    """Return the first photo with an allowed license.
+ 
+    Args:
+        photos: List of photo dicts from an iNaturalist observation (may be
+            None or empty).
+ 
+    Returns:
+        The first photo dict whose ``license_code`` is in
+        ``ALLOWED_LICENSES``, or None if there is no such photo.
+    """
 
     for photo in photos or []:
         license_code = (
@@ -98,6 +132,17 @@ def find_allowed_photo(photos):
 
 
 def get_ofv(obs, field_name):
+    """Return the first photo with an allowed license.
+ 
+    Args:
+        photos: List of photo dicts from an iNaturalist observation (may be
+            None or empty).
+ 
+    Returns:
+        The first photo dict whose ``license_code`` is in
+        ``ALLOWED_LICENSES``, or None if there is no such photo.
+    """
+
     target = field_name.strip().lower()
 
     for ofv in obs.get("ofvs", []):
@@ -110,6 +155,26 @@ def get_ofv(obs, field_name):
 
 
 def normalize(obs, pull_id):
+    """Convert a raw iNaturalist observation into a flat database record.
+ 
+    The returned dict has one key per column expected by
+    ``load_records_to_postgres``. Columns this script cannot fill from the
+    API response are set to None so the loader always receives a full set of
+    keys.
+ 
+    Side effect: calls ``fetch_taxon_metadata``, which makes one network
+    request per observation.
+ 
+    Args:
+        obs: Observation dict from the iNaturalist API.
+        pull_id: Identifier for this import run (e.g.
+            ``scheduler_20261007_190419``), stored in ``inat_api_call`` so
+            rows can be traced back to the run that created them.
+ 
+    Returns:
+        A flat dict of column name -> value.
+    """
+
     taxon = obs.get("taxon") or {}
     user = obs.get("user") or {}
     geojson = obs.get("geojson") or {}
@@ -156,6 +221,7 @@ def normalize(obs, pull_id):
 
         photo_attribution = photo.get("attribution")
 
+    # Single timestamp (UTC) recording when this record was fetched.
     pulled_at = datetime.now(timezone.utc)
 
     return {
@@ -374,6 +440,23 @@ def normalize(obs, pull_id):
     }
 
 def fetch_and_update_observations():
+    """Fetch new project observations from iNaturalist.
+ 
+    Steps:
+        1. Load all observation IDs already stored in PostgreSQL.
+        2. Query iNaturalist for research-grade observations in the
+           "who-eats-whom" project (see the date filter note below).
+        3. Keep only observations whose ID is not already in the database.
+        4. Normalize the new ones (which also fetches species metadata).
+ 
+    Returns:
+        A list of normalized record dicts ready for the loader. The list is
+        empty when there is nothing new.
+ 
+    Raises:
+        requests.HTTPError: If the observations request fails.
+        psycopg.Error: If the existing-IDs query fails.
+    """
 
     print("Checking existing observations in PostgreSQL...")
 
@@ -398,7 +481,7 @@ def fetch_and_update_observations():
     }
 
     response = requests.get(
-        "https://api.inaturalist.org/v1/observations",
+        INATURALIST_OBSERVATIONS_URL,
         params=params,
         headers={"User-Agent": "Who-Eats-Whom/1.0"},
         timeout=30,
@@ -410,6 +493,7 @@ def fetch_and_update_observations():
 
     new_records = []
 
+    # Keep only observations we have not stored yet.
     for obs in data["results"]:
         if str(obs["id"]) not in existing_ids:
             new_records.append(obs)
@@ -435,29 +519,12 @@ def fetch_and_update_observations():
 
     return normalized_records
 
-# if __name__ == "__main__":
-#     records = fetch_and_update_observations()
-
-#     for record in records:
-#         print("\n--- NEW RECORD ---")
-#         print("id:", record["id"])
-#         print("scientific_name:", record["scientific_name"])
-#         print("taxon_id:", record["taxon_id"])
-#         print("wikipedia_summary:", record["wikipedia_summary"])
-#         print("wikipedia_url:", record["wikipedia_url"])
-#         print("image_url:", record["image_url"])
-
-# if __name__ == "__main__":
-#     records = fetch_and_update_observations()
-
-#     if records:
-#         load_records_to_postgres(
-#             records,
-#             etl_version="2026-08-26-api",
-#             notes="Incremental observations fetched from iNaturalist API",
-#         )
-
 def update_database():
+    """Run one incremental import: fetch new observations and store them.
+ 
+    Returns:
+        The number of new observations that were fetched (and loaded).
+    """
     records = fetch_and_update_observations()
 
     if records:
