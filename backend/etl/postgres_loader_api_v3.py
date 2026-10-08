@@ -14,8 +14,14 @@ from datetime import datetime
 # from typing import Any, Dict, List, Optional
 
 from typing import Any, Dict, List, Optional, Tuple
-
+import re
 import psycopg
+
+OBS_ID_RE = re.compile(r"/observations/(\d+)")
+
+def extract_observation_id(url: Optional[str]) -> Optional[int]:
+    match = OBS_ID_RE.search(url or "")
+    return int(match.group(1)) if match else None
 
 
 DSN = os.getenv(
@@ -415,87 +421,153 @@ def load_records_to_postgres(
     )
 
 # new
-def build_interactions(
-    cur: psycopg.Cursor,
-    rows: List[Dict[str, Any]],
-) -> List[Tuple[int, int, datetime | None]]:
-    """Find predator/prey interactions using the entire PostgreSQL database.
+def build_interactions(cur, rows):
+    """Find predator/prey interactions in both directions.
 
-    The API batch may contain only one side of an interaction. Therefore,
-    partner observations are looked up in PostgreSQL rather than only
-    searching the current API batch.
-
-    Returns:
-        Tuples containing:
-            (predator_taxon_id, prey_taxon_id, predator_observed_at)
+    - Eater in batch: look up its partner (prey) anywhere in the database.
+    - Prey in batch: look up eaters in the database whose partner URL points at it.
+    Each (eater, prey) observation pair is counted once.
     """
-
     interactions = []
+    seen_pairs = set()  # (eater_observation_id, prey_observation_id)
 
     for row in rows:
-
-        # Only explicitly confirmed eaters can be predators.
-        if not is_confirmed_eater(row.get(ROLE_FIELD)):
+        obs_id = row.get("id")
+        if not obs_id:
             continue
+        obs_id = int(obs_id)
+        role = canonical_role(row.get(ROLE_FIELD))
 
-        partner_url = (row.get(PARTNER_URL_FIELD) or "").strip()
+        # Case 1: this batch row is the eater
+        if role == "eater":
+            prey_id = extract_observation_id(row.get(PARTNER_URL_FIELD))
+            if prey_id is None or not row.get("taxon_id"):
+                continue
 
-        if not partner_url:
-            continue
-
-        predator_taxon_id = row.get("taxon_id")
-
-        if not predator_taxon_id:
-            continue
-
-        # Search the ENTIRE observations table for the partner.
-        cur.execute(
-            """
-            SELECT
-                taxon_id,
-                role,
-                observed_at
-            FROM observations
-            WHERE iNaturalist_url = %s
-            """,
-            (partner_url,),
-        )
-
-        partner = cur.fetchone()
-
-        if not partner:
-            print(
-                f"Partner observation not found in PostgreSQL: "
-                f"{partner_url}"
+            cur.execute(
+                "SELECT taxon_id, role FROM observations WHERE observation_id = %s",
+                (prey_id,),
             )
-            continue
+            prey = cur.fetchone()
+            if not prey or prey[1] != "thing being eaten":
+                print(f"Partner {prey_id} for eater {obs_id} not available yet.")
+                continue
 
-        prey_taxon_id, prey_role, prey_observed_at = partner
+            pair = (obs_id, prey_id)
+            if pair not in seen_pairs:
+                seen_pairs.add(pair)
+                interactions.append((
+                    int(row["taxon_id"]),
+                    int(prey[0]),
+                    parse_timestamp(row.get("time_observed_at") or row.get("observed_on")),
+                ))
 
-        # The partner must actually be classified as prey.
-        if prey_role != "thing being eaten":
-            print(
-                f"Skipping interaction for observation {row.get('id')}: "
-                f"partner is not classified as prey."
+        # Case 2: this batch row is the prey, so find eaters already stored
+        elif role == "thing being eaten":
+            cur.execute(
+                """
+                SELECT observation_id, taxon_id, observed_at
+                FROM observations
+                WHERE role = 'eater'
+                  AND raw->>'field:url for "partner" observation' ~ %s
+                """,
+                (rf"/observations/{obs_id}($|[^0-9])",),
             )
-            continue
-
-        predator_observed_at = parse_timestamp(
-            row.get("time_observed_at")
-            or row.get("observed_on")
-        )
-
-        interactions.append(
-            (
-                int(predator_taxon_id),
-                int(prey_taxon_id),
-                predator_observed_at,
-            )
-        )
+            for eater_id, eater_taxon_id, eater_observed_at in cur.fetchall():
+                pair = (eater_id, obs_id)
+                if pair in seen_pairs or not row.get("taxon_id"):
+                    continue
+                seen_pairs.add(pair)
+                interactions.append((
+                    int(eater_taxon_id),
+                    int(row["taxon_id"]),
+                    eater_observed_at,
+                ))
 
     print(f"Interactions found: {len(interactions)}")
-
     return interactions
+
+# def build_interactions(
+#     cur: psycopg.Cursor,
+#     rows: List[Dict[str, Any]],
+# ) -> List[Tuple[int, int, datetime | None]]:
+#     """Find predator/prey interactions using the entire PostgreSQL database.
+
+#     The API batch may contain only one side of an interaction. Therefore,
+#     partner observations are looked up in PostgreSQL rather than only
+#     searching the current API batch.
+
+#     Returns:
+#         Tuples containing:
+#             (predator_taxon_id, prey_taxon_id, predator_observed_at)
+#     """
+
+#     interactions = []
+
+#     for row in rows:
+
+#         # Only explicitly confirmed eaters can be predators.
+#         if not is_confirmed_eater(row.get(ROLE_FIELD)):
+#             continue
+
+#         partner_url = (row.get(PARTNER_URL_FIELD) or "").strip()
+
+#         if not partner_url:
+#             continue
+
+#         predator_taxon_id = row.get("taxon_id")
+
+#         if not predator_taxon_id:
+#             continue
+
+#         # Search the ENTIRE observations table for the partner.
+#         cur.execute(
+#             """
+#             SELECT
+#                 taxon_id,
+#                 role,
+#                 observed_at
+#             FROM observations
+#             WHERE iNaturalist_url = %s
+#             """,
+#             (partner_url,),
+#         )
+
+#         partner = cur.fetchone()
+
+#         if not partner:
+#             print(
+#                 f"Partner observation not found in PostgreSQL: "
+#                 f"{partner_url}"
+#             )
+#             continue
+
+#         prey_taxon_id, prey_role, prey_observed_at = partner
+
+#         # The partner must actually be classified as prey.
+#         if prey_role != "thing being eaten":
+#             print(
+#                 f"Skipping interaction for observation {row.get('id')}: "
+#                 f"partner is not classified as prey."
+#             )
+#             continue
+
+#         predator_observed_at = parse_timestamp(
+#             row.get("time_observed_at")
+#             or row.get("observed_on")
+#         )
+
+#         interactions.append(
+#             (
+#                 int(predator_taxon_id),
+#                 int(prey_taxon_id),
+#                 predator_observed_at,
+#             )
+#         )
+
+#     print(f"Interactions found: {len(interactions)}")
+
+#     return interactions
 
 # neww
 
