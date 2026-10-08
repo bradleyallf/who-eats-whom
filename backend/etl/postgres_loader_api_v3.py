@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime
-# from typing import Any, Dict, List, Optional
 
 from typing import Any, Dict, List, Optional, Tuple
 import re
@@ -20,6 +19,14 @@ import psycopg
 OBS_ID_RE = re.compile(r"/observations/(\d+)")
 
 def extract_observation_id(url: Optional[str]) -> Optional[int]:
+    """
+    Extracts the numeric observation ID from an iNaturalist observation URL.
+
+    @param url  URL such as "https://www.inaturalist.org/observations/12345";
+                may be None or empty.
+    @return     The observation ID as an int, or None if no ID is found.
+    """
+
     match = OBS_ID_RE.search(url or "")
     return int(match.group(1)) if match else None
 
@@ -45,21 +52,27 @@ ROLE_MAPPING = {
 
 
 def is_confirmed_eater(raw_value: Optional[str]) -> bool:
-    """Return True only when the role is explicitly recognized as an eater.
-
-    Missing, blank, or unrecognized role values are NOT treated as eaters.
-    This prevents observations with missing role information from being
-    incorrectly used as predators.
     """
+    Determines whether a raw role value is explicitly recognized as an eater.
+
+    Missing, blank, or unrecognized values are NOT treated as eaters, so
+    observations lacking role information are never used as predators.
+
+    @param raw_value  Raw value of the role field (case/whitespace-insensitive).
+    @return           True only if the value maps to "eater" in ROLE_MAPPING.
+    """
+
     normalized = (raw_value or "").strip().lower()
     return ROLE_MAPPING.get(normalized) == "eater"
 
 
 def canonical_role(raw_value: Optional[str]) -> Optional[str]:
-    """Convert a recognized role to the database's canonical role.
+    """
+    Converts a raw role value into the database's canonical role.
 
-    Returns None for missing or unrecognized roles instead of defaulting
-    them to 'eater'.
+    @param raw_value  Raw role string (e.g. "predator", "prey").
+    @return           "eater" or "thing being eaten", or None if the value
+                      is missing or unrecognized (never defaults to "eater").
     """
     normalized = (raw_value or "").strip().lower()
     return ROLE_MAPPING.get(normalized)
@@ -83,13 +96,21 @@ def parse_timestamp(value: str | None) -> Optional[datetime]:
     return None
 
 
-def ensure_etl_version(
+def ensure_etl_version(    
     cur: psycopg.Cursor,
     version: str,
     row_count: int,
     notes: str = "",
 ) -> int:
-    """Create or update the ETL version for an API load."""
+    """
+    Creates the ETL version row, or updates it if it already exists.
+
+    @param cur        Open database cursor (caller manages the transaction).
+    @param version    Unique version label for this load.
+    @param row_count  Number of source rows in this load.
+    @param notes      Optional free-text notes.
+    @return           Primary key (id) of the etl_versions row.
+    """
 
     cur.execute(
         """
@@ -123,7 +144,17 @@ def upsert_species(
     cur: psycopg.Cursor,
     rows: List[Dict[str, Any]],
 ) -> None:
-    """Insert or update species records before observations are inserted."""
+    """
+    Inserts or updates species records referenced by the given rows.
+
+    Rows are de-duplicated by taxon_id (last occurrence wins). Rows without
+    a taxon_id are ignored. Must run before insert_observations() so the
+    taxon_id foreign key is satisfied.
+
+    @param cur   Open database cursor.
+    @param rows  Normalized observation dicts containing taxon/species fields.
+    @return      None.
+    """
 
     species_records = {}
 
@@ -351,15 +382,12 @@ def load_records_to_postgres(
     etl_version: str,
     notes: str = "",
 ) -> None:
-    """Load normalized observations from update_observations.py into PostgreSQL.
+    """
+    Loads normalized observations from update_observations.py into PostgreSQL.
 
-    Order:
-        1. Create ETL version
-        2. Upsert species
-        3. Insert observations
-
-    Interaction/aggregate processing will be added later after the
-    entire PostgreSQL database can be searched for partner observations.
+    Runs in one transaction, in this order: ETL version, species,
+    observations, interactions, aggregate edges. Commits only if all steps
+    succeed.
     """
 
     if not rows:
@@ -429,7 +457,7 @@ def build_interactions(cur, rows):
     Each (eater, prey) observation pair is counted once.
     """
     interactions = []
-    seen_pairs = set()  # (eater_observation_id, prey_observation_id)
+    seen_pairs = set()
 
     for row in rows:
         obs_id = row.get("id")
@@ -576,7 +604,10 @@ def insert_aggregates(
     interactions: List[Tuple[int, int, Optional[datetime]]],
     etl_version_id: int,
 ) -> None:
-    """Insert or update predator/prey aggregate edges."""
+    """Aggregates interactions per (predator, prey) taxon pair and upserts them.
+
+    On conflict (same pair and ETL version), interaction_count is ADDED to
+    the existing count and latest_observation_at takes the later value."""
 
     aggregates = {}
 
