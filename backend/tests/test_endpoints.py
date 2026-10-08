@@ -16,10 +16,12 @@ Conventions used throughout this file:
     backend/main.py.
   * Test names follow the plain-English test IDs, e.g. test_L1_002_...
     covers test case L1-002.
+
+Run all tests - python -m pytest backend/tests/ -v
+Run one test - python -m pytest backend/tests/test_endpoints.py::{name of the test} -v
 """
 from fastapi.testclient import TestClient
 
-from backend.cache import RedisCache
 from backend.main import app
 
 
