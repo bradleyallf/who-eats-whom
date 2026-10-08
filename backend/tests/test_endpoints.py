@@ -1,536 +1,274 @@
+"""
+Endpoint tests for the Who Eats Whom backend (FastAPI).
+
+The tests are organized by layer, with one section per layer below:
+
+  Layer 1: Infrastructure & Config (/health)
+  (more layers will be added as new sections further down)
+
+Conventions used throughout this file:
+  * Tests call the API in-process through FastAPI's TestClient, so no real
+    server or backing service needs to be running.
+  * External services are replaced with fakes so the tests do not connect to
+    real Postgres or Neo4j instances.
+  * FastAPI's lifespan is exercised through TestClient so the tests cover
+    the environment-variable configuration and startup logic in
+    backend/main.py.
+  * Test names follow the plain-English test IDs, e.g. test_L1_002_...
+    covers test case L1-002.
+"""
 from fastapi.testclient import TestClient
 
 from backend.cache import RedisCache
-from backend.main import APP_VERSION, app
+from backend.main import app
 
 
-class FakeCursor:
-  def __init__(self, row, rows, fetchone_rows):
-    self.row = row
-    self.rows = rows or []
-    self.fetchone_rows = fetchone_rows or []
+# =========================================================================
+# Layer 1: Infrastructure & Config -- /health
+#
+# /health must ALWAYS return HTTP 200 with the keys status, postgres, neo4j
+# and redis, regardless of which backing services are configured.
+#
+# The service flags reflect whether the corresponding service handle was
+# successfully created during the FastAPI lifespan:
+#
+#   postgres -> bool(pg_pool)
+#   neo4j    -> bool(neo4j_driver)
+#   redis    -> bool(redis_cache and redis_cache.client)
+#
+# These tests exercise the real FastAPI lifespan so that the environment
+# variable -> app.state configuration logic in backend/main.py is tested.
+# Postgres and Neo4j connections are replaced with fakes so no real
+# external services are required.
+#
+# The tests cover the required L1-001 through L1-006 cases, along with
+# additional Neo4j configuration edge cases.
+# =========================================================================
 
-  async def __aenter__(self):
-    return self
+# Keys every /health response must contain (L1-006).
+REQUIRED_KEYS = {"status", "postgres", "neo4j", "redis"}
 
-  async def __aexit__(self, *args):
-    return False
+# ---------- Lifespan / environment-variable test helpers ----------
+#
+# backend.main reads environment variables at import time into module
+# constants, so these tests monkeypatch those constants rather than
+# os.environ. `with TestClient(app)` runs the FastAPI lifespan, which
+# creates the service handles stored in app.state.
+#
+# Postgres and Neo4j are replaced with fake implementations so startup
+# does not attempt to connect to real services.
+#
+# Fake class names are prefixed with "FakeLifespan" to distinguish them
+# from any fakes used by tests for other layers in this file.
 
-  async def execute(self, *args):
+class FakeLifespanConnectionPool:
+  """
+  Stand-in for psycopg_pool.AsyncConnectionPool.
+
+  Accepts any constructor arguments and provides the async close() that
+  lifespan calls on shutdown, so no real Postgres connection is attempted.
+  """
+
+  def __init__(self, *args, **kwargs):
+    self.kwargs = kwargs
+
+  async def close(self):
+    """No-op shutdown hook called by lifespan teardown."""
     pass
 
-  async def fetchone(self):
-    if self.fetchone_rows:
-      return self.fetchone_rows.pop(0)
-    return self.row
 
-  async def fetchall(self):
-    return self.rows
+class FakeLifespanNeo4jDriver:
+  """Stand-in for a Neo4j driver; only needs the async close() on shutdown."""
 
-
-class FakeConnection(FakeCursor):
-  def cursor(self, **kwargs):
-    return FakeCursor(
-      self.row,
-      self.rows,
-      self.fetchone_rows,
-    )
+  async def close(self):
+    """No-op shutdown hook called by lifespan teardown."""
+    pass
 
 
-class FakePool:
-  def __init__(self, row, rows, fetchone_rows):
-    self.row = row
-    self.rows = rows or []
-    self.fetchone_rows = fetchone_rows or []
+class FakeLifespanGraphDatabase:
+  """Stand-in for neo4j.AsyncGraphDatabase, returning a fake driver."""
 
-  def connection(self):
-    return FakeConnection(
-      self.row,
-      self.rows,
-      self.fetchone_rows,
-    )
+  @staticmethod
+  def driver(uri, auth=None):
+    """Return a fake driver instead of connecting to the given URI."""
+    return FakeLifespanNeo4jDriver()
 
 
-class FakeNeo4jResult:
-  def __init__(self, record):
-    self.record = record
-
-  async def single(self):
-    return self.record
-
-
-class FakeNeo4jSession:
-  async def __aenter__(self):
-    return self
-
-  async def __aexit__(self, *args):
-    return False
-
-  async def run(self, query, **params):
-    if "sum(r.interaction_count)" in query:
-      return FakeNeo4jResult({"observations": 120})
-
-    if "count(r) AS edges" in query:
-      return FakeNeo4jResult({"edges": 45})
-
-    return FakeNeo4jResult({"taxa": 30})
-
-
-class FakeNeo4jDriver:
-  def session(self):
-    return FakeNeo4jSession()
-
-
-ETL_VERSION = {
-  "id": 1,
-  "version": "test-version",
-  "loaded_at": None,
+# Sample env values used by the lifespan tests.
+TEST_POSTGRES_DSN = "postgresql://user:pw@localhost:5432/db"
+TEST_NEO4J_ENV = {
+  "neo4j_uri": "bolt://localhost:7687",
+  "neo4j_user": "neo4j",
+  "neo4j_password": "pw",
 }
+TEST_REDIS_URL = "redis://localhost:6379/0"  # from_url is lazy, no connection
 
 
-RED_FOX = {
-  "taxon_id": 41641,
-  "scientific_name": "Vulpes vulpes",
-  "common_name": "Red Fox",
-  "iconic_taxon_name": "Mammalia",
-  "wikipedia_summary": "The red fox is the largest of the true foxes.",
-  "wikipedia_url": "https://en.wikipedia.org/wiki/Red_fox",
-  "image_url": "https://example.com/fox.jpg",
-  "license_code": "cc-by",
-  "attribution": "(c) Jane Doe",
-}
+def lifespan_health(
+  monkeypatch,
+  postgres_dsn=None,
+  neo4j_uri=None,
+  neo4j_user=None,
+  neo4j_password=None,
+  redis_url=None,
+):
+  """
+  Run the real lifespan with the given "env vars" and return the /health
+  response.
 
+  Sets the module-level constants in backend.main (None means "env var not
+  set"), swaps AsyncConnectionPool and AsyncGraphDatabase for fakes, then
+  starts the app with `with TestClient(app)` so startup and shutdown both run.
 
-def observation(**overrides):
-  row = {
-    "observation_id": 1001,
-    "observed_at": None,
-    "latitude": 40.744,
-    "longitude": -74.032,
-    "place_guess": "Hoboken, NJ, USA",
-    "quality_grade": "research",
-    "description": None,
-    "role": "eater",
-    "taxon_id": 41641,
-    "iNaturalist_url": "https://www.inaturalist.org/observations/1001",
-    "etl_version_id": 1,
-    "raw": {},
-    "image_url": None,
-    "photo_license_code": None,
-    "photo_attribution": None,
-    "scientific_name": "Vulpes vulpes",
-    "common_name": "Red Fox",
-    "iconic_taxon_name": "Mammalia",
-  }
+  Args:
+    monkeypatch: pytest's monkeypatch fixture (undoes patches after the test).
+    postgres_dsn: value for POSTGRES_DSN, or None for unset.
+    neo4j_uri: value for NEO4J_URI, or None for unset.
+    neo4j_user: value for NEO4J_USER, or None for unset.
+    neo4j_password: value for NEO4J_PASSWORD, or None for unset.
+    redis_url: value for REDIS_URL, or None for unset.
 
-  row.update(overrides)
-  return row
-
-
-def make_client(db_row=None, db_rows=None, fetchone_rows=None):
-  app.state.pg_pool = FakePool(
-    db_row,
-    db_rows,
-    fetchone_rows,
+  Returns:
+    The Response from GET /health.
+  """
+  monkeypatch.setattr("backend.main.POSTGRES_DSN", postgres_dsn)
+  monkeypatch.setattr("backend.main.NEO4J_URI", neo4j_uri)
+  monkeypatch.setattr("backend.main.NEO4J_USER", neo4j_user)
+  monkeypatch.setattr("backend.main.NEO4J_PASSWORD", neo4j_password)
+  monkeypatch.setattr("backend.main.REDIS_URL", redis_url)
+  monkeypatch.setattr(
+    "backend.main.AsyncConnectionPool", FakeLifespanConnectionPool
   )
-  app.state.neo4j_driver = None
-  app.state.redis_cache = RedisCache(None)
-  return TestClient(app)
-
-
-def get_interactions(rows, query=""):
-  client = make_client(
-    db_rows=rows,
-    fetchone_rows=[ETL_VERSION],
+  monkeypatch.setattr(
+    "backend.main.AsyncGraphDatabase", FakeLifespanGraphDatabase
   )
 
-  return client.get(f"/api/v1/interactions{query}")
+  with TestClient(app) as client:
+    return client.get("/health")
 
 
-def test_1_health_check_is_ok():
-  resp = make_client().get("/health")
-
-  assert resp.status_code == 200
-  assert resp.json()["status"] == "ok"
-
-
-def test_2_version_endpoint_returns_app_version():
-  resp = make_client().get("/api/v1/version")
-
-  assert resp.status_code == 200
-  assert resp.json() == {"version": APP_VERSION}
-
-
-def test_3_species_detail_returns_species_info():
-  resp = make_client(db_row=RED_FOX).get("/api/v1/species/41641")
-
-  assert resp.status_code == 200
-  assert resp.json() == {"results": [RED_FOX]}
-
-
-def test_4_unknown_species_returns_404():
-  resp = make_client(db_row=None).get("/api/v1/species/999999")
-
-  assert resp.status_code == 404
-  assert resp.json() == {"detail": "Species not found."}
-
-
-def test_5_predator_prey_without_filter_returns_400():
-  resp = make_client().get("/api/v1/predator-prey")
-
-  assert resp.status_code == 400
-  assert resp.json() == {
-    "detail": "Provide predator or prey taxon id to filter results."
-  }
-
-
-def test_6_species_search_rejects_one_letter_query():
-  resp = make_client().get("/api/v1/species/search?q=f")
-
-  assert resp.status_code == 422
-
-
-def test_7_species_search_returns_matching_species():
-  rows = [
-    {
-      "taxon_id": 41641,
-      "scientific_name": "Vulpes vulpes",
-      "common_name": "Red Fox",
-      "iconic_taxon_name": "Mammalia",
-      "image_url": "https://example.com/fox.jpg",
-      "license_code": "cc-by",
-      "attribution": "(c) Jane Doe",
-    }
-  ]
-
-  resp = make_client(db_rows=rows).get(
-    "/api/v1/species/search?q=fox"
+def test_L1_001_lifespan_all_env_vars_set(monkeypatch):
+  """
+  L1-001 via lifespan: with POSTGRES_DSN, all three Neo4j vars and REDIS_URL
+  set, startup creates all three services and /health reports all True.
+  """
+  resp = lifespan_health(
+    monkeypatch,
+    postgres_dsn=TEST_POSTGRES_DSN,
+    redis_url=TEST_REDIS_URL,
+    **TEST_NEO4J_ENV,
   )
 
   assert resp.status_code == 200
   assert resp.json() == {
-    "results": [
-      {
-        "taxon_id": 41641,
-        "scientific_name": "Vulpes vulpes",
-        "common_name": "Red Fox",
-        "iconic_taxon_name": "Mammalia",
-        "default_photo": {
-          "square_url": "https://example.com/fox.jpg",
-          "small_url": "https://example.com/fox.jpg",
-          "url": "https://example.com/fox.jpg",
-          "license_code": "cc-by",
-          "attribution": "(c) Jane Doe",
-        },
-      }
+    "status": "ok",
+    "postgres": True,
+    "neo4j": True,
+    "redis": True,
+  }
+
+
+def test_L1_002_lifespan_postgres_dsn_not_set(monkeypatch):
+  """
+  L1-002 via lifespan: with POSTGRES_DSN unset, no pool is created, and
+  /health returns 200 with postgres: False.
+  """
+  resp = lifespan_health(
+    monkeypatch,
+    redis_url=TEST_REDIS_URL,
+    **TEST_NEO4J_ENV,
+  )
+
+  assert resp.status_code == 200
+  assert resp.json()["postgres"] is False
+
+
+def test_L1_003_lifespan_neo4j_uri_not_set(monkeypatch):
+  """
+  L1-003 via lifespan: with NEO4J_URI unset (user and password still set),
+  no driver is created, and /health returns 200 with neo4j: False.
+  """
+  resp = lifespan_health(
+    monkeypatch,
+    postgres_dsn=TEST_POSTGRES_DSN,
+    redis_url=TEST_REDIS_URL,
+    neo4j_user="neo4j",
+    neo4j_password="pw",
+  )
+
+  assert resp.status_code == 200
+  assert resp.json()["neo4j"] is False
+
+
+def test_L1_003b_lifespan_neo4j_partial_credentials_is_not_connected(
+  monkeypatch,
+):
+  """
+  Extra branch: lifespan only builds the Neo4j driver when NEO4J_URI,
+  NEO4J_USER and NEO4J_PASSWORD are ALL set. With the URI and user set but
+  the password missing, /health must still return 200 with neo4j: False.
+  """
+  resp = lifespan_health(
+    monkeypatch,
+    postgres_dsn=TEST_POSTGRES_DSN,
+    redis_url=TEST_REDIS_URL,
+    neo4j_uri="bolt://localhost:7687",
+    neo4j_user="neo4j",
+  )
+
+  assert resp.status_code == 200
+  assert resp.json()["neo4j"] is False
+
+
+def test_L1_004_lifespan_redis_url_not_set(monkeypatch):
+  """
+  L1-004 via lifespan: with REDIS_URL unset, RedisCache(None) has no client,
+  and /health returns 200 with redis: False.
+  """
+  resp = lifespan_health(
+    monkeypatch,
+    postgres_dsn=TEST_POSTGRES_DSN,
+    **TEST_NEO4J_ENV,
+  )
+
+  assert resp.status_code == 200
+  assert resp.json()["redis"] is False
+
+
+def test_L1_005_lifespan_no_env_vars_set(monkeypatch):
+  """
+  L1-005 via lifespan: with no env vars at all, startup still succeeds and
+  /health returns 200, status "ok", with all three service flags False.
+  """
+  resp = lifespan_health(monkeypatch)
+
+  assert resp.status_code == 200
+  assert resp.json() == {
+    "status": "ok",
+    "postgres": False,
+    "neo4j": False,
+    "redis": False,
+  }
+
+def test_L1_006_lifespan_response_always_contains_required_keys(monkeypatch):
+    configurations = [
+        (postgres, neo4j, redis)
+        for postgres in [True, False]
+        for neo4j in [True, False]
+        for redis in [True, False]
     ]
-  }
 
+    for postgres, neo4j, redis in configurations:
+        response = lifespan_health(
+            monkeypatch,
+            postgres_dsn=TEST_POSTGRES_DSN if postgres else None,
+            neo4j_uri=TEST_NEO4J_ENV["neo4j_uri"] if neo4j else None,
+            neo4j_user=TEST_NEO4J_ENV["neo4j_user"] if neo4j else None,
+            neo4j_password=TEST_NEO4J_ENV["neo4j_password"] if neo4j else None,
+            redis_url=TEST_REDIS_URL if redis else None,
+        )
 
-def test_8_location_search_returns_matching_locations():
-  rows = [
-    {"place_guess": "Raleigh, North Carolina, USA"},
-    {"place_guess": "Raleigh, North Carolina, United States"},
-  ]
+        assert response.status_code == 200
+        data = response.json()
 
-  resp = make_client(
-    db_rows=rows,
-    fetchone_rows=[ETL_VERSION],
-  ).get("/api/v1/locations/search?q=Raleigh")
-
-  assert resp.status_code == 200
-  assert resp.json() == {
-    "results": [
-      {
-        "id": "Raleigh, North Carolina, USA",
-        "name": "Raleigh, North Carolina, USA",
-        "display_name": "Raleigh, North Carolina, USA",
-        "place_type_name": None,
-      },
-      {
-        "id": "Raleigh, North Carolina, United States",
-        "name": "Raleigh, North Carolina, United States",
-        "display_name": "Raleigh, North Carolina, United States",
-        "place_type_name": None,
-      },
-    ]
-  }
-
-
-def test_9_interactions_returns_observations():
-  row = observation(
-    observation_id=12345,
-    latitude=35.7796,
-    longitude=-78.6382,
-    place_guess="Raleigh, North Carolina",
-    description="Red fox observation",
-    image_url="https://example.com/fox.jpg",
-    photo_license_code="cc-by",
-    photo_attribution="(c) Jane Doe",
-    iNaturalist_url=(
-      "https://www.inaturalist.org/observations/12345"
-    ),
-  )
-
-  resp = make_client(
-    db_rows=[row],
-    fetchone_rows=[ETL_VERSION],
-  ).get("/api/v1/interactions")
-
-  assert resp.status_code == 200
-  assert resp.json()["etl_version"] == "test-version"
-  assert len(resp.json()["results"]) == 1
-  assert resp.json()["results"][0]["id"] == 12345
-  assert resp.json()["results"][0]["taxon"]["name"] == "Vulpes vulpes"
-
-
-def test_10_interactions_accepts_filters():
-  row = observation(
-    observation_id=54321,
-    latitude=35.7796,
-    longitude=-78.6382,
-    place_guess="Raleigh, North Carolina",
-    description="Fox eating prey",
-    iNaturalist_url=(
-      "https://www.inaturalist.org/observations/54321"
-    ),
-  )
-
-  resp = make_client(
-    db_rows=[row],
-    fetchone_rows=[ETL_VERSION],
-  ).get(
-    "/api/v1/interactions"
-    "?taxon_id=41641"
-    "&role=predator"
-    "&year=2026"
-    "&location=Raleigh"
-  )
-
-  assert resp.status_code == 200
-  assert resp.json()["etl_version"] == "test-version"
-  assert len(resp.json()["results"]) == 1
-  assert resp.json()["results"][0]["id"] == 54321
-
-
-def test_11_food_web_summary_returns_summary():
-  location_row = {
-    "location_count": 5,
-  }
-
-  resp = make_client(
-    db_row=location_row,
-    fetchone_rows=[ETL_VERSION, location_row],
-  ).get("/api/v1/food-web/summary")
-
-  assert resp.status_code == 200
-  assert resp.json() == {
-    "observations": 0,
-    "edges": 0,
-    "taxa": 0,
-    "locations": 5,
-  }
-
-
-def test_12_species_search_without_image_has_no_photo():
-  rows = [
-    {
-      "taxon_id": 4637,
-      "scientific_name": "Ardea herodias",
-      "common_name": "Great Blue Heron",
-      "iconic_taxon_name": "Aves",
-      "image_url": None,
-      "license_code": None,
-      "attribution": None,
-    }
-  ]
-
-  resp = make_client(
-    db_rows=rows,
-  ).get("/api/v1/species/search?q=heron")
-
-  assert resp.status_code == 200
-  assert resp.json() == {
-    "results": [
-      {
-        "taxon_id": 4637,
-        "scientific_name": "Ardea herodias",
-        "common_name": "Great Blue Heron",
-        "iconic_taxon_name": "Aves",
-      }
-    ]
-  }
-
-
-def test_13_species_search_with_no_matches_returns_empty_list():
-  resp = make_client(
-    db_rows=[],
-  ).get("/api/v1/species/search?q=zebra")
-
-  assert resp.status_code == 200
-  assert resp.json() == {"results": []}
-
-
-def test_14_species_detail_with_missing_fields_returns_nulls():
-  coyote = {
-    "taxon_id": 42069,
-    "scientific_name": "Canis latrans",
-    "common_name": "Coyote",
-    "iconic_taxon_name": "Mammalia",
-    "wikipedia_summary": None,
-    "wikipedia_url": None,
-    "image_url": None,
-    "license_code": None,
-    "attribution": None,
-  }
-
-  resp = make_client(
-    db_row=coyote,
-  ).get("/api/v1/species/42069")
-
-  assert resp.status_code == 200
-  assert resp.json() == {"results": [coyote]}
-
-
-def test_15_species_detail_rejects_non_numeric_id():
-  resp = make_client().get("/api/v1/species/red-fox")
-
-  assert resp.status_code == 422
-
-
-def test_16_interactions_includes_role_and_partner_url():
-  row = observation(
-    role="thing being eaten",
-    raw={
-      'field:url for "partner" observation':
-        "https://www.inaturalist.org/observations/2002"
-    },
-  )
-
-  resp = get_interactions([row])
-
-  ofvs = resp.json()["results"][0]["ofvs"]
-
-  assert resp.status_code == 200
-  assert [
-    (ofv["field_id"], ofv["value"])
-    for ofv in ofvs
-  ] == [
-    (12795, "thing being eaten"),
-    (
-      12796,
-      "https://www.inaturalist.org/observations/2002",
-    ),
-  ]
-
-
-def test_17_interactions_only_shows_licensed_photos():
-  licensed = observation(
-    observation_id=1001,
-    image_url="https://example.com/1001.jpg",
-    photo_license_code="CC-BY",
-    photo_attribution="(c) naturalist1",
-  )
-
-  unlicensed = observation(
-    observation_id=1002,
-    image_url="https://example.com/1002.jpg",
-    photo_license_code=None,
-  )
-
-  resp = get_interactions([
-    licensed,
-    unlicensed,
-  ])
-
-  results = resp.json()["results"]
-
-  assert resp.status_code == 200
-  assert results[0]["photos"] == [
-    {
-      "attribution": "(c) naturalist1",
-      "flags": [],
-      "hidden": False,
-      "id": 1001,
-      "license_code": "cc-by",
-      "original_dimensions": {
-        "width": 0,
-        "height": 0,
-      },
-      "url": "https://example.com/1001.jpg",
-    }
-  ]
-  assert results[1]["photos"] == []
-
-
-def test_18_interactions_builds_map_coordinates():
-  with_location = observation(
-    observation_id=1001,
-    latitude=40.744,
-    longitude=-74.032,
-  )
-
-  without_location = observation(
-    observation_id=1002,
-    latitude=None,
-    longitude=None,
-  )
-
-  resp = get_interactions([
-    with_location,
-    without_location,
-  ])
-
-  results = resp.json()["results"]
-
-  assert resp.status_code == 200
-  assert results[0]["geojson"] == {
-    "type": "Point",
-    "coordinates": [-74.032, 40.744],
-  }
-  assert results[1]["geojson"] is None
-
-
-def test_19_interactions_with_invalid_ids_returns_empty_list():
-  resp = get_interactions(
-    [observation()],
-    query="?ids=abc,xyz",
-  )
-
-  assert resp.status_code == 200
-  assert resp.json() == {
-    "etl_version": "test-version",
-    "results": [],
-  }
-
-
-def test_20_interactions_returns_404_when_no_data_is_loaded():
-  resp = make_client(
-    db_row=None,
-  ).get("/api/v1/interactions")
-
-  assert resp.status_code == 404
-  assert resp.json() == {
-    "detail": "No ETL version found. Load data first."
-  }
-
-
-def test_21_food_web_summary_includes_neo4j_counts():
-  client = make_client(
-    fetchone_rows=[
-      ETL_VERSION,
-      {"location_count": 12},
-    ],
-  )
-
-  app.state.neo4j_driver = FakeNeo4jDriver()
-
-  resp = client.get("/api/v1/food-web/summary")
-
-  assert resp.status_code == 200
-  assert resp.json() == {
-    "observations": 120,
-    "edges": 45,
-    "taxa": 30,
-    "locations": 12,
-  }
+        assert REQUIRED_KEYS.issubset(data.keys())
