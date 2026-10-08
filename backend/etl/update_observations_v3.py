@@ -475,8 +475,8 @@ def fetch_and_update_observations():
     params = {
         "project_id": "who-eats-whom",
         "quality_grade": "research",
-        "created_d1": "2026-06-12",
-        "created_d2": "2026-06-12",
+        "created_d1": "2026-10-02",
+        "created_d2": "2026-10-02",
         "per_page": 200,
     }
 
