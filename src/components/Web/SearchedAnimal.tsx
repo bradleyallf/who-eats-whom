@@ -7,12 +7,14 @@ interface Props {
   partnerData: Record<string, Observation>
 }
 
-const placeholderSrc = 'https://via.placeholder.com/400x300.png?text=No+Image'
+export const placeholderSrc =
+  'https://via.placeholder.com/400x300.png?text=No+Image'
 
-const getCommonName = (observation?: Observation) =>
+export const getCommonName = (observation?: Observation) =>
   observation?.taxon.preferred_common_name || observation?.taxon.name
 
-const getScientificName = (observation?: Observation) => observation?.taxon.name
+export const getScientificName = (observation?: Observation) =>
+  observation?.taxon.name
 
 export const SearchResultGrid = (props: Props) => {
   const { results, type, partnerData } = props

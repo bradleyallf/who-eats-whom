@@ -36,6 +36,8 @@ npm-debug.log
 yarn-error.log
 testem.log
 /typings
+LOCAL_DEV.md
+dev.sh
 
 # System Files
 .DS_Store
@@ -48,3 +50,5 @@ Thumbs.db
 __pycache__/
 *.pyc
 .env.local
+.venv/
+.dev-backend.log
