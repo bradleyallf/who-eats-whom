@@ -3,7 +3,7 @@ Endpoint tests for the Who Eats Whom backend (FastAPI).
 
 The tests are organized by layer, with one section per layer below:
 
-  Layer 1: Infrastructure & Config (/health,  /api/v1/version, CORS)
+  Layer 1: Infrastructure & Config (/health,  /api/v1/version, CORS, Postgres unavailable (any endpoint))
   (more layers will be added as new sections further down)
 
 Conventions used throughout this file:
@@ -516,3 +516,80 @@ def test_L1_016_cors_custom_origins_replace_defaults(monkeypatch):
     )
  
     assert allow_origin_header(resp) is None
+
+# ---------- Postgres unavailable (503) ----------
+#
+# Every data endpoint starts with get_pg_pool(), which raises
+# HTTPException(503, "Postgres connection is not configured.") when
+# app.state.pg_pool is None. With POSTGRES_DSN unset, lifespan sets it to None.
+
+POSTGRES_NOT_CONFIGURED_DETAIL = "Postgres connection is not configured."
+
+
+def get_with_postgres_unset(monkeypatch, path):
+  """
+  Run the real lifespan with POSTGRES_DSN (and every other service env var)
+  unset, then send GET to the given path.
+
+  Args:
+    monkeypatch: pytest's monkeypatch fixture (undoes patches after the test).
+    path: URL path including any query string, e.g. "/api/v1/species".
+
+  Returns:
+    The Response from GET <path>.
+  """
+  monkeypatch.setattr("backend.main.POSTGRES_DSN", None)
+  monkeypatch.setattr("backend.main.NEO4J_URI", TEST_NEO4J_ENV["neo4j_uri"])
+  monkeypatch.setattr("backend.main.NEO4J_USER", TEST_NEO4J_ENV["neo4j_user"])
+  monkeypatch.setattr("backend.main.NEO4J_PASSWORD", TEST_NEO4J_ENV["neo4j_password"])
+  monkeypatch.setattr("backend.main.REDIS_URL", TEST_REDIS_URL)
+
+  monkeypatch.setattr("backend.main.AsyncConnectionPool", FakeLifespanConnectionPool)
+  monkeypatch.setattr("backend.main.AsyncGraphDatabase", FakeLifespanGraphDatabase)
+
+  with TestClient(app) as client:
+    return client.get(path)
+
+
+def test_L1_017_data_endpoint_returns_503_when_postgres_not_configured(
+  monkeypatch,
+):
+  """
+  L1-017: With POSTGRES_DSN unset, GET /api/v1/species returns 503 and
+  {detail: "Postgres connection is not configured."}.
+  """
+  resp = get_with_postgres_unset(monkeypatch, "/api/v1/species")
+
+  assert resp.status_code == 503
+  assert resp.json() == {"detail": POSTGRES_NOT_CONFIGURED_DETAIL}
+
+
+def test_L1_018_503_is_consistent_across_postgres_dependent_endpoints(
+  monkeypatch,
+):
+  """
+  L1-018: With POSTGRES_DSN unset, each Postgres-dependent endpoint returns
+  503 with the same error message.
+
+  Query strings are included where an endpoint rejects the request before it
+  reaches the Postgres check: /api/v1/predator-prey returns 400 unless a
+  predator or prey id is given, and /api/v1/locations/search returns 422
+  unless q has at least 2 characters.
+  """
+  paths = [
+    "/api/v1/species",
+    "/api/v1/species/search?q=ra",
+    "/api/v1/species/41641",
+    "/api/v1/food-web/summary",
+    "/api/v1/interactions",
+    "/api/v1/predator-prey?predator=41641",
+    "/api/v1/locations/search?q=ra",
+  ]
+
+  for path in paths:
+    resp = get_with_postgres_unset(monkeypatch, path)
+
+    assert resp.status_code == 503, f"{path} returned {resp.status_code}"
+    assert resp.json() == {"detail": POSTGRES_NOT_CONFIGURED_DETAIL}, (
+      f"{path} returned a different error body"
+    )
