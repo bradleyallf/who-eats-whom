@@ -3,7 +3,7 @@ Endpoint tests for the Who Eats Whom backend (FastAPI).
 
 The tests are organized by layer, with one section per layer below:
 
-  Layer 1: Infrastructure & Config (/health)
+  Layer 1: Infrastructure & Config (/health,  /api/v1/version)
   (more layers will be added as new sections further down)
 
 Conventions used throughout this file:
@@ -20,8 +20,11 @@ Conventions used throughout this file:
 Run all tests - python -m pytest backend/tests/ -v
 Run one test - python -m pytest backend/tests/test_endpoints.py::{name of the test} -v
 """
+import importlib
+
 from fastapi.testclient import TestClient
 
+import backend.main as main_module
 from backend.main import app
 
 
@@ -274,3 +277,81 @@ def test_L1_006_lifespan_response_always_contains_required_keys(monkeypatch):
         data = response.json()
 
         assert REQUIRED_KEYS.issubset(data.keys())
+
+# ---------- /api/v1/version ----------
+#
+# backend.main sets APP_VERSION once, at import time:
+#
+#   APP_VERSION = os.getenv("APP_VERSION", "0.1.0")
+#
+# Patching the constant would not test that line (the "fall back to 0.1.0"
+# case would just compare the patched value to itself). So these tests set or
+# unset the real APP_VERSION env var and then reload backend.main, which
+# re-runs the os.getenv line. The module is reloaded again afterwards so
+# later tests see the original configuration.
+ 
+def version_response(monkeypatch, app_version=None):
+  """
+  Call GET /api/v1/version with APP_VERSION set (or unset) in the environment.
+ 
+  Sets or removes the APP_VERSION env var, reloads backend.main so the
+  os.getenv("APP_VERSION", "0.1.0") line runs again, sends the request, and
+  then restores the environment and reloads the module once more so other
+  tests are not affected.
+ 
+  Args:
+    monkeypatch: pytest's monkeypatch fixture (used to set/unset the env var
+      and to undo that afterwards).
+    app_version: value for APP_VERSION, or None to leave it unset.
+ 
+  Returns:
+    The Response from GET /api/v1/version.
+  """
+  if app_version is None:
+    monkeypatch.delenv("APP_VERSION", raising=False)
+  else:
+    monkeypatch.setenv("APP_VERSION", app_version)
+ 
+  importlib.reload(main_module)
+  try:
+    return TestClient(main_module.app).get("/api/v1/version")
+  finally:
+    monkeypatch.undo()
+    importlib.reload(main_module)
+ 
+ 
+def test_L1_007_version_returns_value_from_env_var(monkeypatch):
+  """
+  L1-007: With APP_VERSION=2.0.0, GET /api/v1/version returns 200 and
+  {version: "2.0.0"}.
+  """
+  resp = version_response(monkeypatch, app_version="2.0.0")
+ 
+  assert resp.status_code == 200
+  assert resp.json() == {"version": "2.0.0"}
+ 
+ 
+def test_L1_008_version_falls_back_to_default_when_env_var_unset(monkeypatch):
+  """
+  L1-008: With APP_VERSION unset, GET /api/v1/version returns 200 and the
+  default {version: "0.1.0"}.
+  """
+  resp = version_response(monkeypatch)
+ 
+  assert resp.status_code == 200
+  assert resp.json() == {"version": "0.1.0"}
+ 
+ 
+def test_L1_009_version_is_a_string_not_a_number(monkeypatch):
+  """
+  L1-009: With APP_VERSION=2.0.0, the version field in the JSON body is the
+  string "2.0.0", not the number 2.0.
+  """
+  resp = version_response(monkeypatch, app_version="2.0.0")
+ 
+  version = resp.json()["version"]
+ 
+  assert resp.status_code == 200
+  assert isinstance(version, str)
+  assert version == "2.0.0"
+  assert version != 2.0
