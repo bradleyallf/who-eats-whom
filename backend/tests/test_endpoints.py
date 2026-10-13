@@ -3,7 +3,7 @@ Endpoint tests for the Who Eats Whom backend (FastAPI).
 
 The tests are organized by layer, with one section per layer below:
 
-  Layer 1: Infrastructure & Config (/health,  /api/v1/version)
+  Layer 1: Infrastructure & Config (/health,  /api/v1/version, CORS)
   (more layers will be added as new sections further down)
 
 Conventions used throughout this file:
@@ -355,3 +355,164 @@ def test_L1_009_version_is_a_string_not_a_number(monkeypatch):
   assert isinstance(version, str)
   assert version == "2.0.0"
   assert version != 2.0
+
+# ---------- CORS ----------
+#
+# backend.main builds its list of allowed origins and adds the CORS
+# middleware when the module is imported:
+#
+#   allowed_origins_env = os.getenv("CORS_ALLOW_ORIGINS")
+#   app.add_middleware(CORSMiddleware, allow_origins=allowed_origins, ...)
+#
+# Like APP_VERSION, this is fixed at import time, so these tests set or unset
+# the real CORS_ALLOW_ORIGINS env var, reload backend.main to rebuild the app
+# with the new middleware settings, and restore everything afterwards.
+#
+# A browser-style cross-origin request is simulated by sending an Origin
+# header. CORSMiddleware answers an allowed origin by echoing it back in the
+# Access-Control-Allow-Origin response header, and leaves the header out for a
+# disallowed origin.
+ 
+DEFAULT_CORS_ORIGINS = ["http://localhost:4200", "http://127.0.0.1:4200"]
+ 
+ 
+def cors_response(monkeypatch, origin, cors_origins=None):
+  """
+  Call GET /health with an Origin header, using the given CORS_ALLOW_ORIGINS.
+ 
+  Sets or removes the CORS_ALLOW_ORIGINS env var, reloads backend.main so the
+  app is rebuilt with matching CORS middleware, sets empty service handles on
+  the new app's state (the lifespan is not run, and /health reads them), sends
+  the request, then restores the environment and reloads the module again so
+  other tests are not affected.
+ 
+  Args:
+    monkeypatch: pytest's monkeypatch fixture (used to set/unset the env var
+      and to undo that afterwards).
+    origin: value for the request's Origin header.
+    cors_origins: raw value for CORS_ALLOW_ORIGINS (e.g. "https://a.com,
+      https://b.com"), or None to leave it unset so the defaults apply.
+ 
+  Returns:
+    The Response from GET /health.
+  """
+  if cors_origins is None:
+    monkeypatch.delenv("CORS_ALLOW_ORIGINS", raising=False)
+  else:
+    monkeypatch.setenv("CORS_ALLOW_ORIGINS", cors_origins)
+ 
+  importlib.reload(main_module)
+  try:
+    cors_app = main_module.app
+    cors_app.state.pg_pool = None
+    cors_app.state.neo4j_driver = None
+    cors_app.state.redis_cache = main_module.RedisCache(None)
+    return TestClient(cors_app).get("/health", headers={"Origin": origin})
+  finally:
+    monkeypatch.undo()
+    importlib.reload(main_module)
+ 
+ 
+def allow_origin_header(resp):
+  """
+  Return the Access-Control-Allow-Origin header of a response, or None if the
+  header is absent. (Header names are case-insensitive.)
+  """
+  return resp.headers.get("access-control-allow-origin")
+ 
+ 
+def test_L1_010_cors_allows_default_localhost_origin(monkeypatch):
+  """
+  L1-010: With CORS_ALLOW_ORIGINS unset, a request from the default origin
+  http://localhost:4200 gets that origin echoed in Access-Control-Allow-Origin.
+  """
+  resp = cors_response(monkeypatch, "http://localhost:4200")
+ 
+  assert resp.status_code == 200
+  assert allow_origin_header(resp) == "http://localhost:4200"
+ 
+ 
+def test_L1_011_cors_allows_default_127_0_0_1_origin(monkeypatch):
+  """
+  L1-011: With CORS_ALLOW_ORIGINS unset, a request from the default origin
+  http://127.0.0.1:4200 gets that origin echoed back.
+  """
+  resp = cors_response(monkeypatch, "http://127.0.0.1:4200")
+ 
+  assert resp.status_code == 200
+  assert allow_origin_header(resp) == "http://127.0.0.1:4200"
+ 
+ 
+def test_L1_012_cors_blocks_unlisted_origin(monkeypatch):
+  """
+  L1-012: A request from an origin not in the allowed list (http://evil.com)
+  gets no Access-Control-Allow-Origin header, so a browser would block it.
+  """
+  resp = cors_response(monkeypatch, "http://evil.com")
+ 
+  assert allow_origin_header(resp) is None
+ 
+ 
+def test_L1_013_cors_custom_origin_from_env_var_is_allowed(monkeypatch):
+  """
+  L1-013: With CORS_ALLOW_ORIGINS=https://myapp.com, a request from
+  https://myapp.com gets that origin echoed back.
+  """
+  resp = cors_response(
+    monkeypatch,
+    "https://myapp.com",
+    cors_origins="https://myapp.com",
+  )
+ 
+  assert resp.status_code == 200
+  assert allow_origin_header(resp) == "https://myapp.com"
+ 
+ 
+def test_L1_014_cors_multiple_custom_origins_each_work(monkeypatch):
+  """
+  L1-014: With CORS_ALLOW_ORIGINS=https://a.com,https://b.com, each origin
+  tested on its own gets exactly that origin back (not the other one, and not
+  a combined value).
+  """
+  for origin in ("https://a.com", "https://b.com"):
+    resp = cors_response(
+      monkeypatch,
+      origin,
+      cors_origins="https://a.com,https://b.com",
+    )
+ 
+    assert resp.status_code == 200
+    assert allow_origin_header(resp) == origin
+ 
+ 
+def test_L1_015_cors_whitespace_in_env_var_is_handled(monkeypatch):
+  """
+  L1-015: With CORS_ALLOW_ORIGINS=" https://a.com , https://b.com " (spaces
+  around the entries), the spaces are stripped and both origins still work.
+  """
+  for origin in ("https://a.com", "https://b.com"):
+    resp = cors_response(
+      monkeypatch,
+      origin,
+      cors_origins=" https://a.com , https://b.com ",
+    )
+ 
+    assert resp.status_code == 200
+    assert allow_origin_header(resp) == origin
+ 
+ 
+def test_L1_016_cors_custom_origins_replace_defaults(monkeypatch):
+  """
+  L1-016: Setting CORS_ALLOW_ORIGINS replaces the default list instead of
+  adding to it. With only https://myapp.com configured, a request from the
+  former default http://localhost:4200 gets no Access-Control-Allow-Origin
+  header (and neither does the 127.0.0.1 default).
+  """
+  for default_origin in DEFAULT_CORS_ORIGINS:
+    resp = cors_response(
+      monkeypatch,
+      default_origin,
+      cors_origins="https://myapp.com",
+    )
+ 
+    assert allow_origin_header(resp) is None
