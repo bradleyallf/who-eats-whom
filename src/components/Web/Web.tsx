@@ -385,7 +385,7 @@ export const Web = () => {
       .flatMap((ofv) =>
         Array.from(ofv.value.matchAll(/\/observations\/(\d+)/g)).map(
           (match) => match[1]
-        )
+        ).filter((id) => id !== String(observation.id)) || []
       ) || []
 
   // --------------------- ===
@@ -681,6 +681,7 @@ export const Web = () => {
           if (matches) {
             matches.forEach((match) => {
               const observationId = match.split('/').pop()!
+              if (observationId === String(result.id)) return // ignore self-links
               partnerD[observationId] = result
               observationIds.push(observationId)
             })
