@@ -1,3 +1,8 @@
+import logging
+
+import psycopg
+from fastapi.responses import JSONResponse
+
 import json
 import os
 from contextlib import asynccontextmanager
@@ -241,6 +246,15 @@ app.add_middleware(
   allow_headers=["*"],
 )
 
+logger = logging.getLogger(__name__)
+
+
+@app.exception_handler(psycopg.OperationalError)
+async def postgres_unavailable_handler(request: Request, exc: psycopg.OperationalError):
+  # Raised when the database is unreachable or the pool cannot hand out a
+  # connection (psycopg_pool.PoolTimeout is a subclass).
+  logger.error("Postgres unavailable on %s: %s", request.url.path, exc)
+  return JSONResponse(status_code=503, content={"detail": "Postgres is unavailable."})
 
 async def get_pg_pool(request: Request) -> AsyncConnectionPool:
   pool: Optional[AsyncConnectionPool] = request.app.state.pg_pool

@@ -21,8 +21,14 @@ Conventions used throughout this file:
 Run all tests - python -m pytest backend/tests/ -v
 Run one test - python -m pytest backend/tests/test_endpoints.py::{name of the test} -v
 """
+import psycopg
+import psycopg_pool
+
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
+import pytest
 import importlib
-from datetime import datetime
 
 from fastapi.testclient import TestClient
 
@@ -597,33 +603,61 @@ def test_L1_018_503_is_consistent_across_postgres_dependent_endpoints(
     )
 
 # =========================================================================
-# Layer 2: ETL Version Resolution -- default version (no etl_version param)
+# Layer 2: ETL Version Resolution -- resolve_etl_version_id
 #
-# Every data endpoint calls resolve_etl_version_id(pool, etl_version) first.
-# With no etl_version query parameter it reads every version named in
-# ACTIVE_ETL_VERSIONS (default "local-dev,2026-08-26-api"):
+# Every data endpoint calls resolve_etl_version_id(pool, etl_version) first:
 #
+#   names = [etl_version] if etl_version else ACTIVE_ETL_VERSIONS
 #   SELECT id, version FROM etl_versions WHERE version = ANY(%s) ORDER BY id
 #
-# and returns {"ids": [...], "version": "a+b"} (names joined with "+"). It
+# It returns {"ids": [...], "version": "a+b"} (names joined with "+") and
 # raises 404 "No ETL version found. Load data first." when no rows come back.
-# /api/v1/species is used to observe the result: its response body carries the
-# resolved label in "etl_version".
 #
-# NOTE: the plain-English cases L2-001 and L2-003 describe "latest by
-# loaded_at". The current code no longer does that (that logic is the
-# commented-out block above resolve_etl_version_id), so those two tests check
-# the current ACTIVE_ETL_VERSIONS behaviour instead.
+#   - No etl_version parameter (or an empty one): every version named in
+#     ACTIVE_ETL_VERSIONS is read together. ACTIVE_ETL_VERSIONS is parsed from
+#     the env var of the same name when backend.main is imported
+#     (default "local-dev,2026-08-26-api").
+#   - etl_version=<name>: only that version is read, even if it is not active.
+#     A name that matches no row (unknown, whitespace-only, very long, unicode,
+#     or containing SQL) gives the 404 above.
 #
-# The fake pool below cannot run SQL. It emulates only the etl_versions lookup
-# (filter by the requested names, order by id) and records every query so tests
-# can inspect what the app asked for.
+# /api/v1/species is the endpoint used to observe the result, because its body
+# carries the resolved label in "etl_version". L2-008 also sends the override
+# to interactions, predator-prey, locations/search and food-web/summary. The
+# last two do not return etl_version, so for them the test checks the version
+# name the app asked Postgres for.
+#
+# How the tests are built:
+#   - The fake pool cannot run SQL. It emulates only the etl_versions lookup
+#     (filter by the requested names, order by id) and records every query in
+#     pool.executed, so tests can check what the app asked for. Every other
+#     query returns no rows.
+#   - species_with_etl_versions() runs the real FastAPI lifespan with all
+#     service env vars unset, installs the fake pool, and sends one request.
+#   - Tests that check env-var parsing (L2-001c) use
+#     species_with_active_versions_env(), which sets the real env var and
+#     reloads backend.main. All other tests replace the already-parsed
+#     ACTIVE_ETL_VERSIONS list directly.
+#
+# Differences from the plain-English cases:
+#   - The code selects versions by name (ACTIVE_ETL_VERSIONS), not by latest
+#     loaded_at, so L2-001, L2-006 and L2-010 are adapted to "active version".
+#   - L2-003 and L2-011 are not tested (loaded_at is never read).
+#   - L2-013: a database failure after startup (connection refused, pool
+#     timeout) is turned into 503 "Postgres is unavailable." by an exception
+#     handler in main.py. Before that handler existed it was an unhandled 500.
+#   - L2-014 can only show that the value reaches Postgres as a bound
+#     parameter; the fake cannot show that a real database is safe.
+#   - L2-017 shows that resolution keeps no shared state between interleaved
+#     requests; it cannot show database-level races.
+#   - Extra cases not in the plain-English list: L2-001b, L2-001c, L2-002b.
 #
 # Fake class names are prefixed with "FakeEtl" to distinguish them from the
 # Layer 1 fakes.
 # =========================================================================
 
 NO_ETL_VERSION_DETAIL = "No ETL version found. Load data first."
+POSTGRES_UNAVAILABLE_DETAIL = "Postgres is unavailable."
 
 
 class FakeEtlRedisCache:
@@ -659,6 +693,7 @@ class FakeEtlCursor:
     return False
 
   async def execute(self, sql, params=None):
+    await asyncio.sleep(0)  # yield to the event loop so concurrent requests interleave
     self.pool.executed.append((sql, params))
     if "FROM etl_versions" in sql:
       names = params[0]
@@ -710,10 +745,25 @@ class FakeEtlConnectionPool:
   async def close(self):
     pass
 
+class FakeEtlDownPool(FakeEtlConnectionPool):
+  """Pool whose database has gone away: asking for a connection raises."""
 
-def etl_version_row(version_id, version, loaded_at=None):
+  def __init__(self, error):
+    super().__init__([])
+    self.error = error
+
+  def connection(self):
+    raise self.error
+
+
+def etl_version_row(version_id, version, loaded_at=None, row_count=0):
   """Build one row of the fake etl_versions table."""
-  return {"id": version_id, "version": version, "loaded_at": loaded_at}
+  return {
+    "id": version_id,
+    "version": version,
+    "loaded_at": loaded_at,
+    "row_count": row_count,
+  }
 
 
 def etl_lookups(pool):
@@ -723,17 +773,22 @@ def etl_lookups(pool):
   ]
 
 
-def species_with_etl_versions(monkeypatch, etl_versions, active_versions=None):
+def species_with_etl_versions(
+  monkeypatch, etl_versions, active_versions=None, params=None, path="/api/v1/species",
+):
   """
   Run the real lifespan with every service env var unset, swap in a fake
   Postgres pool holding the given etl_versions rows, and send
-  GET /api/v1/species with no etl_version parameter.
+  GET /api/v1/species.
 
   Args:
     monkeypatch: pytest's monkeypatch fixture (undoes patches after the test).
     etl_versions: list of rows made with etl_version_row().
     active_versions: list to use for ACTIVE_ETL_VERSIONS, or None to keep the
       module default.
+    params: query-string parameters, e.g. {"etl_version": "v1"}, or None to send
+      no etl_version parameter.
+    path: endpoint to request (default /api/v1/species).
 
   Returns:
     (response, pool): the Response from GET /api/v1/species and the fake pool,
@@ -752,78 +807,7 @@ def species_with_etl_versions(monkeypatch, etl_versions, active_versions=None):
     # Lifespan has run (pg_pool is None); install the fakes before the request.
     app.state.pg_pool = pool
     app.state.redis_cache = FakeEtlRedisCache()
-    return client.get("/api/v1/species"), pool
-
-
-def test_L2_001_no_param_uses_active_etl_versions(monkeypatch):
-  """
-  L2-001 (adapted): with two versions loaded and only "v-new" in
-  ACTIVE_ETL_VERSIONS, GET /api/v1/species with no etl_version parameter
-  returns 200 with etl_version "v-new", and the app asked Postgres for exactly
-  the active names (the unlisted "v-old" is ignored).
-  """
-  etl_versions = [
-    etl_version_row(1, "v-old", datetime(2026, 1, 1)),
-    etl_version_row(2, "v-new", datetime(2026, 2, 1)),
-  ]
-
-  resp, pool = species_with_etl_versions(
-    monkeypatch, etl_versions, active_versions=["v-new"]
-  )
-
-  assert resp.status_code == 200
-  assert resp.json()["etl_version"] == "v-new"
-  assert [params for _, params in etl_lookups(pool)] == [(["v-new"],)]
-
-
-def test_L2_001b_all_active_versions_are_read_together(monkeypatch):
-  """
-  Extra branch: with both versions in ACTIVE_ETL_VERSIONS, the response label
-  joins them with "+" and both ids are passed on to the species query.
-  """
-  etl_versions = [
-    etl_version_row(1, "v-old", datetime(2026, 1, 1)),
-    etl_version_row(2, "v-new", datetime(2026, 2, 1)),
-  ]
-
-  resp, pool = species_with_etl_versions(
-    monkeypatch, etl_versions, active_versions=["v-old", "v-new"]
-  )
-
-  species_queries = [
-    params for sql, params in pool.executed if "FROM species" in sql
-  ]
-
-  assert resp.status_code == 200
-  assert resp.json()["etl_version"] == "v-old+v-new"
-  assert species_queries[0][0] == [1, 2]
-
-
-def test_L2_002_no_etl_versions_returns_404(monkeypatch):
-  """
-  L2-002: with the etl_versions table empty, GET /api/v1/species returns 404
-  and {detail: "No ETL version found. Load data first."}.
-  """
-  resp, _ = species_with_etl_versions(monkeypatch, [])
-
-  assert resp.status_code == 404
-  assert resp.json() == {"detail": NO_ETL_VERSION_DETAIL}
-
-
-def test_L2_002b_versions_exist_but_none_are_active_returns_404(monkeypatch):
-  """
-  Extra branch: versions are loaded but none of them is named in
-  ACTIVE_ETL_VERSIONS. The lookup finds no rows, so the endpoint returns the
-  same 404 (even though the table is not empty).
-  """
-  etl_versions = [etl_version_row(1, "v-unlisted", datetime(2026, 1, 1))]
-
-  resp, _ = species_with_etl_versions(
-    monkeypatch, etl_versions, active_versions=["v-listed"]
-  )
-
-  assert resp.status_code == 404
-  assert resp.json() == {"detail": NO_ETL_VERSION_DETAIL}
+    return client.get(path, params=params), pool
 
 
 def species_with_active_versions_env(monkeypatch, etl_versions, env_value=None):
@@ -854,9 +838,58 @@ def species_with_active_versions_env(monkeypatch, etl_versions, env_value=None):
     importlib.reload(main_module)
 
 
-def test_L2_003_default_active_versions_when_env_var_unset(monkeypatch):
+# ---------- Feature: Default version (no etl_version param) ----------
+# L2-003 (latest version by loaded_at, not id) and L2-011 (identical loaded_at)
+# are not tested: the current code never reads loaded_at.
+
+
+def test_L2_001_returns_active_etl_version_when_none_specified(monkeypatch):
   """
-  L2-003 (current behaviour): with ACTIVE_ETL_VERSIONS unset, the default
+  L2-001 (adapted): with two versions loaded and only "v-new" in
+  ACTIVE_ETL_VERSIONS, GET /api/v1/species with no etl_version parameter
+  returns 200 with etl_version "v-new", and the app asked Postgres for exactly
+  the active names (the unlisted "v-old" is ignored).
+  """
+  etl_versions = [
+    etl_version_row(1, "v-old"),
+    etl_version_row(2, "v-new"),
+  ]
+
+  resp, pool = species_with_etl_versions(
+    monkeypatch, etl_versions, active_versions=["v-new"]
+  )
+
+  assert resp.status_code == 200
+  assert resp.json()["etl_version"] == "v-new"
+  assert [params for _, params in etl_lookups(pool)] == [(["v-new"],)]
+
+
+def test_L2_001b_all_active_versions_are_read_together(monkeypatch):
+  """
+  Extra branch: with both versions in ACTIVE_ETL_VERSIONS, the response label
+  joins them with "+" and both ids are passed on to the species query.
+  """
+  etl_versions = [
+    etl_version_row(1, "v-old"),
+    etl_version_row(2, "v-new"),
+  ]
+
+  resp, pool = species_with_etl_versions(
+    monkeypatch, etl_versions, active_versions=["v-old", "v-new"]
+  )
+
+  species_queries = [
+    params for sql, params in pool.executed if "FROM species" in sql
+  ]
+
+  assert resp.status_code == 200
+  assert resp.json()["etl_version"] == "v-old+v-new"
+  assert species_queries[0][0] == [1, 2]
+
+
+def test_L2_001c_default_active_versions_when_env_var_unset(monkeypatch):
+  """
+  Extra branch: with ACTIVE_ETL_VERSIONS unset, the default
   "local-dev,2026-08-26-api" is used. A request with no etl_version parameter
   asks Postgres for those two names, and the label joins them with "+".
   """
@@ -872,3 +905,310 @@ def test_L2_003_default_active_versions_when_env_var_unset(monkeypatch):
   assert [params for _, params in etl_lookups(pool)] == [
     (["local-dev", "2026-08-26-api"],)
   ]
+
+
+def test_L2_002_returns_404_when_no_etl_versions_exist(monkeypatch):
+  """
+  L2-002: with the etl_versions table empty, GET /api/v1/species returns 404
+  and {detail: "No ETL version found. Load data first."}.
+  """
+  resp, _ = species_with_etl_versions(monkeypatch, [])
+
+  assert resp.status_code == 404
+  assert resp.json() == {"detail": NO_ETL_VERSION_DETAIL}
+
+# ---------- Feature: Explicit version override (etl_version param) ----------
+def test_L2_004_explicit_valid_version_returns_data_for_that_version(monkeypatch):
+  """
+  L2-004: with v1 and v2 loaded, GET /api/v1/species?etl_version=v1 returns
+  etl_version "v1" and queries only v1's id, even though v2 is the active
+  version.
+  """
+  etl_versions = [
+    etl_version_row(1, "v1"),
+    etl_version_row(2, "v2"),
+  ]
+
+  resp, pool = species_with_etl_versions(
+    monkeypatch,
+    etl_versions,
+    active_versions=["v2"],
+    params={"etl_version": "v1"},
+  )
+
+  species_queries = [
+    params for sql, params in pool.executed if "FROM species" in sql
+  ]
+
+  assert resp.status_code == 200
+  assert resp.json()["etl_version"] == "v1"
+  assert [params for _, params in etl_lookups(pool)] == [(["v1"],)]
+  assert species_queries[0][0] == [1]
+
+
+def test_L2_005_explicit_version_that_does_not_exist_returns_404(monkeypatch):
+  """
+  L2-005: GET /api/v1/species?etl_version=does-not-exist returns 404 and
+  {detail: "No ETL version found. Load data first."}.
+  """
+  etl_versions = [etl_version_row(1, "v1")]
+
+  resp, _ = species_with_etl_versions(
+    monkeypatch,
+    etl_versions,
+    active_versions=["v1"],
+    params={"etl_version": "does-not-exist"},
+  )
+
+  assert resp.status_code == 404
+  assert resp.json() == {"detail": NO_ETL_VERSION_DETAIL}
+
+
+def test_L2_006_empty_string_etl_version_falls_back_to_default(monkeypatch):
+  """
+  L2-006: GET /api/v1/species?etl_version= (empty string) is treated as "no
+  override": the active versions are used and the response is 200, not 404.
+  """
+  etl_versions = [etl_version_row(1, "v-new")]
+
+  resp, pool = species_with_etl_versions(
+    monkeypatch,
+    etl_versions,
+    active_versions=["v-new"],
+    params={"etl_version": ""},
+  )
+
+  assert resp.status_code == 200
+  assert resp.json()["etl_version"] == "v-new"
+  assert [params for _, params in etl_lookups(pool)] == [(["v-new"],)]
+
+
+def test_L2_007_whitespace_etl_version_returns_404_not_500(monkeypatch):
+  """
+  L2-007: GET /api/v1/species?etl_version=%20%20%20 (spaces only) is not empty,
+  so it is looked up as a literal version name, matches nothing, and returns the
+  404. It does not fall back to the active versions and does not crash.
+  """
+  etl_versions = [etl_version_row(1, "v-new")]
+
+  resp, pool = species_with_etl_versions(
+    monkeypatch,
+    etl_versions,
+    active_versions=["v-new"],
+    params={"etl_version": "   "},
+  )
+
+  assert resp.status_code == 404
+  assert resp.json() == {"detail": NO_ETL_VERSION_DETAIL}
+  assert [params for _, params in etl_lookups(pool)] == [(["   "],)]
+
+# One row per endpoint: (path, extra query params, does the body include
+# etl_version?). locations/search and food-web/summary do not return the field,
+# so for them the test relies on the etl_versions lookup instead.
+ETL_VERSION_ENDPOINTS = [
+  ("/api/v1/species", {}, True),
+  ("/api/v1/interactions", {}, True),
+  ("/api/v1/predator-prey", {"predator": 1}, True),
+  ("/api/v1/locations/search", {"q": "Ra"}, False),
+  ("/api/v1/food-web/summary", {}, False),
+]
+
+
+@pytest.mark.parametrize(
+  "path, extra_params, returns_version", ETL_VERSION_ENDPOINTS
+)
+def test_L2_008_etl_version_param_works_on_every_endpoint(
+  monkeypatch, path, extra_params, returns_version
+):
+  """
+  L2-008: ?etl_version=v1 is honoured by every endpoint that accepts it. Each
+  returns 200 (never 500), and the app asked Postgres for exactly "v1" even
+  though "v2" is the active version. Endpoints that include etl_version in
+  their body must report "v1".
+  """
+  etl_versions = [
+    etl_version_row(1, "v1"),
+    etl_version_row(2, "v2"),
+  ]
+
+  resp, pool = species_with_etl_versions(
+    monkeypatch,
+    etl_versions,
+    active_versions=["v2"],
+    params={**extra_params, "etl_version": "v1"},
+    path=path,
+  )
+
+  assert resp.status_code == 200
+  assert [params for _, params in etl_lookups(pool)] == [(["v1"],)]
+  if returns_version:
+    assert resp.json()["etl_version"] == "v1"
+
+
+
+# Feature: ETL version consistency across endpoints
+
+def test_L2_009_response_includes_etl_version_field(monkeypatch):
+  """
+  L2-009: GET /api/v1/species with the default version returns a body that
+  contains an etl_version field equal to the version that was used.
+  """
+  etl_versions = [etl_version_row(1, "v-new")]
+
+  resp, _ = species_with_etl_versions(
+    monkeypatch, etl_versions, active_versions=["v-new"]
+  )
+
+  assert resp.status_code == 200
+  assert "etl_version" in resp.json()
+  assert resp.json()["etl_version"] == "v-new"
+
+
+def test_L2_010_only_one_etl_version_exists_returns_it(monkeypatch):
+  """
+  L2-010: with exactly one version loaded (and active), GET /api/v1/species
+  returns 200 with that version.
+  """
+  etl_versions = [etl_version_row(1, "v-only")]
+
+  resp, _ = species_with_etl_versions(
+    monkeypatch, etl_versions, active_versions=["v-only"]
+  )
+
+  assert resp.status_code == 200
+  assert resp.json()["etl_version"] == "v-only"
+
+def test_L2_012_version_with_zero_row_count_still_resolves(monkeypatch):
+  """
+  L2-012: a version whose row_count is 0 still resolves. The lookup never reads
+  row_count, so GET /api/v1/species returns 200 with empty results, not 404.
+  """
+  etl_versions = [etl_version_row(1, "v-empty", row_count=0)]
+
+  resp, _ = species_with_etl_versions(
+    monkeypatch, etl_versions, active_versions=["v-empty"]
+  )
+
+  assert resp.status_code == 200
+  assert resp.json()["etl_version"] == "v-empty"
+  assert resp.json()["results"] == []
+
+@pytest.mark.parametrize(
+  "error",
+  [
+    psycopg.OperationalError("connection refused"),
+    psycopg_pool.PoolTimeout("couldn't get a connection after 30.00 sec"),
+  ],
+  ids=["operational-error", "pool-timeout"],
+)
+def test_L2_013_postgres_down_after_startup_returns_503(monkeypatch, error):
+  """
+  L2-013: the app starts normally, then Postgres goes away. GET /api/v1/species
+  returns 503 {detail: "Postgres is unavailable."}, not an unhandled 500. Both
+  failures the pool can raise are covered: the database refusing the connection
+  and the pool timing out waiting for one.
+  """
+  monkeypatch.setattr("backend.main.POSTGRES_DSN", None)
+  monkeypatch.setattr("backend.main.NEO4J_URI", None)
+  monkeypatch.setattr("backend.main.NEO4J_USER", None)
+  monkeypatch.setattr("backend.main.NEO4J_PASSWORD", None)
+  monkeypatch.setattr("backend.main.REDIS_URL", None)
+
+  with TestClient(app) as client:
+    # Startup finished normally; now the database "goes down".
+    app.state.pg_pool = FakeEtlDownPool(error)
+    app.state.redis_cache = FakeEtlRedisCache()
+    resp = client.get("/api/v1/species")
+
+  assert resp.status_code == 503
+  assert resp.json() == {"detail": POSTGRES_UNAVAILABLE_DETAIL}
+
+def test_L2_014_special_characters_in_version_are_passed_as_a_parameter(monkeypatch):
+  """
+  L2-014: a version string containing SQL (v1'; DROP TABLE etl_versions;--)
+  returns 404. The string reaches Postgres only as a bound parameter, never
+  inside the SQL text, and the etl_versions rows are untouched.
+  """
+  etl_versions = [etl_version_row(1, "v1")]
+  injection = "v1'; DROP TABLE etl_versions;--"
+
+  resp, pool = species_with_etl_versions(
+    monkeypatch,
+    etl_versions,
+    active_versions=["v1"],
+    params={"etl_version": injection},
+  )
+
+  assert resp.status_code == 404
+  assert resp.json() == {"detail": NO_ETL_VERSION_DETAIL}
+  assert [params for _, params in etl_lookups(pool)] == [([injection],)]
+  assert all(injection not in sql for sql, _ in pool.executed)
+  assert pool.etl_versions == etl_versions
+
+
+def test_L2_015_very_long_version_string_returns_404(monkeypatch):
+  """
+  L2-015: a 500-character etl_version returns 404 and does not crash.
+  """
+  etl_versions = [etl_version_row(1, "v1")]
+  long_version = "v" * 500
+
+  resp, pool = species_with_etl_versions(
+    monkeypatch,
+    etl_versions,
+    active_versions=["v1"],
+    params={"etl_version": long_version},
+  )
+
+  assert resp.status_code == 404
+  assert resp.json() == {"detail": NO_ETL_VERSION_DETAIL}
+  assert [params for _, params in etl_lookups(pool)] == [([long_version],)]
+
+
+def test_L2_016_unicode_version_string_returns_404(monkeypatch):
+  """
+  L2-016: an etl_version with unicode characters (版本1) returns 404 and does
+  not crash; the exact string reaches the lookup.
+  """
+  etl_versions = [etl_version_row(1, "v1")]
+
+  resp, pool = species_with_etl_versions(
+    monkeypatch,
+    etl_versions,
+    active_versions=["v1"],
+    params={"etl_version": "版本1"},
+  )
+
+  assert resp.status_code == 404
+  assert resp.json() == {"detail": NO_ETL_VERSION_DETAIL}
+  assert [params for _, params in etl_lookups(pool)] == [(["版本1"],)]
+
+def test_L2_017_concurrent_requests_resolve_same_version(monkeypatch):
+  """
+  L2-017: 10 simultaneous requests to /api/v1/species with no etl_version
+  parameter all return 200 with the same etl_version. Each request does its
+  own etl_versions lookup (the fake cache never stores anything), and the
+  fake cursor yields to the event loop so the requests really interleave.
+  """
+  monkeypatch.setattr("backend.main.POSTGRES_DSN", None)
+  monkeypatch.setattr("backend.main.NEO4J_URI", None)
+  monkeypatch.setattr("backend.main.NEO4J_USER", None)
+  monkeypatch.setattr("backend.main.NEO4J_PASSWORD", None)
+  monkeypatch.setattr("backend.main.REDIS_URL", None)
+  monkeypatch.setattr("backend.main.ACTIVE_ETL_VERSIONS", ["v-new"])
+
+  pool = FakeEtlConnectionPool([
+    etl_version_row(1, "v-old"),
+    etl_version_row(2, "v-new"),
+  ])
+  with TestClient(app) as client:
+    app.state.pg_pool = pool
+    app.state.redis_cache = FakeEtlRedisCache()
+    with ThreadPoolExecutor(max_workers=10) as executor:
+      responses = list(
+        executor.map(lambda _: client.get("/api/v1/species"), range(10))
+      )
+
+  assert [r.status_code for r in responses] == [200] * 10
+  assert {r.json()["etl_version"] for r in responses} == {"v-new"}
+  assert [params for _, params in etl_lookups(pool)] == [(["v-new"],)] * 10
