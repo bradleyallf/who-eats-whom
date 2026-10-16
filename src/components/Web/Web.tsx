@@ -1730,60 +1730,59 @@ export const Web = () => {
             </div>
           </div>
         ) : (
-          <>
-            {selectedThumbnail && (
-              <div className="flex flex-row gap-2">
-                <div className="relative shrink-0">
-                  <img
-                    className={`rounded transition-[width,height,border-radius] duration-300 ease-out w-14 h-14 sm:w-18 sm:h-18 md:w-24 md:h-24 rounded`}
-                    src={selectedThumbnail}
-                    alt=""
-                  />
-                  {taxonLicenseCode && (
-                    <div className="absolute top-0 right-0 group">
-                      <button
-                        type="button"
-                        onClick={(evt) => {
-                          evt.preventDefault()
-                          evt.stopPropagation()
-                          setIsTaxonAttributionOpen((prev) => !prev)
-                        }}
-                        aria-expanded={isTaxonAttributionOpen}
-                        aria-label="Toggle image attribution"
-                        className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-slate-900 text-[9px] font-semibold border border-black hover:bg-slate-100"
-                      >
-                        CC
-                      </button>
+          selectedThumbnail && (
+            <div className="flex flex-row gap-2">
+              <div className="relative shrink-0">
+                <img
+                  className={`block rounded transition-[width,height,border-radius] duration-300 ease-out w-14 h-14 sm:w-18 sm:h-18 md:w-24 md:h-24 rounded`}
+                  src={selectedThumbnail}
+                  alt=""
+                />
+                {taxonLicenseCode && (
+                  <div className="absolute bottom-0 right-0 group">
+                    <button
+                      type="button"
+                      onClick={(evt) => {
+                        evt.preventDefault()
+                        evt.stopPropagation()
+                        setIsTaxonAttributionOpen((prev) => !prev)
+                      }}
+                      aria-expanded={isTaxonAttributionOpen}
+                      aria-label="Toggle image attribution"
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-sm rounded-tl-md bg-white text-slate-900 text-[9px] font-semibold ring-1 ring-black/60 hover:bg-white/60"
+                    >
+                      CC
+                    </button>
 
-                      {isTaxonAttributionOpen && (
-                        <div className="absolute top-full right-0 mt-1 z-10 w-48 rounded border border-slate-300 bg-white px-2 py-1 text-[10px] leading-tight text-slate-700 shadow-md">
-                          {photographerName ||
-                            'No attribution available for this image.'}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {(taxonDesc || taxonWikiUrl) && (
-                  <p className="max-w-prose text-sm md:text-md line-clamp-3">
-                    {taxonDescPreview}{' '}
-                    {taxonWikiUrl && (
-                      <a
-                        href={taxonWikiUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-blue-600 underline hover:text-blue-800"
-                      >
-                        (Wikipedia)
-                      </a>
+                    {isTaxonAttributionOpen && (
+                      <div className="absolute bottom-full right-0 mb-1 z-10 w-48 rounded border border-slate-300 bg-white px-2 py-1 text-[10px] leading-tight text-slate-700 shadow-md">
+                        {'Photo taken by ' +
+                          (photographerName ||
+                            'No attribution available for this image.')}
+                      </div>
                     )}
-                  </p>
+                  </div>
                 )}
               </div>
-            )}
-          </>
+
+              {(taxonDesc || taxonWikiUrl) && (
+                <p className="max-w-prose text-sm md:text-md line-clamp-3">
+                  {taxonDescPreview}{' '}
+                  {taxonWikiUrl && (
+                    <a
+                      href={taxonWikiUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-blue-600 underline hover:text-blue-800"
+                    >
+                      (Wikipedia)
+                    </a>
+                  )}
+                </p>
+              )}
+            </div>
+          )
         )}
       </div>
       {shouldDisplayResults && !isAdvancedSearchOpen && (
