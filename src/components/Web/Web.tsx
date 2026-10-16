@@ -18,7 +18,6 @@ import {
 import { apiClient } from '../../utils'
 
 import { SearchResultGrid } from './SearchedAnimal'
-import { SearchResultSpeciesGrid } from './SpeciesGrid'
 import { SearchResultGraph } from './SearchResultGraph'
 import { Observation, Ofv } from './types'
 import { Dropdown, Suggestion, titleCase } from './Dropdown'
@@ -175,6 +174,8 @@ interface TaxonSuggestion {
     url?: string
     small_url?: string
     square_url?: string
+    license_code?: string | null
+    attribution?: string | null
   }
 }
 
@@ -209,6 +210,9 @@ export const Web = () => {
   const [isTaxonMetaLoading, setIsTaxonMetaLoading] = useState(false)
   const [taxonDesc, setTaxonDesc] = useState<string | null>()
   const [taxonWikiUrl, setTaxonWikiUrl] = useState<string>('')
+  const [taxonLicenseCode, setTaxonLicenseCode] = useState<string>('')
+  const [taxonAttribution, setTaxonAttribution] = useState<string>('')
+  const [isTaxonAttributionOpen, setIsTaxonAttributionOpen] = useState(false)
 
   // State representing the updated amount of results from API on each year update
   // Added to handle year adjustments to properly display 0 results
@@ -262,9 +266,6 @@ export const Web = () => {
   const [selectedView, setSelectedView] = useState<
     'grid' | 'graph' | 'network' | 'map' | null
   >(null)
-  const [gridSubView, setGridSubView] = useState<'observations' | 'species'>(
-    'observations'
-  )
 
   const locationDropdownRef = useRef<HTMLDivElement | null>(null)
   const speciesInputReady = useMemo(
@@ -381,10 +382,11 @@ export const Web = () => {
           typeof ofv.value === 'string' &&
           ofv.value.includes('/observations/')
       )
-      .flatMap((ofv) =>
-        Array.from(ofv.value.matchAll(/\/observations\/(\d+)/g)).map(
-          (match) => match[1]
-        )
+      .flatMap(
+        (ofv) =>
+          Array.from(ofv.value.matchAll(/\/observations\/(\d+)/g))
+            .map((match) => match[1])
+            .filter((id) => id !== String(observation.id)) || []
       ) || []
 
   // --------------------- ===
@@ -503,14 +505,11 @@ export const Web = () => {
               ?.some((partnerId) => researchPartnerIds.has(partnerId))
         )
 
-        if (!mostRecentWithResearchPartner?.created_at) return
+        if (!mostRecentWithResearchPartner?.observed_on) return
 
-        // Anchor to noon local so the UTC timestamp doesn't render as the previous day.
         const date = new Date(
-          `${mostRecentWithResearchPartner.created_at.slice(0, 10)}T12:00:00`
+          `${mostRecentWithResearchPartner.observed_on}T12:00:00`
         )
-        if (Number.isNaN(date.getTime())) return
-
         const readable = date.toLocaleDateString('en-US', {
           year: 'numeric',
           month: 'long',
@@ -686,6 +685,7 @@ export const Web = () => {
           if (matches) {
             matches.forEach((match) => {
               const observationId = match.split('/').pop()!
+              if (observationId === String(result.id)) return // ignore self-links
               partnerD[observationId] = result
               observationIds.push(observationId)
             })
@@ -775,6 +775,9 @@ export const Web = () => {
     if (!selectedTaxonId) {
       setTaxonDesc('')
       setTaxonWikiUrl('')
+      setTaxonLicenseCode('')
+      setTaxonAttribution('')
+      setIsTaxonAttributionOpen(false)
       setIsTaxonMetaLoading(false)
       return
     }
@@ -786,10 +789,14 @@ export const Web = () => {
         const species = d.data.results?.[0]
         setTaxonDesc(species?.wikipedia_summary || '')
         setTaxonWikiUrl(species?.wikipedia_url || '')
+        setTaxonLicenseCode(species?.license_code || '')
+        setTaxonAttribution(species?.attribution || '')
       })
       .catch(() => {
         setTaxonDesc('')
         setTaxonWikiUrl('')
+        setTaxonLicenseCode('')
+        setTaxonAttribution('')
       })
       .finally(() => {
         setIsTaxonMetaLoading(false)
@@ -1117,7 +1124,18 @@ export const Web = () => {
     [search, suggestionLookup]
   )
 
-  const filteredResults = shouldDisplayResults ? eatenByData || [] : []
+  // Every view shows only partner observations that are linked to a searched
+  // observation and have a photo, so counts, CSV and all four views agree.
+  const filteredResults = useMemo(
+    () =>
+      shouldDisplayResults
+        ? (eatenByData || []).filter(
+            (observation) =>
+              !!partnerData[observation.id] && !!observation.photos?.[0]?.url
+          )
+        : [],
+    [shouldDisplayResults, eatenByData, partnerData]
+  )
 
   const hasResults = filteredResults.length > 0 && updatedSearchLength > 0
   const isResultsLoading = isSearchLoading || isPartnerLoading
@@ -1251,53 +1269,25 @@ export const Web = () => {
   }, [taxonDesc, taxonDescPreviewMaxLength])
 
   const searchSummary = shouldDisplayResults ? (
-    <span className="flex flex-wrap items-center justify-center gap-x-2 text-xs leading-tight text-slate-600 font-bold sm:justify-start md:text-sm">
+    <span className="text-xs leading-tight text-slate-600 font-bold md:text-sm">
       {isResultsLoading ? (
         <span>Loading results...</span>
       ) : (
         <>
-          {(
-            [
-              {
-                key: 'observations',
-                count: updatedSearchLength === 0 ? 0 : filteredResults.length,
-                label: 'Observations',
-              },
-              {
-                key: 'species',
-                count: updatedSearchLength === 0 ? 0 : totalSpecies,
-                label: 'Unique Species',
-              },
-            ] as const
-          ).map(({ key, count, label }) => (
-            <button
-              key={key}
-              type="button"
-              disabled={!hasResults}
-              aria-pressed={selectedView === 'grid' && gridSubView === key}
-              onClick={() => {
-                setGridSubView(key)
-                setSelectedView('grid')
-              }}
-              className={`rounded border px-1.5 py-0.5 text-[11px] transition-colors sm:rounded-md sm:px-2 sm:py-1 sm:text-xs md:text-sm ${
-                selectedView === 'grid' && gridSubView === key
-                  ? 'border-slate-900 bg-slate-900 text-white'
-                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-              } ${!hasResults ? 'cursor-not-allowed opacity-70' : ''}`}
-            >
-              {count} {label}
-            </button>
-          ))}
-          {activeAdvancedFiltersLabel && (
-            <span className="text-xs font-normal text-slate-600 md:text-sm">
-              {activeAdvancedFiltersLabel}
-            </span>
-          )}
+          <span>
+            {filteredResults.length} Observations, {totalSpecies} Unique Species{' '}
+            {activeAdvancedFiltersLabel && (
+              <span className="text-xs text-slate-600 md:text-sm">
+                {activeAdvancedFiltersLabel}
+              </span>
+            )}
+          </span>
+
           {!aggregatedCounterparts.length ? null : (
             <button
               type="button"
               onClick={downloadCsv}
-              className="font-medium text-slate-800 underline underline-offset-2 hover:text-black"
+              className="ml-3 font-medium text-slate-800 underline underline-offset-2 hover:text-black"
             >
               Download CSV
             </button>
@@ -1306,6 +1296,10 @@ export const Web = () => {
       )}
     </span>
   ) : null
+
+  const photographerName = taxonAttribution
+    ?.replace(/^\(c\)\s*/, '')
+    .split(',')[0]
 
   // --------------------- ===
   //  RENDER
@@ -1512,9 +1506,7 @@ export const Web = () => {
               >
                 {isResolvingPlace ? 'Loading...' : 'Go'}
               </button>
-              <div className="flex justify-center sm:hidden">
-                {searchSummary}
-              </div>
+              <div className="items-center sm:hidden">{searchSummary}</div>
             </form>
           </div>
 
@@ -1706,25 +1698,56 @@ export const Web = () => {
           </div>
         ) : (
           <>
-            {selectedThumbnail && taxonDesc && taxonWikiUrl && (
+            {selectedThumbnail && (
               <div className="flex flex-row gap-2">
-                <img
-                  className={`rounded transition-[width,height,border-radius] duration-300 ease-out w-14 h-14 sm:w-18 sm:h-18 md:w-24 md:h-24 rounded`}
-                  src={selectedThumbnail}
-                  alt=""
-                />
-                <p className="max-w-prose text-sm md:text-md line-clamp-3">
-                  {taxonDescPreview}{' '}
-                  <a
-                    href={taxonWikiUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-blue-600 underline hover:text-blue-800"
-                  >
-                    (Wikipedia)
-                  </a>
-                </p>
+                <div className="relative shrink-0">
+                  <img
+                    className={`rounded transition-[width,height,border-radius] duration-300 ease-out w-14 h-14 sm:w-18 sm:h-18 md:w-24 md:h-24 rounded`}
+                    src={selectedThumbnail}
+                    alt=""
+                  />
+                  {taxonLicenseCode && (
+                    <div className="absolute top-0 right-0 group">
+                      <button
+                        type="button"
+                        onClick={(evt) => {
+                          evt.preventDefault()
+                          evt.stopPropagation()
+                          setIsTaxonAttributionOpen((prev) => !prev)
+                        }}
+                        aria-expanded={isTaxonAttributionOpen}
+                        aria-label="Toggle image attribution"
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-slate-900 text-[9px] font-semibold border border-black hover:bg-slate-100"
+                      >
+                        CC
+                      </button>
+
+                      {isTaxonAttributionOpen && (
+                        <div className="absolute top-full right-0 mt-1 z-10 w-48 rounded border border-slate-300 bg-white px-2 py-1 text-[10px] leading-tight text-slate-700 shadow-md">
+                          {photographerName ||
+                            'No attribution available for this image.'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {(taxonDesc || taxonWikiUrl) && (
+                  <p className="max-w-prose text-sm md:text-md line-clamp-3">
+                    {taxonDescPreview}{' '}
+                    {taxonWikiUrl && (
+                      <a
+                        href={taxonWikiUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-blue-600 underline hover:text-blue-800"
+                      >
+                        (Wikipedia)
+                      </a>
+                    )}
+                  </p>
+                )}
               </div>
             )}
           </>
@@ -1807,20 +1830,13 @@ export const Web = () => {
             </div>
           ) : hasResults ? (
             <>
-              {selectedView === 'grid' &&
-                (gridSubView === 'species' ? (
-                  <SearchResultSpeciesGrid
-                    results={filteredResults}
-                    partnerData={partnerData}
-                    type={type}
-                  />
-                ) : (
-                  <SearchResultGrid
-                    results={filteredResults}
-                    partnerData={partnerData}
-                    type={type}
-                  />
-                ))}
+              {selectedView === 'grid' && (
+                <SearchResultGrid
+                  results={filteredResults}
+                  partnerData={partnerData}
+                  type={type}
+                />
+              )}
               {selectedView === 'graph' && (
                 <SearchResultGraph
                   results={filteredResults}

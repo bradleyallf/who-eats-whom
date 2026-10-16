@@ -1,43 +1,39 @@
 import { useEffect, useState } from 'react';
+import { apiClient } from '../../utils';
 
 interface StatsSummary {
-  observations: number
-  edges: number
-  taxa: number
-  locations: number
+  observations: number;
+  edges: number;
+  taxa: number;
+  locations: number;
 }
 
 export const InteractiveFoodWeb = () => {
   const src = `${import.meta.env.BASE_URL}predator_prey.html`;
-  const statsUrl = `${import.meta.env.BASE_URL}predator_prey_stats.json`;
 
   const [stats, setStats] = useState<StatsSummary | null>(null);
   const [hasError, setHasError] = useState(false);
 
+  // Added this block of code to call the food-web/summary endpoint instead of displaying the summary statistics from the static file - Shriya
+
   useEffect(() => {
-    let isMounted = true;
-    fetch(statsUrl)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('Failed to load stats');
-        }
-        return response.json();
-      })
-      .then((data: StatsSummary) => {
-        if (isMounted) {
-          setStats(data);
-        }
+    let mounted = true;
+
+    apiClient
+      .get('/v1/food-web/summary')
+      .then((res) => {
+        if (!mounted) return;
+        setStats(res.data);
       })
       .catch(() => {
-        if (isMounted) {
-          setHasError(true);
-        }
+        if (!mounted) return;
+        setHasError(true);
       });
 
     return () => {
-      isMounted = false;
+      mounted = false;
     };
-  }, [statsUrl]);
+  }, []);
 
   const metrics = [
     {
@@ -49,7 +45,11 @@ export const InteractiveFoodWeb = () => {
       value: stats?.taxa,
     },
     {
-      label: 'Countries',
+      label: '# of Edges',
+      value: stats?.edges,
+    },
+    {
+      label: 'Locations',
       value: stats?.locations,
     },
   ];
@@ -60,7 +60,9 @@ export const InteractiveFoodWeb = () => {
         {metrics.map(({ label, value }) => (
           <div key={label} className="p-4 bg-white rounded-lg shadow text-center">
             <p className="text-3xl font-bold">
-              {value !== undefined && value !== null ? value.toLocaleString() : '—'}
+              {value !== undefined && value !== null
+                ? value.toLocaleString()
+                : '—'}
             </p>
             <p className="text-sm text-gray-600">{label}</p>
           </div>

@@ -21,9 +21,21 @@ CREATE TABLE IF NOT EXISTS species (
   order_name TEXT,
   family_name TEXT,
   genus_name TEXT,
+  wikipedia_summary TEXT,
+  wikipedia_url TEXT,
+  image_url TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- New columns to store wikipedia_summary, wikipedia_url and image_url for a specie pulled from iNaturalist
+ALTER TABLE species ADD COLUMN IF NOT EXISTS wikipedia_summary TEXT;
+ALTER TABLE species ADD COLUMN IF NOT EXISTS wikipedia_url TEXT;
+ALTER TABLE species ADD COLUMN IF NOT EXISTS image_url TEXT;
+
+-- Columns to hold the license_code and attribution for the above image
+ALTER TABLE species ADD COLUMN IF NOT EXISTS license_code TEXT;
+ALTER TABLE species ADD COLUMN IF NOT EXISTS attribution TEXT;
 
 CREATE TABLE IF NOT EXISTS observations (
   observation_id BIGINT PRIMARY KEY,
@@ -41,6 +53,16 @@ CREATE TABLE IF NOT EXISTS observations (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- New columns for observations image_url, license_code and attribution pulled from iNaturalist
+ALTER TABLE observations ADD COLUMN image_url TEXT;
+ALTER TABLE observations ADD COLUMN IF NOT EXISTS photo_license_code TEXT;
+ALTER TABLE observations ADD COLUMN IF NOT EXISTS photo_attribution TEXT;
+
+-- Columns to keep track when the above fields are pulled from iNaturalist
+ALTER TABLE observations ADD COLUMN IF NOT EXISTS inat_pulled_at TIMESTAMPTZ;
+ALTER TABLE observations ADD COLUMN IF NOT EXISTS inat_api_call TEXT;
+
 
 CREATE TABLE IF NOT EXISTS predator_prey_aggregates (
   predator_taxon_id BIGINT NOT NULL REFERENCES species (taxon_id),

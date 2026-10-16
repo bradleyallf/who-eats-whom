@@ -46,6 +46,15 @@ def canonical_role(raw_value: Optional[str]) -> str:
   normalized = (raw_value or "").strip().lower()
   return ROLE_MAPPING.get(normalized, "eater")
 
+def is_confirmed_eater(raw_value: Optional[str]) -> bool:
+  """Strict check used only when building predator/prey pairs. Unlike
+  canonical_role(), a blank or unrecognized role field is NOT treated as an
+  eater here -- it's excluded entirely, matching the old CSV-based Neo4j
+  loader's behavior of dropping anything that isn't a recognized eater
+  value, so missing data can't silently fabricate an interaction."""
+  normalized = (raw_value or "").strip().lower()
+  return ROLE_MAPPING.get(normalized) == "eater"
+
 
 def parse_timestamp(value: str | None) -> Optional[datetime]:
   if not value:
@@ -95,6 +104,11 @@ def upsert_species(cur: psycopg.Cursor, rows: List[Dict[str, Any]]) -> None:
       row.get("taxon_order_name"),
       row.get("taxon_family_name"),
       row.get("taxon_genus_name"),
+      None, # wikipedia_summary
+      None, # wikipedia_url
+      None, # image_url
+      None, # license
+      None, # attribution
     )
 
   cur.executemany(
@@ -110,8 +124,13 @@ def upsert_species(cur: psycopg.Cursor, rows: List[Dict[str, Any]]) -> None:
       class_name,
       order_name,
       family_name,
-      genus_name
-    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+      genus_name,
+      wikipedia_summary,
+      wikipedia_url,
+      image_url,
+      license_code,
+      attribution
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     ON CONFLICT (taxon_id) DO UPDATE SET
       scientific_name = EXCLUDED.scientific_name,
       common_name = EXCLUDED.common_name,
@@ -133,8 +152,8 @@ def build_interactions(rows: List[Dict[str, Any]]) -> List[Tuple[Dict[str, Any],
   lookup = {row.get("url", "").strip(): row for row in rows if row.get("url")}
   interactions = []
   for row in rows:
-    role = canonical_role(row.get(ROLE_FIELD))
-    if role != "eater":
+    role = is_confirmed_eater(row.get(ROLE_FIELD))
+    if not role:
       continue
     partner_url = (row.get(PARTNER_URL_FIELD) or "").strip()
     if not partner_url:
@@ -168,6 +187,11 @@ def insert_observations(cur: psycopg.Cursor, rows: List[Dict[str, Any]], etl_ver
         url,
         etl_version_id,
         json.dumps(row),
+        None,  # image_url - populated by photo backfill
+        None,  # photo_license_code - populated by photo backfill
+        None,  # photo_attribution - populated by photo backfill
+        None,  # inat_pulled_at - populated by photo/API backfill
+        None,  # inat_api_call - populated by photo/API backfill
       )
     )
 
@@ -185,8 +209,13 @@ def insert_observations(cur: psycopg.Cursor, rows: List[Dict[str, Any]], etl_ver
       taxon_id,
       iNaturalist_url,
       etl_version_id,
-      raw
-    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+      raw,
+      image_url,
+      photo_license_code,
+      photo_attribution,
+      inat_pulled_at,
+      inat_api_call
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     ON CONFLICT (observation_id) DO UPDATE SET
       observed_at = EXCLUDED.observed_at,
       latitude = EXCLUDED.latitude,

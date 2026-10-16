@@ -1,3 +1,8 @@
+import logging
+
+import psycopg
+from fastapi.responses import JSONResponse
+
 import json
 import os
 from contextlib import asynccontextmanager
@@ -31,6 +36,12 @@ NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
 REDIS_URL = os.getenv("REDIS_URL")
 DEFAULT_CACHE_TTL = int(os.getenv("API_CACHE_TTL", "300"))
 
+# Versions the site reads together. Override with env var ACTIVE_ETL_VERSIONS.
+ACTIVE_ETL_VERSIONS = [
+  v.strip()
+  for v in os.getenv("ACTIVE_ETL_VERSIONS", "local-dev,2026-08-26-api").split(",")
+  if v.strip()
+]
 
 def parse_raw_payload(raw: Any) -> Dict[str, Any]:
   if not raw:
@@ -48,17 +59,44 @@ def canonical_role_value(value: Optional[str]) -> str:
   return ROLE_MAPPING.get(normalized, "eater")
 
 
-def build_photo_payload(raw: Dict[str, Any], observation_id: int) -> List[Dict[str, Any]]:
-  image_url = raw.get("image_url") or raw.get("photo_url")
+# Licenses that may be displayed. Edit this set to change what counts as "allowed".
+ALLOWED_LICENSES = {
+  "cc0",
+  "cc-by",
+  "cc-by-nc",
+  "cc-by-sa",
+  "cc-by-nd",
+  "cc-by-nc-sa",
+  "cc-by-nc-nd",
+  "pd",
+  "gfdl"
+}
+
+
+def is_allowed_license(code: Optional[str]) -> bool:
+  return (code or "").strip().lower() in ALLOWED_LICENSES
+
+
+def build_photo_payload(
+  image_url: Optional[str],
+  observation_id: int,
+  photo_license_code: Optional[str],
+  photo_attribution: Optional[str],
+  observation_license_code: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+  # Both the photo's license and the observation's license must be allowed.
   if not image_url:
     return []
+  if not (is_allowed_license(photo_license_code) and is_allowed_license(observation_license_code)):
+    return []
+
   return [
     {
-      "attribution": raw.get("user_name") or "",
+      "attribution": photo_attribution or "",
       "flags": [],
       "hidden": False,
       "id": observation_id,
-      "license_code": (raw.get("license") or "").lower(),
+      "license_code": photo_license_code.strip().lower(),
       "original_dimensions": {"width": 0, "height": 0},
       "url": image_url,
     }
@@ -118,10 +156,15 @@ def build_observation_payload(row: Dict[str, Any]) -> Dict[str, Any]:
   if latitude is not None and longitude is not None:
     geojson = {"type": "Point", "coordinates": [longitude, latitude]}
 
+  image_url = row.get("image_url")
+
   return {
     "community_taxon_id": taxon_id,
     "created_at": raw.get("created_at") or (row.get("observed_at").isoformat() if row.get("observed_at") else None),
     "description": row.get("description"),
+    "observed_on": raw.get("observed_on") or (
+      row["observed_at"].date().isoformat() if row.get("observed_at") else None
+    ),
     "ofvs": ofvs,
     "taxon": {
       "id": taxon_id,
@@ -130,17 +173,23 @@ def build_observation_payload(row: Dict[str, Any]) -> Dict[str, Any]:
       "iconic_taxon_name": row.get("iconic_taxon_name"),
       "default_photo": {
         "id": taxon_id,
-        "square_url": raw.get("image_url"),
-        "url": raw.get("image_url"),
-        "medium_url": raw.get("image_url"),
-        "small_url": raw.get("image_url"),
+        "square_url": image_url,
+        "url": image_url,
+        "medium_url": image_url,
+        "small_url": image_url,
       }
-      if raw.get("image_url")
+      if image_url
       else None,
     },
     "id": observation_id,
     "uri": row.get("inaturalist_url") or row.get("iNaturalist_url") or raw.get("url"),
-    "photos": build_photo_payload(raw, observation_id),
+    "photos": build_photo_payload(
+      image_url,
+      observation_id,
+      row.get("photo_license_code"),
+      row.get("photo_attribution"),
+      raw.get("license") or raw.get("license_code"),
+    ),
     "uuid": raw.get("uuid") or str(observation_id),
     "place_country_name": raw.get("place_country_name"),
     "place_state_name": raw.get("place_state_name"),
@@ -197,6 +246,15 @@ app.add_middleware(
   allow_headers=["*"],
 )
 
+logger = logging.getLogger(__name__)
+
+
+@app.exception_handler(psycopg.OperationalError)
+async def postgres_unavailable_handler(request: Request, exc: psycopg.OperationalError):
+  # Raised when the database is unreachable or the pool cannot hand out a
+  # connection (psycopg_pool.PoolTimeout is a subclass).
+  logger.error("Postgres unavailable on %s: %s", request.url.path, exc)
+  return JSONResponse(status_code=503, content={"detail": "Postgres is unavailable."})
 
 async def get_pg_pool(request: Request) -> AsyncConnectionPool:
   pool: Optional[AsyncConnectionPool] = request.app.state.pg_pool
@@ -208,32 +266,48 @@ async def get_pg_pool(request: Request) -> AsyncConnectionPool:
 async def get_redis_cache(request: Request) -> RedisCache:
   return request.app.state.redis_cache
 
-
 async def resolve_etl_version_id(pool: AsyncConnectionPool, requested_version: Optional[str]) -> Dict[str, Any]:
+  """Return {"ids": [...], "version": "a+b"}. With no override, reads all ACTIVE_ETL_VERSIONS."""
+  names = [requested_version] if requested_version else ACTIVE_ETL_VERSIONS
   async with pool.connection() as conn:
     async with conn.cursor(row_factory=dict_row) as cur:
-      if requested_version:
-        await cur.execute(
-          """
-          SELECT id, version, loaded_at
-          FROM etl_versions
-          WHERE version = %s
-          """,
-          (requested_version,),
-        )
-      else:
-        await cur.execute(
-          """
-          SELECT id, version, loaded_at
-          FROM etl_versions
-          ORDER BY loaded_at DESC
-          LIMIT 1
-          """
-        )
-      row = await cur.fetchone()
-      if not row:
+      await cur.execute(
+        "SELECT id, version FROM etl_versions WHERE version = ANY(%s) ORDER BY id",
+        (names,),
+      )
+      rows = await cur.fetchall()
+      if not rows:
         raise HTTPException(status_code=404, detail="No ETL version found. Load data first.")
-      return dict(row)
+      return {
+        "ids": [r["id"] for r in rows],
+        "version": "+".join(r["version"] for r in rows),
+      }
+
+# async def resolve_etl_version_id(pool: AsyncConnectionPool, requested_version: Optional[str]) -> Dict[str, Any]:
+#   async with pool.connection() as conn:
+#     async with conn.cursor(row_factory=dict_row) as cur:
+#       if requested_version:
+#         await cur.execute(
+#           """
+#           SELECT id, version, loaded_at
+#           FROM etl_versions
+#           WHERE version = %s
+#           """,
+#           (requested_version,),
+#         )
+#       else:
+#         await cur.execute(
+#           """
+#           SELECT id, version, loaded_at
+#           FROM etl_versions
+#           ORDER BY loaded_at DESC
+#           LIMIT 1
+#           """
+#         )
+#       row = await cur.fetchone()
+#       if not row:
+#         raise HTTPException(status_code=404, detail="No ETL version found. Load data first.")
+#       return dict(row)
 
 
 async def resolve_taxon_condition(
@@ -349,12 +423,12 @@ async def list_species(
             COALESCE(SUM(CASE WHEN p.prey_taxon_id = s.taxon_id THEN p.interaction_count END), 0) AS prey_events
           FROM species AS s
           LEFT JOIN predator_prey_aggregates AS p
-            ON p.etl_version_id = %s AND (p.predator_taxon_id = s.taxon_id OR p.prey_taxon_id = s.taxon_id)
+            ON p.etl_version_id = ANY(%s) AND (p.predator_taxon_id = s.taxon_id OR p.prey_taxon_id = s.taxon_id)
           GROUP BY s.taxon_id, s.scientific_name, s.common_name
           ORDER BY predator_events DESC
           LIMIT %s OFFSET %s
           """,
-          (version_info["id"], limit, offset),
+          (version_info["ids"], limit, offset),
         )
         rows = await cur.fetchall()
         records = [dict(row) for row in rows]
@@ -384,14 +458,9 @@ async def search_species(
           s.scientific_name,
           s.common_name,
           s.iconic_taxon_name,
-          (
-            SELECT o.raw->>'image_url'
-            FROM observations o
-            WHERE o.taxon_id = s.taxon_id
-              AND o.raw->>'image_url' IS NOT NULL
-              AND o.raw->>'image_url' <> ''
-            LIMIT 1
-          ) AS image_url
+          s.image_url,
+          s.license_code,
+          s.attribution
         FROM species s
         WHERE s.scientific_name ILIKE %s OR s.common_name ILIKE %s
         ORDER BY COALESCE(s.common_name, s.scientific_name)
@@ -404,8 +473,16 @@ async def search_species(
       for row in rows:
         r = dict(row)
         image_url = r.pop("image_url", None)
+        license_code = r.pop("license_code", None)
+        attribution = r.pop("attribution", None)
         if image_url:
-          r["default_photo"] = {"square_url": image_url, "small_url": image_url, "url": image_url}
+          r["default_photo"] = {
+            "square_url": image_url,
+            "small_url": image_url,
+            "url": image_url,
+            "license_code": license_code,
+            "attribution": attribution,
+          }
         results.append(r)
       return {"results": results}
 
@@ -417,7 +494,16 @@ async def species_detail(request: Request, taxon_id: int):
     async with conn.cursor(row_factory=dict_row) as cur:
       await cur.execute(
         """
-        SELECT taxon_id, scientific_name, common_name, iconic_taxon_name
+        SELECT 
+          taxon_id,
+          scientific_name,
+          common_name,
+          iconic_taxon_name,
+          wikipedia_summary,
+          wikipedia_url,
+          image_url,
+          license_code,
+          attribution
         FROM species
         WHERE taxon_id = %s
         """,
@@ -434,11 +520,95 @@ async def species_detail(request: Request, taxon_id: int):
         "scientific_name": row["scientific_name"],
         "common_name": row["common_name"],
         "iconic_taxon_name": row["iconic_taxon_name"],
-        "wikipedia_summary": None,
+        "wikipedia_summary": row["wikipedia_summary"],
+        "wikipedia_url": row["wikipedia_url"],
+        "image_url": row["image_url"],
+        "license_code": row["license_code"],
+        "attribution": row["attribution"],
       }
     ]
   }
 
+# Old food-web/summary endpoint
+
+# @app.get("/api/v1/food-web/summary", tags=["data"])
+# async def food_web_summary(
+#   request: Request,
+#   etl_version: Optional[str] = Query(None, description="Override ETL version; defaults to latest."),
+# ):
+#   pool = await get_pg_pool(request)
+#   cache = await get_redis_cache(request)
+#   version_info = await resolve_etl_version_id(pool, etl_version)
+#   cache_key = f"v{version_info['version']}:summary"
+
+#   async def producer():
+#     async with pool.connection() as conn:
+#       async with conn.cursor(row_factory=dict_row) as cur:
+#         await cur.execute("SELECT COUNT(*) AS total_species FROM species")
+#         total_species = (await cur.fetchone())["total_species"]
+
+#         await cur.execute(
+#           """
+#           SELECT
+#             COUNT(DISTINCT predator_taxon_id) AS predator_species,
+#             COUNT(DISTINCT prey_taxon_id) AS prey_species,
+#             COALESCE(SUM(interaction_count), 0) AS total_interactions
+#           FROM predator_prey_aggregates
+#           WHERE etl_version_id = %s
+#           """,
+#           (version_info["id"],),
+#         )
+#         aggregates = dict(await cur.fetchone())
+
+#     neo4j_metrics: Dict[str, Any] = {}
+#     driver: Optional[AsyncGraphDatabase] = request.app.state.neo4j_driver
+#     if driver:
+#       async with driver.session() as session:
+#         nodes_result = await session.run(
+#           "MATCH (s:Species {etl_version: $etl}) RETURN count(s) AS species",
+#           etl=version_info["version"],
+#         )
+#         edges_result = await session.run(
+#           "MATCH ()-[r:EATS {etl_version: $etl}]->() RETURN count(r) AS relationships",
+#           etl=version_info["version"],
+#         )
+#         top_predators_result = await session.run(
+#           """
+#           MATCH (pred:Species)-[r:EATS {etl_version:$etl}]->(:Species)
+#           RETURN pred.taxon_id AS taxon_id,
+#                  pred.scientific_name AS scientific_name,
+#                  SUM(r.interaction_count) AS total_interactions
+#           ORDER BY total_interactions DESC
+#           LIMIT 5
+#           """,
+#           etl=version_info["version"],
+#         )
+#         nodes_record = await nodes_result.single()
+#         edges_record = await edges_result.single()
+#         top_predators = await top_predators_result.data()
+#         neo4j_metrics = {
+#           "species_nodes": nodes_record["species"] if nodes_record else 0,
+#           "edges": edges_record["relationships"] if edges_record else 0,
+#           "top_predators": top_predators,
+#         }
+
+#     return {
+#       "etl_version": version_info["version"],
+#       "postgres": {
+#         "total_species": total_species,
+#         "predator_species": aggregates["predator_species"],
+#         "prey_species": aggregates["prey_species"],
+#         "total_interactions": aggregates["total_interactions"],
+#       },
+#       "neo4j": neo4j_metrics or None,
+#     }
+
+#   return await cached_response(cache, cache_key, producer)
+
+
+
+
+# New food-web/summary endpoint to get the summary statistics which appear at the top of the page in the Interactive food web - BY Shriya
 
 @app.get("/api/v1/food-web/summary", tags=["data"])
 async def food_web_summary(
@@ -448,68 +618,58 @@ async def food_web_summary(
   pool = await get_pg_pool(request)
   cache = await get_redis_cache(request)
   version_info = await resolve_etl_version_id(pool, etl_version)
-  cache_key = f"v{version_info['version']}:summary"
+  cache_key = f"v{version_info['version']}:summary:flat"
 
   async def producer():
+    # Locations come from Postgres since Neo4j has no location data
     async with pool.connection() as conn:
       async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute("SELECT COUNT(*) AS total_species FROM species")
-        total_species = (await cur.fetchone())["total_species"]
-
         await cur.execute(
           """
-          SELECT
-            COUNT(DISTINCT predator_taxon_id) AS predator_species,
-            COUNT(DISTINCT prey_taxon_id) AS prey_species,
-            COALESCE(SUM(interaction_count), 0) AS total_interactions
-          FROM predator_prey_aggregates
-          WHERE etl_version_id = %s
+          SELECT COUNT(DISTINCT raw->>'place_country_name') AS location_count
+          FROM observations
+          WHERE etl_version_id = ANY(%s)
+            AND quality_grade = 'research'
+            AND raw->>'place_country_name' IS NOT NULL
+            AND raw->>'place_country_name' <> ''
           """,
-          (version_info["id"],),
+          (version_info["ids"],),
         )
-        aggregates = dict(await cur.fetchone())
+        location_row = await cur.fetchone()
+        locations = location_row["location_count"] if location_row else 0
 
-    neo4j_metrics: Dict[str, Any] = {}
+    # Observations, edges, taxa come from Neo4j via Cypher
     driver: Optional[AsyncGraphDatabase] = request.app.state.neo4j_driver
+    observations = 0
+    edges = 0
+    taxa = 0
     if driver:
       async with driver.session() as session:
-        nodes_result = await session.run(
-          "MATCH (s:Species {etl_version: $etl}) RETURN count(s) AS species",
-          etl=version_info["version"],
+        obs_result = await session.run(
+          "MATCH ()-[r:EATS]->() RETURN sum(r.interaction_count) AS observations"
         )
+        obs_record = await obs_result.single()
+        observations = obs_record["observations"] if obs_record and obs_record["observations"] else 0
+
         edges_result = await session.run(
-          "MATCH ()-[r:EATS {etl_version: $etl}]->() RETURN count(r) AS relationships",
-          etl=version_info["version"],
+          "MATCH ()-[r:EATS]->() RETURN count(r) AS edges"
         )
-        top_predators_result = await session.run(
-          """
-          MATCH (pred:Species)-[r:EATS {etl_version:$etl}]->(:Species)
-          RETURN pred.taxon_id AS taxon_id,
-                 pred.scientific_name AS scientific_name,
-                 SUM(r.interaction_count) AS total_interactions
-          ORDER BY total_interactions DESC
-          LIMIT 5
-          """,
-          etl=version_info["version"],
-        )
-        nodes_record = await nodes_result.single()
         edges_record = await edges_result.single()
-        top_predators = await top_predators_result.data()
-        neo4j_metrics = {
-          "species_nodes": nodes_record["species"] if nodes_record else 0,
-          "edges": edges_record["relationships"] if edges_record else 0,
-          "top_predators": top_predators,
-        }
+        edges = edges_record["edges"] if edges_record else 0
+
+        taxa_result = await session.run(
+          """
+          MATCH (n) RETURN count(DISTINCT n) AS taxa;
+          """
+        )
+        taxa_record = await taxa_result.single()
+        taxa = taxa_record["taxa"] if taxa_record else 0
 
     return {
-      "etl_version": version_info["version"],
-      "postgres": {
-        "total_species": total_species,
-        "predator_species": aggregates["predator_species"],
-        "prey_species": aggregates["prey_species"],
-        "total_interactions": aggregates["total_interactions"],
-      },
-      "neo4j": neo4j_metrics or None,
+      "observations": observations,
+      "edges": edges,
+      "taxa": taxa,
+      "locations": locations,
     }
 
   return await cached_response(cache, cache_key, producer)
@@ -529,8 +689,10 @@ async def predator_prey_edges(
   pool = await get_pg_pool(request)
   version_info = await resolve_etl_version_id(pool, etl_version)
 
-  conditions = ["agg.etl_version_id = %s"]
-  params: list[Any] = [version_info["id"]]
+#   conditions = ["agg.etl_version_id = %s"]
+#   params: list[Any] = [version_info["id"]]
+  conditions = ["agg.etl_version_id = ANY(%s)"]
+  params: list[Any] = [version_info["ids"]]
   if predator_taxon_id is not None:
     conditions.append("agg.predator_taxon_id = %s")
     params.append(predator_taxon_id)
@@ -546,19 +708,36 @@ async def predator_prey_edges(
       await cur.execute(
         f"""
         SELECT
-          agg.predator_taxon_id,
-          predator.scientific_name AS predator_scientific_name,
-          agg.prey_taxon_id,
-          prey.scientific_name AS prey_scientific_name,
-          agg.interaction_count,
-          agg.latest_observation_at
+        agg.predator_taxon_id,
+        predator.scientific_name AS predator_scientific_name,
+        agg.prey_taxon_id,
+        prey.scientific_name AS prey_scientific_name,
+        SUM(agg.interaction_count)::int AS interaction_count,
+        MAX(agg.latest_observation_at) AS latest_observation_at
         FROM predator_prey_aggregates AS agg
         JOIN species AS predator ON predator.taxon_id = agg.predator_taxon_id
         JOIN species AS prey ON prey.taxon_id = agg.prey_taxon_id
         WHERE {where_clause}
-        ORDER BY agg.interaction_count DESC
+        GROUP BY agg.predator_taxon_id, predator.scientific_name,
+                agg.prey_taxon_id, prey.scientific_name
+        ORDER BY SUM(agg.interaction_count) DESC
         LIMIT %s
         """,
+        # f"""
+        # SELECT
+        #   agg.predator_taxon_id,
+        #   predator.scientific_name AS predator_scientific_name,
+        #   agg.prey_taxon_id,
+        #   prey.scientific_name AS prey_scientific_name,
+        #   agg.interaction_count,
+        #   agg.latest_observation_at
+        # FROM predator_prey_aggregates AS agg
+        # JOIN species AS predator ON predator.taxon_id = agg.predator_taxon_id
+        # JOIN species AS prey ON prey.taxon_id = agg.prey_taxon_id
+        # WHERE {where_clause}
+        # ORDER BY agg.interaction_count DESC
+        # LIMIT %s
+        # """,
         params,
       )
       fetched_rows = await cur.fetchall()
@@ -586,14 +765,14 @@ async def location_search(
         """
         SELECT DISTINCT place_guess
         FROM observations
-        WHERE etl_version_id = %s
+        WHERE etl_version_id = ANY(%s)
           AND place_guess IS NOT NULL
           AND place_guess <> ''
           AND place_guess ILIKE %s
         ORDER BY place_guess
         LIMIT %s
         """,
-        (version_info["id"], like_value, limit),
+        (version_info["ids"], like_value, limit),
       )
       rows = await cur.fetchall()
       results = []
@@ -627,8 +806,8 @@ async def interaction_search(
 ):
   pool = await get_pg_pool(request)
   version_info = await resolve_etl_version_id(pool, etl_version)
-  conditions: List[str] = ["o.etl_version_id = %s"]
-  params: List[Any] = [version_info["id"]]
+  conditions: List[str] = ["o.etl_version_id = ANY(%s)"]
+  params: List[Any] = [version_info["ids"]]
 
   if ids:
     id_list = [int(i) for i in ids.split(",") if i.strip().isdigit()]
@@ -676,6 +855,9 @@ async def interaction_search(
           o.iNaturalist_url,
           o.etl_version_id,
           o.raw,
+          o.image_url,
+          o.photo_license_code,
+          o.photo_attribution,
           s.scientific_name,
           s.common_name,
           s.iconic_taxon_name
@@ -704,3 +886,5 @@ if __name__ == "__main__":
     port=8000,
     reload=os.getenv("RELOAD", "false").lower() == "true",
   )
+
+
