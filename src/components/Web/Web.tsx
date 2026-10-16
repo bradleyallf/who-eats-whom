@@ -18,6 +18,7 @@ import {
 import { apiClient } from '../../utils'
 
 import { SearchResultGrid } from './SearchedAnimal'
+import { SearchResultSpeciesGrid } from './SpeciesGrid'
 import { SearchResultGraph } from './SearchResultGraph'
 import { Observation, Ofv } from './types'
 import { Dropdown, Suggestion, titleCase } from './Dropdown'
@@ -266,6 +267,9 @@ export const Web = () => {
   const [selectedView, setSelectedView] = useState<
     'grid' | 'graph' | 'network' | 'map' | null
   >(null)
+  const [gridSubView, setGridSubView] = useState<'observations' | 'species'>(
+    'observations'
+  )
 
   const locationDropdownRef = useRef<HTMLDivElement | null>(null)
   const speciesInputReady = useMemo(
@@ -1269,25 +1273,54 @@ export const Web = () => {
   }, [taxonDesc, taxonDescPreviewMaxLength])
 
   const searchSummary = shouldDisplayResults ? (
-    <span className="text-xs leading-tight text-slate-600 font-bold md:text-sm">
+    <span className="flex flex-wrap items-center justify-center gap-x-2 text-xs leading-tight text-slate-600 font-bold sm:justify-start md:text-sm">
       {isResultsLoading ? (
         <span>Loading results...</span>
       ) : (
         <>
-          <span>
-            {filteredResults.length} Observations, {totalSpecies} Unique Species{' '}
-            {activeAdvancedFiltersLabel && (
-              <span className="text-xs text-slate-600 md:text-sm">
-                {activeAdvancedFiltersLabel}
-              </span>
-            )}
-          </span>
+          {(
+            [
+              {
+                key: 'observations',
+                count: filteredResults.length,
+                label: 'Observations',
+              },
+              {
+                key: 'species',
+                count: totalSpecies,
+                label: 'Unique Species',
+              },
+            ] as const
+          ).map(({ key, count, label }) => (
+            <button
+              key={key}
+              type="button"
+              disabled={!hasResults}
+              aria-pressed={selectedView === 'grid' && gridSubView === key}
+              onClick={() => {
+                setGridSubView(key)
+                setSelectedView('grid')
+              }}
+              className={`rounded border px-1.5 py-0.5 text-[11px] transition-colors sm:rounded-md sm:px-2 sm:py-1 sm:text-xs md:text-sm ${
+                selectedView === 'grid' && gridSubView === key
+                  ? 'border-slate-900 bg-slate-900 text-white'
+                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+              } ${!hasResults ? 'cursor-not-allowed opacity-70' : ''}`}
+            >
+              {count} {label}
+            </button>
+          ))}
+          {activeAdvancedFiltersLabel && (
+            <span className="text-xs font-normal text-slate-600 md:text-sm">
+              {activeAdvancedFiltersLabel}
+            </span>
+          )}
 
           {!aggregatedCounterparts.length ? null : (
             <button
               type="button"
               onClick={downloadCsv}
-              className="ml-3 font-medium text-slate-800 underline underline-offset-2 hover:text-black"
+              className="font-medium text-slate-800 underline underline-offset-2 hover:text-black"
             >
               Download CSV
             </button>
@@ -1830,13 +1863,20 @@ export const Web = () => {
             </div>
           ) : hasResults ? (
             <>
-              {selectedView === 'grid' && (
-                <SearchResultGrid
-                  results={filteredResults}
-                  partnerData={partnerData}
-                  type={type}
-                />
-              )}
+              {selectedView === 'grid' &&
+                (gridSubView === 'species' ? (
+                  <SearchResultSpeciesGrid
+                    results={filteredResults}
+                    partnerData={partnerData}
+                    type={type}
+                  />
+                ) : (
+                  <SearchResultGrid
+                    results={filteredResults}
+                    partnerData={partnerData}
+                    type={type}
+                  />
+                ))}
               {selectedView === 'graph' && (
                 <SearchResultGraph
                   results={filteredResults}
