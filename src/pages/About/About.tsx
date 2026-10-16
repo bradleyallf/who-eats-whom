@@ -257,9 +257,15 @@ export const About = () => {
       </section>
       <section className="space-y-10">
         <div className="space-y-3">
-          <h2 className="text-3xl font-semibold">Cite Our Data</h2>
-          <p className="text-sm font-semibold text-slate-700">
-            If you use this data, please cite our paper:
+          <h2 className="text-3xl font-semibold">Cite Our Project</h2>
+          <p className="text-sm font-bold text-slate-700">
+            If you found Who Eats Whom data/infrastructure useful for your
+            research, please consider citing our paper(s):
+          </p>
+          <p className="text-sm text-slate-700">
+            Allf, Bradley C., et al. "Who Eats Whom? A global food web derived
+            from citizen science." PLoS biology 24.9 (2026): e3003988.
+            https://doi.org/10.1371/journal.pbio.3003988
           </p>
           <p className="text-sm text-slate-700">
             Mallavarapu, A., Uzzo, S., Vasudeva, N., Dunn, R., Allf, B., “Who

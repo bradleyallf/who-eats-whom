@@ -284,7 +284,8 @@ export const HowToSubmit = () => {
         </ol>
         <p className="text-lg text-slate-900">
           If you’re still struggling to add your observations to Who Eats Whom
-          feel free to DM Bradley on iNaturalist.
+          feel free to email Bradley Allf at
+          bradley[dot]allf[at]colostate[dot]edu.
         </p>
       </section>
     </section>
