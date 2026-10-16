@@ -18,7 +18,7 @@ import {
 import { apiClient } from '../../utils'
 
 import { SearchResultGrid } from './SearchedAnimal'
-import { SearchResultSpeciesGrid } from './SpeciesGrid'
+import { SearchResultSpeciesGrid, TaxonImage } from './SpeciesGrid'
 import { SearchResultGraph } from './SearchResultGraph'
 import { Observation, Ofv } from './types'
 import { Dropdown, Suggestion, titleCase } from './Dropdown'
@@ -270,6 +270,11 @@ export const Web = () => {
   const [gridSubView, setGridSubView] = useState<'observations' | 'species'>(
     'observations'
   )
+  // Lifted above SearchResultSpeciesGrid so the cache survives toggling
+  // between the observations/species sub-views, not just drilldown navigation.
+  const [speciesTaxonImages, setSpeciesTaxonImages] = useState<
+    Record<number, TaxonImage>
+  >({})
 
   const locationDropdownRef = useRef<HTMLDivElement | null>(null)
   const speciesInputReady = useMemo(
@@ -652,6 +657,8 @@ export const Web = () => {
     }
     if (!data.length) {
       setIsPartnerLoading(false)
+      setEatenByData([])
+      setPartnerData({})
       return
     }
 
@@ -1868,6 +1875,8 @@ export const Web = () => {
                     results={filteredResults}
                     partnerData={partnerData}
                     type={type}
+                    taxonImages={speciesTaxonImages}
+                    setTaxonImages={setSpeciesTaxonImages}
                   />
                 ) : (
                   <SearchResultGrid
