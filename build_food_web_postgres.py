@@ -1,15 +1,5 @@
 """Refresh the graph data inside the existing predator_prey.html from Postgres.
 
-Unlike build_food_web.py, this does NOT rebuild the page from a template.
-It keeps your current HTML (including any click-to-dim or other custom
-behaviour) and only replaces these three lines:
-
-    const graphData = ...;
-    const categoryColors = ...;
-    const legendItems = ...;
-
-A .bak copy of each file is saved next to it before it is changed.
-
 Run from the repo root:
 
     python3 build_food_web_postgres.py
