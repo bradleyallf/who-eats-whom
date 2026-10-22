@@ -1167,7 +1167,7 @@ def test_L2_015_very_long_version_string_returns_404(monkeypatch):
 
 def test_L2_016_unicode_version_string_returns_404(monkeypatch):
   """
-  L2-016: an etl_version with unicode characters (版本1) returns 404 and does
+  L2-016: an etl_version with unicode characters (ҠҊ1) returns 404 and does
   not crash; the exact string reaches the lookup.
   """
   etl_versions = [etl_version_row(1, "v1")]
@@ -1176,12 +1176,12 @@ def test_L2_016_unicode_version_string_returns_404(monkeypatch):
     monkeypatch,
     etl_versions,
     active_versions=["v1"],
-    params={"etl_version": "版本1"},
+    params={"etl_version": "ҠҊ1"},
   )
 
   assert resp.status_code == 404
   assert resp.json() == {"detail": NO_ETL_VERSION_DETAIL}
-  assert [params for _, params in etl_lookups(pool)] == [(["版本1"],)]
+  assert [params for _, params in etl_lookups(pool)] == [(["ҠҊ1"],)]
 
 def test_L2_017_concurrent_requests_resolve_same_version(monkeypatch):
   """
