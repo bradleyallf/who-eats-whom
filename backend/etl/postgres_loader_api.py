@@ -78,22 +78,52 @@ def canonical_role(raw_value: Optional[str]) -> Optional[str]:
     return ROLE_MAPPING.get(normalized)
 
 
-def parse_timestamp(value: str | None) -> Optional[datetime]:
-    """Convert an iNaturalist timestamp into a Python datetime."""
+# def parse_timestamp(value: str | None) -> Optional[datetime]:
+#     """Convert an iNaturalist timestamp into a Python datetime."""
+#     if not value:
+#         return None
+
+#     for fmt in (
+#         "%Y-%m-%d %H:%M:%S %Z",
+#         "%Y-%m-%d %H:%M:%S %z",
+#         "%Y-%m-%d",
+#     ):
+#         try:
+#             return datetime.strptime(value, fmt)
+#         except ValueError:
+#             continue
+
+#     return None
+
+from datetime import datetime, timezone
+
+def parse_timestamp(value) -> Optional[datetime]:
+    """Parse iNaturalist timestamps (ISO 8601, CSV style, or date-only) into UTC-aware datetimes."""
     if not value:
         return None
+    s = str(value).strip()
 
-    for fmt in (
-        "%Y-%m-%d %H:%M:%S %Z",
-        "%Y-%m-%d %H:%M:%S %z",
-        "%Y-%m-%d",
-    ):
-        try:
-            return datetime.strptime(value, fmt)
-        except ValueError:
-            continue
+    dt = None
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        for fmt in ("%Y-%m-%d %H:%M:%S %Z", "%Y-%m-%d %H:%M:%S %z"):
+            try:
+                dt = datetime.strptime(s, fmt)
+                break
+            except ValueError:
+                continue
 
-    return None
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def observed_timestamp(row: Dict[str, Any]) -> Optional[datetime]:
+    # Fall back to the date if the timestamp is missing OR unparseable.
+    return parse_timestamp(row.get("time_observed_at")) or parse_timestamp(row.get("observed_on"))
 
 
 def ensure_etl_version(    
@@ -277,10 +307,7 @@ def insert_observations(
             (
                 int(observation_id),
 
-                parse_timestamp(
-                    row.get("time_observed_at")
-                    or row.get("observed_on")
-                ),
+                observed_timestamp(row), #changed
 
                 float(row["latitude"])
                 if row.get("latitude") not in (None, "")
@@ -487,7 +514,7 @@ def build_interactions(cur, rows):
                 interactions.append((
                     int(row["taxon_id"]),
                     int(prey[0]),
-                    parse_timestamp(row.get("time_observed_at") or row.get("observed_on")),
+                    observed_timestamp(row),   ##changed
                 ))
 
         # Case 2: this batch row is the prey, so find eaters already stored
