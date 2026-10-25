@@ -55,13 +55,17 @@ CREATE TABLE IF NOT EXISTS observations (
 );
 
 -- New columns for observations image_url, license_code and attribution pulled from iNaturalist
-ALTER TABLE observations ADD COLUMN image_url TEXT;
+ALTER TABLE observations ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE observations ADD COLUMN IF NOT EXISTS photo_license_code TEXT;
 ALTER TABLE observations ADD COLUMN IF NOT EXISTS photo_attribution TEXT;
 
 -- Columns to keep track when the above fields are pulled from iNaturalist
 ALTER TABLE observations ADD COLUMN IF NOT EXISTS inat_pulled_at TIMESTAMPTZ;
 ALTER TABLE observations ADD COLUMN IF NOT EXISTS inat_api_call TEXT;
+
+-- Where the observation came from (e.g. csv vs scheduler) and why it was last updated
+ALTER TABLE observations ADD COLUMN IF NOT EXISTS source TEXT;
+ALTER TABLE observations ADD COLUMN IF NOT EXISTS updated_due_to TEXT;
 
 
 CREATE TABLE IF NOT EXISTS predator_prey_aggregates (

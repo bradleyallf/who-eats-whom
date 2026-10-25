@@ -1,6 +1,8 @@
 """
 One-time backfill of licensed photo metadata for existing
 observations in Postgres.
+
+To run: python3 -u backend/etl/backfill_observations_metadata.py --dsn postgresql://whodba:whopass@localhost:5433/who_eats_whom --delay 1.0 
 """
 from __future__ import annotations
 
@@ -22,6 +24,7 @@ INATURALIST_OBSERVATIONS_URL = (
 )
 
 BATCH_SIZE = 30
+UPDATED_DUE_TO = "backfill: observation image metadata"
 
 ALLOWED_LICENSES = {
     "cc0",
@@ -409,6 +412,7 @@ def main() -> None:
                             photo_attribution = %s,
                             inat_pulled_at = %s,
                             inat_api_call = %s,
+                            updated_due_to = %s,
                             updated_at = NOW()
                         WHERE observation_id = %s;
                         """,
@@ -418,6 +422,7 @@ def main() -> None:
                             attribution,
                             pulled_at,
                             pull_id,
+                            UPDATED_DUE_TO,
                             observation_id,
                         ),
                     )

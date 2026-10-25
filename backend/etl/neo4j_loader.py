@@ -88,7 +88,6 @@ def fetch_edges(
     WHERE eater.etl_version_id = ANY(%s)
       AND partner.etl_version_id = ANY(%s)
       AND lower(btrim(eater.raw ->> %s)) = ANY(%s)
-      AND partner.observation_id <> eater.observation_id
     GROUP BY eater.taxon_id, partner.taxon_id
     """,
     (PARTNER_URL_FIELD, etl_version_ids, etl_version_ids, ROLE_FIELD, EATER_VALUES),

@@ -17,6 +17,8 @@ PARTNER_URL_FIELD = 'field:url for "partner" observation'
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CSV = REPO_ROOT / "observations.csv"
+SOURCE = "csv"
+UPDATED_DUE_TO = "csv load"
 
 ROLE_MAPPING = {
   "eater": "eater",
@@ -192,6 +194,8 @@ def insert_observations(cur: psycopg.Cursor, rows: List[Dict[str, Any]], etl_ver
         None,  # photo_attribution - populated by photo backfill
         None,  # inat_pulled_at - populated by photo/API backfill
         None,  # inat_api_call - populated by photo/API backfill
+        SOURCE,
+        UPDATED_DUE_TO,
       )
     )
 
@@ -214,8 +218,10 @@ def insert_observations(cur: psycopg.Cursor, rows: List[Dict[str, Any]], etl_ver
       photo_license_code,
       photo_attribution,
       inat_pulled_at,
-      inat_api_call
-    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+      inat_api_call,
+      source,
+      updated_due_to
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     ON CONFLICT (observation_id) DO UPDATE SET
       observed_at = EXCLUDED.observed_at,
       latitude = EXCLUDED.latitude,
@@ -228,6 +234,7 @@ def insert_observations(cur: psycopg.Cursor, rows: List[Dict[str, Any]], etl_ver
       iNaturalist_url = EXCLUDED.iNaturalist_url,
       etl_version_id = EXCLUDED.etl_version_id,
       raw = EXCLUDED.raw,
+      updated_due_to = EXCLUDED.updated_due_to,
       updated_at = NOW()
     """,
     observation_records,
