@@ -27,6 +27,8 @@ import { useScreenSize } from '../../hooks'
 
 const getLastLetter = (str: string) => str[str.length - 1]
 
+const MIN_SPECIES_SEARCH_LENGTH = 3
+
 const getTaxonDescPreviewMaxLength = (width: number) => {
   if (width < 640) return 100 // Mobile
   if (width < 1024) return 150 // Tablet
@@ -537,7 +539,7 @@ export const Web = () => {
     let canceled = false
     const query = search.trim()
 
-    if (query.length < 3) {
+    if (query.length < MIN_SPECIES_SEARCH_LENGTH) {
       setSuggestionSource([])
       setIsSuggestionLoading(false)
       return () => {
@@ -585,7 +587,7 @@ export const Web = () => {
     let canceled = false
     const query = draftLocationInput.trim()
 
-    if (!isAdvancedSearchOpen || !speciesInputReady || query.length < 3) {
+    if (!isAdvancedSearchOpen || !speciesInputReady || query.length < MIN_SPECIES_SEARCH_LENGTH) {
       setLocationSuggestions([])
       setIsLocationSuggestionLoading(false)
       setIsLocationDropdownOpen(false)
@@ -702,7 +704,7 @@ export const Web = () => {
   useEffect(() => {
     let canceled = false
 
-    if (submittedSearch.length < 3) {
+    if (submittedSearch.length < MIN_SPECIES_SEARCH_LENGTH) {
       setIsSearchLoading(false)
       setData([])
       if (submittedSearch.length === 0) {
@@ -868,7 +870,7 @@ export const Web = () => {
     setSearchError(null)
     setShouldDisplayResults(false)
     setSelectedThumbnail(null)
-    if (value.trim().length < 3) {
+    if (value.trim().length < MIN_SPECIES_SEARCH_LENGTH) {
       setSuggestionSource([])
       setIsSuggestionLoading(false)
     }
@@ -892,7 +894,7 @@ export const Web = () => {
     setPlaceLookupError(null)
     setAdvancedSearchError(null)
     const trimmed = value.trim()
-    if (trimmed.length < 3) {
+    if (trimmed.length < MIN_SPECIES_SEARCH_LENGTH) {
       setLocationSuggestions([])
       setIsLocationSuggestionLoading(false)
     }
@@ -940,7 +942,7 @@ export const Web = () => {
     const rawSearch = explicitSearch ?? search
     const trimmedSearch = rawSearch.trim()
 
-    if (trimmedSearch.length < 3) {
+    if (trimmedSearch.length < MIN_SPECIES_SEARCH_LENGTH) {
       setSearchError('Please enter a species name.')
       setShouldDisplayResults(false)
       setSubmittedSearch('')
@@ -1062,7 +1064,7 @@ export const Web = () => {
     setSelectedPlaceLabel(draftSelectedPlaceLabel)
 
     const searchTerm = (submittedSearch || search).trim()
-    if (searchTerm.length < 3) {
+    if (searchTerm.length < MIN_SPECIES_SEARCH_LENGTH) {
       closeAdvancedSearch()
       return
     }

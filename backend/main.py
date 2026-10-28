@@ -443,11 +443,16 @@ async def list_species(
 @app.get("/api/v1/species/search", tags=["data"])
 async def search_species(
   request: Request,
-  q: str = Query(..., min_length=2, description="Search text for common or scientific name."),
+  q: str = Query(..., min_length=3, description="Search text for common or scientific name."),
   limit: int = Query(25, ge=1, le=50),
 ):
   pool = await get_pg_pool(request)
-  search_term = f"%{q.strip()}%"
+  #search_term = f"%{q.strip()}%"
+  # Added this since the endpoint returns data for whitespaces otherwise
+  q = q.strip()
+  if len(q) < 3:
+    raise HTTPException(status_code=422, detail="Search text must be at least 3 characters.")
+  search_term = f"%{q}%"
 
   async with pool.connection() as conn:
     async with conn.cursor(row_factory=dict_row) as cur:
@@ -463,7 +468,7 @@ async def search_species(
           s.attribution
         FROM species s
         WHERE s.scientific_name ILIKE %s OR s.common_name ILIKE %s
-        ORDER BY COALESCE(s.common_name, s.scientific_name)
+        ORDER BY COALESCE(NULLIF(s.common_name, ''), s.scientific_name)
         LIMIT %s
         """,
         (search_term, search_term, limit),
