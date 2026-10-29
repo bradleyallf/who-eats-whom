@@ -262,6 +262,11 @@ async def get_pg_pool(request: Request) -> AsyncConnectionPool:
     raise HTTPException(status_code=503, detail="Postgres connection is not configured.")
   return pool
 
+async def get_neo4j_driver(request: Request):
+  driver = request.app.state.neo4j_driver
+  if not driver:
+    raise HTTPException(status_code=503, detail="Neo4j connection is not configured.")
+  return driver
 
 async def get_redis_cache(request: Request) -> RedisCache:
   return request.app.state.redis_cache
@@ -398,6 +403,48 @@ async def api_version():
   return {"version": APP_VERSION}
 
 
+# @app.get("/api/v1/species", tags=["data"])
+# async def list_species(
+#   request: Request,
+#   limit: int = Query(50, ge=1, le=200),
+#   offset: int = Query(0, ge=0),
+#   etl_version: Optional[str] = Query(None, description="Override ETL version; defaults to latest."),
+# ):
+#   pool = await get_pg_pool(request)
+#   cache = await get_redis_cache(request)
+#   version_info = await resolve_etl_version_id(pool, etl_version)
+#   cache_key = f"v{version_info['version']}:species:{limit}:{offset}"
+
+#   async def producer():
+#     async with pool.connection() as conn:
+#       async with conn.cursor(row_factory=dict_row) as cur:
+#         await cur.execute(
+#           """
+#           SELECT
+#             s.taxon_id,
+#             s.scientific_name,
+#             s.common_name,
+#             COALESCE(SUM(CASE WHEN p.predator_taxon_id = s.taxon_id THEN p.interaction_count END), 0) AS predator_events,
+#             COALESCE(SUM(CASE WHEN p.prey_taxon_id = s.taxon_id THEN p.interaction_count END), 0) AS prey_events
+#           FROM species AS s
+#           LEFT JOIN predator_prey_aggregates AS p
+#             ON p.etl_version_id = ANY(%s) AND (p.predator_taxon_id = s.taxon_id OR p.prey_taxon_id = s.taxon_id)
+#           GROUP BY s.taxon_id, s.scientific_name, s.common_name
+#           ORDER BY predator_events DESC
+#           LIMIT %s OFFSET %s
+#           """,
+#           (version_info["ids"], limit, offset),
+#         )
+#         rows = await cur.fetchall()
+#         records = [dict(row) for row in rows]
+#         return {
+#           "etl_version": version_info["version"],
+#           "results": records,
+#         }
+
+#   return await cached_response(cache, cache_key, producer)
+
+# /api/v1/species endpoint that queries neo4j instead of postgres' predator_prey_aggregates table
 @app.get("/api/v1/species", tags=["data"])
 async def list_species(
   request: Request,
@@ -406,36 +453,35 @@ async def list_species(
   etl_version: Optional[str] = Query(None, description="Override ETL version; defaults to latest."),
 ):
   pool = await get_pg_pool(request)
+  driver = await get_neo4j_driver(request)
   cache = await get_redis_cache(request)
   version_info = await resolve_etl_version_id(pool, etl_version)
   cache_key = f"v{version_info['version']}:species:{limit}:{offset}"
 
   async def producer():
-    async with pool.connection() as conn:
-      async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute(
-          """
-          SELECT
-            s.taxon_id,
-            s.scientific_name,
-            s.common_name,
-            COALESCE(SUM(CASE WHEN p.predator_taxon_id = s.taxon_id THEN p.interaction_count END), 0) AS predator_events,
-            COALESCE(SUM(CASE WHEN p.prey_taxon_id = s.taxon_id THEN p.interaction_count END), 0) AS prey_events
-          FROM species AS s
-          LEFT JOIN predator_prey_aggregates AS p
-            ON p.etl_version_id = ANY(%s) AND (p.predator_taxon_id = s.taxon_id OR p.prey_taxon_id = s.taxon_id)
-          GROUP BY s.taxon_id, s.scientific_name, s.common_name
-          ORDER BY predator_events DESC
-          LIMIT %s OFFSET %s
-          """,
-          (version_info["ids"], limit, offset),
-        )
-        rows = await cur.fetchall()
-        records = [dict(row) for row in rows]
-        return {
-          "etl_version": version_info["version"],
-          "results": records,
-        }
+    async with driver.session() as session:
+      result = await session.run(
+        """
+        MATCH (s:Species)
+        OPTIONAL MATCH (s)-[out:EATS]->()
+        WITH s, coalesce(sum(out.interaction_count), 0) AS predator_events
+        OPTIONAL MATCH ()-[inc:EATS]->(s)
+        WITH s, predator_events, coalesce(sum(inc.interaction_count), 0) AS prey_events
+        RETURN s.taxon_id AS taxon_id,
+               s.scientific_name AS scientific_name,
+               s.common_name AS common_name,
+               predator_events,
+               prey_events
+        ORDER BY predator_events DESC, taxon_id
+        SKIP $offset LIMIT $limit
+        """,
+        {"offset": offset, "limit": limit},
+      )
+      records = await result.data()
+    return {
+      "etl_version": version_info["version"],
+      "results": records,
+    }
 
   return await cached_response(cache, cache_key, producer)
 
@@ -680,6 +726,79 @@ async def food_web_summary(
   return await cached_response(cache, cache_key, producer)
 
 
+# @app.get("/api/v1/predator-prey", tags=["data"])
+# async def predator_prey_edges(
+#   request: Request,
+#   predator_taxon_id: Optional[int] = Query(None, alias="predator"),
+#   prey_taxon_id: Optional[int] = Query(None, alias="prey"),
+#   limit: int = Query(100, ge=1, le=500),
+#   etl_version: Optional[str] = Query(None),
+# ):
+#   if predator_taxon_id is None and prey_taxon_id is None:
+#     raise HTTPException(status_code=400, detail="Provide predator or prey taxon id to filter results.")
+
+#   pool = await get_pg_pool(request)
+#   version_info = await resolve_etl_version_id(pool, etl_version)
+
+# #   conditions = ["agg.etl_version_id = %s"]
+# #   params: list[Any] = [version_info["id"]]
+#   conditions = ["agg.etl_version_id = ANY(%s)"]
+#   params: list[Any] = [version_info["ids"]]
+#   if predator_taxon_id is not None:
+#     conditions.append("agg.predator_taxon_id = %s")
+#     params.append(predator_taxon_id)
+#   if prey_taxon_id is not None:
+#     conditions.append("agg.prey_taxon_id = %s")
+#     params.append(prey_taxon_id)
+#   params.append(limit)
+
+#   where_clause = " AND ".join(conditions)
+
+#   async with pool.connection() as conn:
+#     async with conn.cursor(row_factory=dict_row) as cur:
+#       await cur.execute(
+#         f"""
+#         SELECT
+#         agg.predator_taxon_id,
+#         predator.scientific_name AS predator_scientific_name,
+#         agg.prey_taxon_id,
+#         prey.scientific_name AS prey_scientific_name,
+#         SUM(agg.interaction_count)::int AS interaction_count,
+#         MAX(agg.latest_observation_at) AS latest_observation_at
+#         FROM predator_prey_aggregates AS agg
+#         JOIN species AS predator ON predator.taxon_id = agg.predator_taxon_id
+#         JOIN species AS prey ON prey.taxon_id = agg.prey_taxon_id
+#         WHERE {where_clause}
+#         GROUP BY agg.predator_taxon_id, predator.scientific_name,
+#                 agg.prey_taxon_id, prey.scientific_name
+#         ORDER BY SUM(agg.interaction_count) DESC
+#         LIMIT %s
+#         """,
+#         # f"""
+#         # SELECT
+#         #   agg.predator_taxon_id,
+#         #   predator.scientific_name AS predator_scientific_name,
+#         #   agg.prey_taxon_id,
+#         #   prey.scientific_name AS prey_scientific_name,
+#         #   agg.interaction_count,
+#         #   agg.latest_observation_at
+#         # FROM predator_prey_aggregates AS agg
+#         # JOIN species AS predator ON predator.taxon_id = agg.predator_taxon_id
+#         # JOIN species AS prey ON prey.taxon_id = agg.prey_taxon_id
+#         # WHERE {where_clause}
+#         # ORDER BY agg.interaction_count DESC
+#         # LIMIT %s
+#         # """,
+#         params,
+#       )
+#       fetched_rows = await cur.fetchall()
+#       rows = [dict(row) for row in fetched_rows]
+#       return {
+#         "etl_version": version_info["version"],
+#         "results": rows,
+#       }
+
+# /api/v1/predator-prey endpoint which queries neo4j instead of postgres' predator_prey_aggregates table
 @app.get("/api/v1/predator-prey", tags=["data"])
 async def predator_prey_edges(
   request: Request,
@@ -692,65 +811,32 @@ async def predator_prey_edges(
     raise HTTPException(status_code=400, detail="Provide predator or prey taxon id to filter results.")
 
   pool = await get_pg_pool(request)
+  driver = await get_neo4j_driver(request)
   version_info = await resolve_etl_version_id(pool, etl_version)
 
-#   conditions = ["agg.etl_version_id = %s"]
-#   params: list[Any] = [version_info["id"]]
-  conditions = ["agg.etl_version_id = ANY(%s)"]
-  params: list[Any] = [version_info["ids"]]
-  if predator_taxon_id is not None:
-    conditions.append("agg.predator_taxon_id = %s")
-    params.append(predator_taxon_id)
-  if prey_taxon_id is not None:
-    conditions.append("agg.prey_taxon_id = %s")
-    params.append(prey_taxon_id)
-  params.append(limit)
+  async with driver.session() as session:
+    result = await session.run(
+      """
+      MATCH (pred:Species)-[r:EATS]->(prey:Species)
+      WHERE ($predator IS NULL OR pred.taxon_id = $predator)
+        AND ($prey IS NULL OR prey.taxon_id = $prey)
+      RETURN pred.taxon_id AS predator_taxon_id,
+             pred.scientific_name AS predator_scientific_name,
+             prey.taxon_id AS prey_taxon_id,
+             prey.scientific_name AS prey_scientific_name,
+             r.interaction_count AS interaction_count,
+             toString(r.last_seen_at) AS latest_observation_at
+      ORDER BY r.interaction_count DESC
+      LIMIT $limit
+      """,
+      {"predator": predator_taxon_id, "prey": prey_taxon_id, "limit": limit},
+    )
+    rows = await result.data()
 
-  where_clause = " AND ".join(conditions)
-
-  async with pool.connection() as conn:
-    async with conn.cursor(row_factory=dict_row) as cur:
-      await cur.execute(
-        f"""
-        SELECT
-        agg.predator_taxon_id,
-        predator.scientific_name AS predator_scientific_name,
-        agg.prey_taxon_id,
-        prey.scientific_name AS prey_scientific_name,
-        SUM(agg.interaction_count)::int AS interaction_count,
-        MAX(agg.latest_observation_at) AS latest_observation_at
-        FROM predator_prey_aggregates AS agg
-        JOIN species AS predator ON predator.taxon_id = agg.predator_taxon_id
-        JOIN species AS prey ON prey.taxon_id = agg.prey_taxon_id
-        WHERE {where_clause}
-        GROUP BY agg.predator_taxon_id, predator.scientific_name,
-                agg.prey_taxon_id, prey.scientific_name
-        ORDER BY SUM(agg.interaction_count) DESC
-        LIMIT %s
-        """,
-        # f"""
-        # SELECT
-        #   agg.predator_taxon_id,
-        #   predator.scientific_name AS predator_scientific_name,
-        #   agg.prey_taxon_id,
-        #   prey.scientific_name AS prey_scientific_name,
-        #   agg.interaction_count,
-        #   agg.latest_observation_at
-        # FROM predator_prey_aggregates AS agg
-        # JOIN species AS predator ON predator.taxon_id = agg.predator_taxon_id
-        # JOIN species AS prey ON prey.taxon_id = agg.prey_taxon_id
-        # WHERE {where_clause}
-        # ORDER BY agg.interaction_count DESC
-        # LIMIT %s
-        # """,
-        params,
-      )
-      fetched_rows = await cur.fetchall()
-      rows = [dict(row) for row in fetched_rows]
-      return {
-        "etl_version": version_info["version"],
-        "results": rows,
-      }
+  return {
+    "etl_version": version_info["version"],
+    "results": rows,
+  }
 
 
 @app.get("/api/v1/locations/search", tags=["data"])
