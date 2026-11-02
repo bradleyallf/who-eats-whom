@@ -51,3 +51,6 @@ __pycache__/
 
 #inat log files from backfill script
 inat_logs/
+
+#test results
+backend/tests/test_results/

@@ -842,13 +842,18 @@ async def predator_prey_edges(
 @app.get("/api/v1/locations/search", tags=["data"])
 async def location_search(
   request: Request,
-  q: str = Query(..., min_length=2),
+  q: str = Query(..., min_length=3),
   limit: int = Query(10, ge=1, le=25),
   etl_version: Optional[str] = Query(None),
 ):
   pool = await get_pg_pool(request)
   version_info = await resolve_etl_version_id(pool, etl_version)
-  like_value = f"%{q.strip()}%"
+  # like_value = f"%{q.strip()}%"
+  # Added this since the endpoint returns data for whitespaces otherwise
+  q = q.strip()
+  if len(q) < 3:
+    raise HTTPException(status_code=422, detail="Search text must be at least 3 characters.")
+  like_value = f"%{q}%"
 
   async with pool.connection() as conn:
     async with conn.cursor(row_factory=dict_row) as cur:

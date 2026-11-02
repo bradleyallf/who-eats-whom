@@ -580,16 +580,16 @@ def test_L1_018_503_is_consistent_across_postgres_dependent_endpoints(
   Query strings are included where an endpoint rejects the request before it
   reaches the Postgres check: /api/v1/predator-prey returns 400 unless a
   predator or prey id is given, and /api/v1/locations/search returns 422
-  unless q has at least 2 characters.
+  unless q has at least 3 characters.
   """
   paths = [
     "/api/v1/species",
-    "/api/v1/species/search?q=ra",
+    "/api/v1/species/search?q=fox",
     "/api/v1/species/41641",
     "/api/v1/food-web/summary",
     "/api/v1/interactions",
     "/api/v1/predator-prey?predator=41641",
-    "/api/v1/locations/search?q=ra",
+    "/api/v1/locations/search?q=ral",
   ]
 
   for path in paths:
@@ -765,7 +765,7 @@ ETL_VERSION_ENDPOINTS = [
   ("/api/v1/species", {}, True),
   ("/api/v1/interactions", {}, True),
   ("/api/v1/predator-prey", {"predator": 1}, True),
-  ("/api/v1/locations/search", {"q": "Ra"}, False),
+  ("/api/v1/locations/search", {"q": "Ral"}, False),
   ("/api/v1/food-web/summary", {}, False),
 ]
 
