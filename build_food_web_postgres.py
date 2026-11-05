@@ -1,12 +1,14 @@
 """Refresh the graph data inside the existing predator_prey.html from Postgres.
 
-Run from the repo root:
+Run from the repo root, after the scheduler has loaded new data:
 
-    python3 build_food_web_postgres.py
+    python build_food_web_postgres.py
 
-Environment variables (both optional):
-    POSTGRES_DSN          default postgresql://whodba:whopass@localhost:5433/who_eats_whom
-    ACTIVE_ETL_VERSIONS   default "local-dev,2026-08-26-api" (same as backend/main.py)
+Environment variables (optional):
+    POSTGRES_DSN   default postgresql://whodba:whopass@localhost:5433/who_eats_whom_scheduler
+
+Predator/prey edges are computed straight from the observations table (same
+logic as the Neo4j loader), so there are no ETL versions or aggregate tables.
 """
 
 import json
@@ -24,13 +26,11 @@ TARGETS = [PUBLIC_DIR / "predator_prey.html", REPO_ROOT / "predator_prey.html"]
 
 DSN = os.getenv(
     "POSTGRES_DSN",
-    "postgresql://whodba:whopass@localhost:5433/who_eats_whom",
+    "postgresql://whodba:whopass@localhost:5433/who_eats_whom_scheduler",
 )
-ACTIVE_ETL_VERSIONS = [
-    v.strip()
-    for v in os.getenv("ACTIVE_ETL_VERSIONS", "local-dev,2026-08-26-api").split(",")
-    if v.strip()
-]
+
+# Must match postgres_loader_api_v2.py
+PARTNER_URL_FIELD = 'field:url for "partner" observation'
 
 CATEGORY_DEFINITIONS = {
     "plants": {
@@ -61,17 +61,24 @@ def map_iconic_to_category(iconic_taxon):
 def fetch_data():
     with psycopg.connect(DSN) as conn:
         with conn.cursor() as cur:
+            # Each eater observation stores its partner's iNaturalist URL in
+            # raw JSON; the observation ID is pulled out of it and joined by
+            # primary key. Counted per (predator taxon, prey taxon).
             cur.execute(
                 """
-                SELECT a.predator_taxon_id,
-                       a.prey_taxon_id,
-                       SUM(a.interaction_count)::int AS cnt
-                FROM predator_prey_aggregates a
-                JOIN etl_versions e ON e.id = a.etl_version_id
-                WHERE e.version = ANY(%s)
-                GROUP BY a.predator_taxon_id, a.prey_taxon_id
+                SELECT eater.taxon_id AS predator_taxon_id,
+                       partner.taxon_id AS prey_taxon_id,
+                       COUNT(*)::int AS cnt
+                FROM observations AS eater
+                JOIN observations AS partner
+                  ON partner.observation_id =
+                     (substring(eater.raw ->> %s from '/observations/([0-9]+)'))::bigint
+                WHERE eater.role = 'eater'
+                  AND partner.role = 'thing being eaten'
+                  AND eater.observation_id <> partner.observation_id
+                GROUP BY eater.taxon_id, partner.taxon_id
                 """,
-                (ACTIVE_ETL_VERSIONS,),
+                (PARTNER_URL_FIELD,),
             )
             edge_rows = cur.fetchall()
 
@@ -100,12 +107,9 @@ def fetch_data():
                 """
                 SELECT COUNT(DISTINCT o.raw->>'place_country_name')
                 FROM observations o
-                JOIN etl_versions e ON e.id = o.etl_version_id
-                WHERE e.version = ANY(%s)
-                  AND o.quality_grade = 'research'
+                WHERE o.quality_grade = 'research'
                   AND COALESCE(o.raw->>'place_country_name', '') <> ''
-                """,
-                (ACTIVE_ETL_VERSIONS,),
+                """
             )
             locations = cur.fetchone()[0]
 
@@ -187,7 +191,7 @@ def replace_const(html, name, value):
 
 
 def main():
-    print(f"Reading ETL versions: {', '.join(ACTIVE_ETL_VERSIONS)}")
+    print("Reading predator/prey data from Postgres...")
     edge_rows, species, locations = fetch_data()
     graph = build_graph(edge_rows, species)
     category_colors, legend_items = build_legend(graph["nodes"])

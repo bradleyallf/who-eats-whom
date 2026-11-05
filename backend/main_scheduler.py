@@ -39,28 +39,6 @@ DEFAULT_CACHE_TTL = int(os.getenv("API_CACHE_TTL", "300"))
 # Name of the row in scheduler_state that tracks the iNaturalist import.
 SCHEDULER_NAME = "inat_import"
 
-# Predator/prey edges, computed from the observations table (same logic as
-# neo4j_loader.py). Each eater observation stores its partner's iNaturalist
-# URL in raw JSON; the observation ID is pulled out of it and joined by
-# primary key. Prepend this to a query, then select FROM edges.
-EDGES_CTE = f"""
-WITH edges AS (
-  SELECT
-    eater.taxon_id AS predator_taxon_id,
-    partner.taxon_id AS prey_taxon_id,
-    COUNT(*)::int AS interaction_count,
-    MAX(eater.observed_at) AS latest_observation_at
-  FROM observations AS eater
-  JOIN observations AS partner
-    ON partner.observation_id =
-       (substring(eater.raw ->> '{PARTNER_URL_FIELD}' from '/observations/([0-9]+)'))::bigint
-  WHERE eater.role = 'eater'
-    AND partner.role = 'thing being eaten'
-    AND eater.observation_id <> partner.observation_id
-  GROUP BY eater.taxon_id, partner.taxon_id
-)
-"""
-
 
 def parse_raw_payload(raw: Any) -> Dict[str, Any]:
   if not raw:
@@ -285,6 +263,11 @@ async def get_pg_pool(request: Request) -> AsyncConnectionPool:
 async def get_redis_cache(request: Request) -> RedisCache:
   return request.app.state.redis_cache
 
+async def get_neo4j_driver(request: Request):
+  driver = request.app.state.neo4j_driver
+  if not driver:
+    raise HTTPException(status_code=503, detail="Neo4j connection is not configured.")
+  return driver
 
 async def get_data_version(pool: AsyncConnectionPool) -> str:
   """Return a label for the current data: the scheduler's last_fetched time.
@@ -401,38 +384,36 @@ async def list_species(
   offset: int = Query(0, ge=0),
 ):
   pool = await get_pg_pool(request)
+  driver = await get_neo4j_driver(request)
   cache = await get_redis_cache(request)
   data_version = await get_data_version(pool)
   cache_key = f"v{data_version}:species:{limit}:{offset}"
-
+ 
   async def producer():
-    async with pool.connection() as conn:
-      async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute(
-          f"""
-          {EDGES_CTE}
-          SELECT
-            s.taxon_id,
-            s.scientific_name,
-            s.common_name,
-            COALESCE(SUM(CASE WHEN e.predator_taxon_id = s.taxon_id THEN e.interaction_count END), 0) AS predator_events,
-            COALESCE(SUM(CASE WHEN e.prey_taxon_id = s.taxon_id THEN e.interaction_count END), 0) AS prey_events
-          FROM species AS s
-          LEFT JOIN edges AS e
-            ON e.predator_taxon_id = s.taxon_id OR e.prey_taxon_id = s.taxon_id
-          GROUP BY s.taxon_id, s.scientific_name, s.common_name
-          ORDER BY predator_events DESC
-          LIMIT %s OFFSET %s
-          """,
-          (limit, offset),
-        )
-        rows = await cur.fetchall()
-        records = [dict(row) for row in rows]
-        return {
-          "etl_version": data_version,
-          "results": records,
-        }
-
+    async with driver.session() as session:
+      result = await session.run(
+        """
+        MATCH (s:Species)
+        OPTIONAL MATCH (s)-[out:EATS]->()
+        WITH s, coalesce(sum(out.interaction_count), 0) AS predator_events
+        OPTIONAL MATCH ()-[inc:EATS]->(s)
+        WITH s, predator_events, coalesce(sum(inc.interaction_count), 0) AS prey_events
+        RETURN s.taxon_id AS taxon_id,
+               s.scientific_name AS scientific_name,
+               s.common_name AS common_name,
+               predator_events,
+               prey_events
+        ORDER BY predator_events DESC, taxon_id
+        SKIP $offset LIMIT $limit
+        """,
+        {"offset": offset, "limit": limit},
+      )
+      records = await result.data()
+    return {
+      "etl_version": data_version,
+      "results": records,
+    }
+ 
   return await cached_response(cache, cache_key, producer)
 
 
@@ -597,50 +578,39 @@ async def predator_prey_edges(
 ):
   if predator_taxon_id is None and prey_taxon_id is None:
     raise HTTPException(status_code=400, detail="Provide predator or prey taxon id to filter results.")
-
+ 
   pool = await get_pg_pool(request)
+  driver = await get_neo4j_driver(request)
+  cache = await get_redis_cache(request)
   data_version = await get_data_version(pool)
-
-  conditions: List[str] = []
-  params: List[Any] = []
-  if predator_taxon_id is not None:
-    conditions.append("e.predator_taxon_id = %s")
-    params.append(predator_taxon_id)
-  if prey_taxon_id is not None:
-    conditions.append("e.prey_taxon_id = %s")
-    params.append(prey_taxon_id)
-  params.append(limit)
-
-  where_clause = " AND ".join(conditions)
-
-  async with pool.connection() as conn:
-    async with conn.cursor(row_factory=dict_row) as cur:
-      await cur.execute(
-        f"""
-        {EDGES_CTE}
-        SELECT
-          e.predator_taxon_id,
-          predator.scientific_name AS predator_scientific_name,
-          e.prey_taxon_id,
-          prey.scientific_name AS prey_scientific_name,
-          e.interaction_count,
-          e.latest_observation_at
-        FROM edges AS e
-        JOIN species AS predator ON predator.taxon_id = e.predator_taxon_id
-        JOIN species AS prey ON prey.taxon_id = e.prey_taxon_id
-        WHERE {where_clause}
-        ORDER BY e.interaction_count DESC
-        LIMIT %s
+  cache_key = f"v{data_version}:predator-prey:{predator_taxon_id}:{prey_taxon_id}:{limit}"
+ 
+  async def producer():
+    async with driver.session() as session:
+      result = await session.run(
+        """
+        MATCH (pred:Species)-[r:EATS]->(prey:Species)
+        WHERE ($predator IS NULL OR pred.taxon_id = $predator)
+          AND ($prey IS NULL OR prey.taxon_id = $prey)
+        RETURN pred.taxon_id AS predator_taxon_id,
+               pred.scientific_name AS predator_scientific_name,
+               prey.taxon_id AS prey_taxon_id,
+               prey.scientific_name AS prey_scientific_name,
+               r.interaction_count AS interaction_count,
+               toString(r.last_seen_at) AS latest_observation_at
+        ORDER BY r.interaction_count DESC, predator_taxon_id, prey_taxon_id
+        LIMIT $limit
         """,
-        params,
+        {"predator": predator_taxon_id, "prey": prey_taxon_id, "limit": limit},
       )
-      fetched_rows = await cur.fetchall()
-      rows = [dict(row) for row in fetched_rows]
-      return {
-        "etl_version": data_version,
-        "results": rows,
-      }
-
+      rows = await result.data()
+    return {
+      "etl_version": data_version,
+      "results": rows,
+    }
+ 
+  return await cached_response(cache, cache_key, producer)
+ 
 
 @app.get("/api/v1/locations/search", tags=["data"])
 async def location_search(
@@ -764,7 +734,6 @@ async def interaction_search(
         "etl_version": data_version,
         "results": payload,
       }
-
 
 if __name__ == "__main__":
   import uvicorn

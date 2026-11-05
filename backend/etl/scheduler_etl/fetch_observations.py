@@ -23,17 +23,24 @@ Pipeline overview:
             -> normalize()                # one flat record per observation
         -> load_records_to_postgres()     # upsert one page at a time
         -> set_last_fetched()             # only after everything succeeded
+        -> update_graph()                 # rebuild the Neo4j graph from postgres
 
 Environment variables:
     POSTGRES_DSN: PostgreSQL connection string (default: local Docker DB).
+    NEO4J_URI:      Neo4j bolt URI (default: bolt://localhost:7687).
+    NEO4J_USER:     Neo4j username (default: neo4j).
+    NEO4J_PASSWORD: Neo4j password (default: testpass, the local Docker setup).
 """
 
 import time
 from datetime import datetime, timezone
+import os
 
 import requests
+from neo4j_loader_scheduler import load_graph
 
 from postgres_loader_api_v2 import (
+    DSN,
     get_last_fetched,
     load_records_to_postgres,
     set_last_fetched,
@@ -44,6 +51,14 @@ INATURALIST_PLACES_URL = "https://api.inaturalist.org/v1/places/{}"
 INATURALIST_OBSERVATIONS_URL = "https://api.inaturalist.org/v1/observations"
 
 HEADERS = {"User-Agent": "Who-Eats-Whom/1.0"}
+
+# Neo4j connection. Override with environment variables; the defaults match the
+# local Docker setup.
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "testpass")
+
+
 PER_PAGE = 200
 PAUSE_SECONDS = 1.0  # be polite to the iNaturalist API (~60 requests/min limit)
 TAXA_BATCH_SIZE = 30     # the taxa endpoint accepts up to 30 ids per request
@@ -512,6 +527,24 @@ def fetch_observation_pages(since):
         time.sleep(PAUSE_SECONDS)
 
 
+def update_graph():
+    """Rebuild the Neo4j graph from Postgres.
+ 
+    Runs after every scheduler run, even when nothing new was fetched, so a
+    Neo4j that was down during an earlier run catches up on the next one. The
+    Postgres data is already saved by this point, so a Neo4j failure does not
+    lose anything.
+    """
+    print("Updating Neo4j graph...")
+    try:
+        load_graph(DSN, NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
+    except Exception as exc:
+        print(f"Neo4j update failed: {exc}")
+        print("Postgres is up to date. Fix Neo4j and run the scheduler again to retry.")
+        raise
+
+
+
 def update_database():
     """Run one incremental import and advance ``last_fetched``.
 
@@ -541,6 +574,8 @@ def update_database():
 
     set_last_fetched(run_started)
     print(f"Done. {total} observations written. last_fetched = {run_started.isoformat()}")
+
+    update_graph()
 
     return total
 

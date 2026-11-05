@@ -126,25 +126,39 @@ def load_edges(tx, edge_payload: List[Dict[str, Any]]) -> None:
   )
 
 
-def main() -> None:
-  args = parse_args()
 
-  with psycopg.connect(args.dsn) as conn:
+def load_graph(dsn: str, uri: str, user: str, password: str) -> Tuple[int, int]:
+  """Rebuild the Neo4j graph from Postgres.
+ 
+  Reads every species and recomputes every predator/prey edge, then upserts
+  them into Neo4j. Safe to run repeatedly.
+ 
+  Returns:
+    (number of species loaded, number of edges loaded)
+  """
+  with psycopg.connect(dsn) as conn:
     with conn.cursor() as cur:
       species_payload = fetch_species(cur)
       edge_payload = fetch_edges(cur)
-
+ 
   if not species_payload:
-    raise SystemExit("No species found in Postgres. Run the scheduler first.")
-
-  driver = GraphDatabase.driver(args.uri, auth=(args.user, args.password))
-  with driver.session(database="neo4j") as session:
-    session.execute_write(load_species, species_payload)
-    if edge_payload:
-      session.execute_write(load_edges, edge_payload)
-  driver.close()
+    print("No species found in Postgres; nothing to load into Neo4j.")
+    return 0, 0
+ 
+  with GraphDatabase.driver(uri, auth=(user, password)) as driver:
+    with driver.session(database="neo4j") as session:
+      session.execute_write(load_species, species_payload)
+      if edge_payload:
+        session.execute_write(load_edges, edge_payload)
+ 
   print(f"Loaded {len(species_payload)} species and {len(edge_payload)} edges into Neo4j from Postgres.")
+  return len(species_payload), len(edge_payload)
 
 
+def main() -> None:
+  args = parse_args()
+  load_graph(args.dsn, args.uri, args.user, args.password)
+ 
+ 
 if __name__ == "__main__":
   main()
