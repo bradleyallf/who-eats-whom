@@ -46,6 +46,8 @@ from postgres_loader_api_v2 import (
     set_last_fetched,
 )
 
+from prune_stale_observations import prune_stale_observations
+
 INATURALIST_TAXA_URL = "https://api.inaturalist.org/v1/taxa/{}"
 INATURALIST_PLACES_URL = "https://api.inaturalist.org/v1/places/{}"
 INATURALIST_OBSERVATIONS_URL = "https://api.inaturalist.org/v1/observations"
@@ -574,6 +576,13 @@ def update_database():
 
     set_last_fetched(run_started)
     print(f"Done. {total} observations written. last_fetched = {run_started.isoformat()}")
+
+    try:
+        prune_stale_observations()
+    except Exception as exc:
+        print(f"Pruning stale observations skipped: {exc}")
+        print("Stale observations were NOT removed this run; continuing.")
+
 
     update_graph()
 
