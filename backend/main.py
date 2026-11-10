@@ -689,18 +689,18 @@ async def food_web_summary(
         location_row = await cur.fetchone()
         locations = location_row["location_count"] if location_row else 0
 
-    # Observations, edges, taxa come from Neo4j via Cypher
+    # interactions, edges, taxa come from Neo4j via Cypher
     driver: Optional[AsyncGraphDatabase] = request.app.state.neo4j_driver
-    observations = 0
+    interactions = 0
     edges = 0
     taxa = 0
     if driver:
       async with driver.session() as session:
         obs_result = await session.run(
-          "MATCH ()-[r:EATS]->() RETURN sum(r.interaction_count) AS observations"
+          "MATCH ()-[r:EATS]->() RETURN sum(r.interaction_count) AS interactions"
         )
         obs_record = await obs_result.single()
-        observations = obs_record["observations"] if obs_record and obs_record["observations"] else 0
+        interactions = obs_record["interactions"] if obs_record and obs_record["interactions"] else 0
 
         edges_result = await session.run(
           "MATCH ()-[r:EATS]->() RETURN count(r) AS edges"
@@ -717,7 +717,7 @@ async def food_web_summary(
         taxa = taxa_record["taxa"] if taxa_record else 0
 
     return {
-      "observations": observations,
+      "interactions": interactions,
       "edges": edges,
       "taxa": taxa,
       "locations": locations,

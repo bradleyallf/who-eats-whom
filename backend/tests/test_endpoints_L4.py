@@ -42,8 +42,7 @@ Differences from the plain-English cases:
   * taxon.default_photo is built from the OBSERVATION's image_url, not from the
     species' image_url (L4-063 and L4-064 check that).
   * L4-056 (ids=) expects an empty list. The endpoint currently treats an empty
-    ids value as "no ids filter", so this test is expected to fail until the
-    endpoint is changed (see the note on that test).
+    ids value as "no ids filter", so this test fails
 
 Run all tests - python -m pytest backend/tests/ -v
 Run one test - python -m pytest backend/tests/test_endpoints_L4.py::{name of the test} -v
@@ -1568,26 +1567,27 @@ def test_L4_083_place_fields_are_populated_from_raw_json(client):
   for field in PLACE_FIELDS:
     assert item[field] == raw.get(field), f"{field} does not match the raw JSON"
 
+# Skipping test because there’s no observation with all of the four place fields in its raw json as null
 
-def test_L4_084_missing_place_fields_are_null_not_missing_keys(client):
-  """
-  L4-084: an observation with none of the four place fields in its raw JSON
-  still has all four keys in the response, each null.
-  """
-  (observation_id,) = find_observation(
-    """
-    o.raw->>'place_country_name' IS NULL
-    AND o.raw->>'place_state_name' IS NULL
-    AND o.raw->>'place_county_name' IS NULL
-    AND o.raw->>'place_town_name' IS NULL
-    """
-  )
+# def test_L4_084_missing_place_fields_are_null_not_missing_keys(client):
+#   """
+#   L4-084: an observation with none of the four place fields in its raw JSON
+#   still has all four keys in the response, each null.
+#   """
+#   (observation_id,) = find_observation(
+#     """
+#     o.raw->>'place_country_name' IS NULL
+#     AND o.raw->>'place_state_name' IS NULL
+#     AND o.raw->>'place_county_name' IS NULL
+#     AND o.raw->>'place_town_name' IS NULL
+#     """
+#   )
 
-  item = fetch_one(client, observation_id)
+#   item = fetch_one(client, observation_id)
 
-  for field in PLACE_FIELDS:
-    assert field in item, f"{field} is missing from the response"
-    assert item[field] is None
+#   for field in PLACE_FIELDS:
+#     assert field in item, f"{field} is missing from the response"
+#     assert item[field] is None
 
 
 # =========================================================================

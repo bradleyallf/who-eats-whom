@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiClient } from '../../utils';
 
 interface StatsSummary {
-  observations: number;
+  interactions: number;
   edges: number;
   taxa: number;
   locations: number;
@@ -37,8 +37,8 @@ export const InteractiveFoodWeb = () => {
 
   const metrics = [
     {
-      label: 'Observations available',
-      value: stats?.observations,
+      label: '# of Interactions',
+      value: stats?.interactions,
     },
     {
       label: '# of Unique Nodes',
