@@ -51,7 +51,10 @@ __pycache__/
 *.pyc
 .env.local
 .venv/
+.venv-wsl/
 .dev-backend.log
 
 #inat log files from backfill script
 inat_logs/
+
+

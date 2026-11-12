@@ -22,6 +22,7 @@ import { SearchResultSpeciesGrid, TaxonImage } from './SpeciesGrid'
 import { SearchResultGraph } from './SearchResultGraph'
 import { Observation, Ofv } from './types'
 import { Dropdown, Suggestion, titleCase } from './Dropdown'
+import { TaxonSearchInput } from './TaxonSearchInput'
 import { SearchResultNetwork } from './SearchResultNetwork'
 import { SearchResultMap } from './SearchResultMap'
 import { useScreenSize } from '../../hooks'
@@ -213,7 +214,6 @@ export const Web = () => {
   const [taxonWikiUrl, setTaxonWikiUrl] = useState<string>('')
   const [taxonLicenseCode, setTaxonLicenseCode] = useState<string>('')
   const [taxonAttribution, setTaxonAttribution] = useState<string>('')
-  const [isTaxonAttributionOpen, setIsTaxonAttributionOpen] = useState(false)
 
   // State representing the updated amount of results from API on each year update
   // Added to handle year adjustments to properly display 0 results
@@ -264,6 +264,31 @@ export const Web = () => {
   const [isMiniToolBarOpen, setMiniToolBarOpen] = useState(false)
 
   const [type, setType] = useState(types.eaten.key)
+  // "Does ... eat ..." is an advanced filter on the who eats / who is eaten
+  // by searches: the other organism is typed in the Advanced Search popup.
+  const [isDoesEatActive, setIsDoesEatActive] = useState(false)
+  const [appliedDoesEatOther, setAppliedDoesEatOther] = useState<{
+    name: string
+    id: number | null
+  } | null>(null)
+  const [draftDoesEatOther, setDraftDoesEatOther] = useState('')
+  const [draftDoesEatOtherId, setDraftDoesEatOtherId] = useState<number | null>(
+    null
+  )
+  const [doesEatPair, setDoesEatPair] = useState<{
+    predator: string
+    prey: string
+  } | null>(null)
+  const [doesEatResult, setDoesEatResult] = useState<{
+    status: 'loading' | 'yes' | 'no' | 'error'
+    message: string
+  } | null>(null)
+  const [doesEatMatches, setDoesEatMatches] = useState<
+    Array<{ predator: Observation; prey: Observation }>
+  >([])
+  const [openDoesEatAttribution, setOpenDoesEatAttribution] = useState<
+    Record<string, boolean>
+  >({})
   const [selectedView, setSelectedView] = useState<
     'grid' | 'graph' | 'network' | 'map' | null
   >(null)
@@ -788,7 +813,6 @@ export const Web = () => {
       setTaxonWikiUrl('')
       setTaxonLicenseCode('')
       setTaxonAttribution('')
-      setIsTaxonAttributionOpen(false)
       setIsTaxonMetaLoading(false)
       return
     }
@@ -877,6 +901,10 @@ export const Web = () => {
   const handleInputChange = (evt: ChangeEvent<HTMLInputElement>) => {
     const { value } = evt.target
     setSearch(value)
+    setIsDoesEatActive(false)
+    setAppliedDoesEatOther(null)
+    setDoesEatResult(null)
+    setDoesEatMatches([])
     setSelectedTaxonId(null)
     setTaxonDesc('')
     setTaxonWikiUrl('')
@@ -920,6 +948,8 @@ export const Web = () => {
     setDraftLocationInput(locationInput)
     setDraftSelectedPlaceId(selectedPlaceId)
     setDraftSelectedPlaceLabel(selectedPlaceLabel)
+    setDraftDoesEatOther(appliedDoesEatOther?.name ?? '')
+    setDraftDoesEatOtherId(appliedDoesEatOther?.id ?? null)
     setPlaceLookupError(null)
     setAdvancedSearchError(null)
     setIsLocationDropdownOpen(false)
@@ -933,6 +963,145 @@ export const Web = () => {
     setIsLocationSuggestionLoading(false)
     setPlaceLookupError(null)
     setAdvancedSearchError(null)
+  }
+
+  const runDoesEatCheck = async (filters: {
+    predator: { name: string; id: number | null }
+    prey: { name: string; id: number | null }
+    year: string
+    location: string | null
+  }) => {
+    const predator = filters.predator.name.trim()
+    const prey = filters.prey.name.trim()
+    const predatorId = filters.predator.id
+    const preyId = filters.prey.id
+    if (predator.length < 3 || prey.length < 3) {
+      setDoesEatResult({
+        status: 'error',
+        message: 'Enter both a predator and a prey (at least 3 letters each).',
+      })
+      return
+    }
+
+    setDoesEatPair({ predator, prey })
+    setIsDoesEatActive(true)
+    setDoesEatMatches([])
+    setOpenDoesEatAttribution({})
+    setDoesEatResult({ status: 'loading', message: 'Checking...' })
+    try {
+      // Observations of the predator in the "eater" role, each linking to the
+      // observation of what it ate.
+      const params = new URLSearchParams({
+        limit: '200',
+        role: types.eater.value,
+      })
+      if (predatorId) {
+        params.append('taxon_id', String(predatorId))
+      } else {
+        params.append('taxon_name', predator)
+      }
+      if (filters.year) params.append('year', filters.year)
+      if (filters.location) params.append('location', filters.location)
+      const eaterRes = await apiClient.get(
+        `/v1/interactions?${params.toString()}`
+      )
+      const eaterObs: Observation[] = eaterRes.data?.results || []
+
+      // partner observation id -> the predator's observation linking to it
+      const predatorByPartnerId = new Map<string, Observation>()
+      eaterObs.forEach((obs) => {
+        obs.ofvs.forEach((ofv) => {
+          if (
+            ofv.field_id === partnerFieldId &&
+            ofv.value.includes('/observations/')
+          ) {
+            ofv.value.match(/\/observations\/(\d+)/g)?.forEach((match) => {
+              const id = match.split('/').pop()!
+              if (id !== String(obs.id)) predatorByPartnerId.set(id, obs)
+            })
+          }
+        })
+      })
+
+      const matches: Array<{ predator: Observation; prey: Observation }> = []
+      if (predatorByPartnerId.size) {
+        const partnerRes = await apiClient.get(
+          `/v1/interactions?${new URLSearchParams({
+            ids: Array.from(predatorByPartnerId.keys()).join(','),
+            limit: '200',
+          }).toString()}`
+        )
+        const preyName = prey.toLowerCase()
+        const partners: Observation[] = partnerRes.data?.results || []
+        partners.forEach((o) => {
+          const isPrey = preyId
+            ? o.taxon?.id === preyId
+            : o.taxon?.name?.toLowerCase() === preyName ||
+              o.taxon?.preferred_common_name?.toLowerCase() === preyName
+          const predatorObs = predatorByPartnerId.get(String(o.id))
+          // Like the other searches, skip observations without a photo.
+          if (isPrey && predatorObs && predatorObs.photos?.[0]?.url) {
+            matches.push({ predator: predatorObs, prey: o })
+          }
+        })
+      }
+
+      setDoesEatMatches(matches)
+      setDoesEatResult(
+        matches.length > 0
+          ? { status: 'yes', message: '' }
+          : {
+              status: 'no',
+              message: `No recorded interactions of ${titleCase(
+                predator
+              )} eating ${titleCase(prey)}${
+                filters.year || filters.location
+                  ? ` ${[
+                      filters.year && `in ${filters.year}`,
+                      filters.location && `in ${filters.location}`,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}`
+                  : ''
+              }.`,
+            }
+      )
+    } catch {
+      setDoesEatResult({
+        status: 'error',
+        message: 'Something went wrong checking that. Please try again.',
+      })
+    }
+  }
+
+  // Switching search types drops the previous search's results.
+  const clearSearchResults = () => {
+    setSubmittedSearch('')
+    setData([])
+    setShouldDisplayResults(false)
+    setSelectedTaxonId(null)
+    setSelectedThumbnail(null)
+    setTaxonDesc('')
+    setTaxonWikiUrl('')
+    setSearchError(null)
+    setIsDropdownOpen(false)
+    setIsDoesEatActive(false)
+    setDoesEatPair(null)
+    setDoesEatResult(null)
+    setDoesEatMatches([])
+    setOpenDoesEatAttribution({})
+  }
+
+  const handleModeChange = (value: string) => {
+    clearSearchResults()
+    // Advanced filters don't carry over to a different search type.
+    clearAdvancedFilters()
+    setAppliedDoesEatOther(null)
+    setYearFilter('')
+    setLocationInput('')
+    setSelectedPlaceId(null)
+    setSelectedPlaceLabel(null)
+    if (value === 'eaten' || value === 'eater') setType(value)
   }
 
   const handleSubmit = async (
@@ -977,6 +1146,9 @@ export const Web = () => {
     }
 
     setSearchError(null)
+    setIsDoesEatActive(false)
+    setDoesEatResult(null)
+    setDoesEatMatches([])
     setIsSearchLoading(true)
 
     const trimmedLocation = (
@@ -1069,6 +1241,68 @@ export const Web = () => {
 
     setAdvancedSearchError(null)
     setPlaceLookupError(null)
+
+    const otherName = draftDoesEatOther.trim()
+    if (otherName) {
+      const searchedName = (submittedSearch || search).trim()
+      if (searchedName.length < 3) {
+        setAdvancedSearchError('Search for an organism first.')
+        return
+      }
+      if (otherName.length < 3) {
+        setAdvancedSearchError('Enter at least 3 letters for the organism.')
+        return
+      }
+
+      let placeId = draftSelectedPlaceId
+      let placeLabel = draftSelectedPlaceLabel
+      if (nextLocation && placeId === null) {
+        setIsResolvingPlace(true)
+        try {
+          const place = await resolvePlace(nextLocation)
+          placeId = typeof place?.id === 'number' ? place.id : null
+          placeLabel = place?.display_name || place?.name || null
+        } catch {
+          setPlaceLookupError(
+            'Unable to resolve that location. Please try another.'
+          )
+          return
+        } finally {
+          setIsResolvingPlace(false)
+        }
+        if (!placeLabel) {
+          setPlaceLookupError(
+            'Unable to resolve that location. Please try another.'
+          )
+          return
+        }
+      }
+      if (!nextLocation) {
+        placeId = null
+        placeLabel = null
+      }
+
+      setYearFilter(nextYear)
+      setLocationInput(nextLocation)
+      setSelectedPlaceId(placeId)
+      setSelectedPlaceLabel(placeLabel)
+      setAppliedDoesEatOther({ name: otherName, id: draftDoesEatOtherId })
+      closeAdvancedSearch()
+
+      // "who eats X" -> the typed organism is the predator, X is the prey.
+      const searched = { name: searchedName, id: selectedTaxonId }
+      const other = { name: otherName, id: draftDoesEatOtherId }
+      await runDoesEatCheck({
+        predator: type === types.eaten.key ? other : searched,
+        prey: type === types.eaten.key ? searched : other,
+        year: nextYear,
+        location: placeLabel,
+      })
+      return
+    }
+
+    setAppliedDoesEatOther(null)
+
     setYearFilter(nextYear)
     setLocationInput(nextLocation)
     setSelectedPlaceId(draftSelectedPlaceId)
@@ -1103,6 +1337,8 @@ export const Web = () => {
     setDraftLocationInput('')
     setDraftSelectedPlaceId(null)
     setDraftSelectedPlaceLabel(null)
+    setDraftDoesEatOther('')
+    setDraftDoesEatOtherId(null)
     setLocationSuggestions([])
     setIsLocationDropdownOpen(false)
     setPlaceLookupError(null)
@@ -1262,6 +1498,47 @@ export const Web = () => {
     URL.revokeObjectURL(url)
   }
 
+  const downloadDoesEatCsv = () => {
+    if (!doesEatMatches.length) return
+    const name = (o: Observation) =>
+      o.taxon.preferred_common_name || o.taxon.name
+    const rows = [
+      'Predator Common Name,Predator Scientific Name,Prey Common Name,Prey Scientific Name,Predator Observation URL,Prey Observation URL,Photo Attribution',
+      ...doesEatMatches.map(({ predator, prey }) =>
+        [
+          name(predator),
+          predator.taxon.name,
+          name(prey),
+          prey.taxon.name,
+          predator.uri,
+          prey.uri,
+          predator.photos?.[0]?.attribution || '',
+        ]
+          .map((value) => JSON.stringify(value ?? ''))
+          .join(',')
+      ),
+    ]
+
+    const blob = new Blob([rows.join('\n')], {
+      type: 'text/csv;charset=utf-8;',
+    })
+    const url = URL.createObjectURL(blob)
+    const sanitize = (value: string) =>
+      value.replace(/[\\/:*?"<>|]/g, '').trim() || 'result'
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const fileName = `Does ${sanitize(
+      doesEatPair?.predator ?? ''
+    )} Eat ${sanitize(doesEatPair?.prey ?? '')} ${timestamp}.csv`
+
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', fileName)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   const speciesLabel =
     submittedSearch || search.trim() || 'the selected species'
   const activeAdvancedFiltersLabel = useMemo(() => {
@@ -1279,7 +1556,9 @@ export const Web = () => {
     return truncateWithEllipsis(stripHtml(taxonDesc), taxonDescPreviewMaxLength)
   }, [taxonDesc, taxonDescPreviewMaxLength])
 
-  const searchSummary = shouldDisplayResults ? (
+  const showRegularResults = shouldDisplayResults && !isDoesEatActive
+
+  const searchSummary = showRegularResults ? (
     <span className="flex flex-wrap items-center justify-center gap-x-2 text-xs leading-tight text-slate-600 font-bold sm:justify-start md:text-sm">
       {isResultsLoading ? (
         <span>Loading results...</span>
@@ -1346,12 +1625,18 @@ export const Web = () => {
   // ---------------------
   return (
     <>
-      <div className="sticky top-[72px] z-40 bg-white p-5">
+      <div
+        className={`sticky top-[72px] bg-white p-5 ${
+          // The modal lives in this stacking context, so lift it above the
+          // results toolbar while open.
+          isAdvancedSearchOpen ? 'z-[60]' : 'z-40'
+        }`}
+      >
         <div className="flex flex-col gap-2 w-full items-center">
           <div className="flex flex-row gap-10 mb-4 -mt-2">
             <div className="sm:hidden">
               {/* Results tool bar button for small screens*/}
-              {shouldDisplayResults && !isResultsLoading && hasResults && (
+              {showRegularResults && !isResultsLoading && hasResults && (
                 <button
                   type="button"
                   onClick={() => setMiniToolBarOpen(!isMiniToolBarOpen)}
@@ -1442,10 +1727,7 @@ export const Web = () => {
               <select
                 className="form-select form-select-lg w-full"
                 value={type}
-                onChange={(evt) => {
-                  const { value } = evt.target
-                  if (value === 'eaten' || value === 'eater') setType(value)
-                }}
+                onChange={(evt) => handleModeChange(evt.target.value)}
               >
                 {(Object.keys(types) as Array<Ofv['value']>).map((key) => (
                   <option value={key} key={key}>
@@ -1466,10 +1748,7 @@ export const Web = () => {
                   <select
                     className="form-select w-[8rem] px-2 py-1.75 pr-7 text-[12px] text-xs"
                     value={type}
-                    onChange={(evt) => {
-                      const { value } = evt.target
-                      if (value === 'eaten' || value === 'eater') setType(value)
-                    }}
+                    onChange={(evt) => handleModeChange(evt.target.value)}
                   >
                     {(Object.keys(types) as Array<Ofv['value']>).map((key) => (
                       <option value={key} key={key}>
@@ -1560,7 +1839,8 @@ export const Web = () => {
                       Advanced Search
                     </h2>
                     <p className="mt-1 text-sm text-slate-600">
-                      Adjust the year and location filters for this search.
+                      Adjust the year and location filters, or check whether a
+                      specific organism eats this one.
                     </p>
                   </div>
                   <button
@@ -1659,6 +1939,62 @@ export const Web = () => {
                     />
                   </div>
 
+                  {(submittedSearch || search).trim().length >= 3 && (
+                    <div>
+                      <span className="mb-1 block text-sm font-medium text-slate-700">
+                        Does ... eat ...?
+                      </span>
+                      <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-700">
+                        {type === types.eaten.key ? (
+                          <>
+                            <span>Does</span>
+                            <TaxonSearchInput
+                              className="w-full placeholder-[#bfb6b6] font-normal"
+                              ariaLabel="Predator"
+                              value={draftDoesEatOther}
+                              onChange={(value) => {
+                                setDraftDoesEatOther(value)
+                                setDraftDoesEatOtherId(null)
+                              }}
+                              onSelect={(suggestion) => {
+                                setDraftDoesEatOther(suggestion.label)
+                                setDraftDoesEatOtherId(suggestion.id)
+                              }}
+                              placeholder="Organism (ex. Osprey)"
+                            />
+                            <span>
+                              eat{' '}
+                              {titleCase((submittedSearch || search).trim())}?
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span>
+                              Does{' '}
+                              {titleCase((submittedSearch || search).trim())}{' '}
+                              eat
+                            </span>
+                            <TaxonSearchInput
+                              className="w-full placeholder-[#bfb6b6] font-normal"
+                              ariaLabel="Prey"
+                              value={draftDoesEatOther}
+                              onChange={(value) => {
+                                setDraftDoesEatOther(value)
+                                setDraftDoesEatOtherId(null)
+                              }}
+                              onSelect={(suggestion) => {
+                                setDraftDoesEatOther(suggestion.label)
+                                setDraftDoesEatOtherId(suggestion.id)
+                              }}
+                              placeholder="Organism (ex. Fish)"
+                            />
+                            <span>?</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {advancedSearchError && (
                     <p className="text-sm text-red-600">
                       {advancedSearchError}
@@ -1699,6 +2035,7 @@ export const Web = () => {
           {/* Most recent observation (only when no searches being made) */}
           <div className="flex flex-row gap-12">
             {!search.trim() &&
+              !doesEatResult &&
               (isRecentTaxonLoading ? (
                 <h2 className="mt-2 text-center text-gray-500">
                   Loading most recent observation...
@@ -1745,54 +2082,160 @@ export const Web = () => {
                   src={selectedThumbnail}
                   alt=""
                 />
-                {taxonLicenseCode && (
-                  <div className="absolute bottom-0 right-0 group">
-                    <button
-                      type="button"
-                      onClick={(evt) => {
-                        evt.preventDefault()
-                        evt.stopPropagation()
-                        setIsTaxonAttributionOpen((prev) => !prev)
-                      }}
-                      aria-expanded={isTaxonAttributionOpen}
-                      aria-label="Toggle image attribution"
-                      className="inline-flex h-4 w-4 items-center justify-center rounded-sm rounded-tl-md bg-white text-slate-900 text-[9px] font-semibold ring-1 ring-black/60 hover:bg-white/60"
-                    >
-                      CC
-                    </button>
-
-                    {isTaxonAttributionOpen && (
-                      <div className="absolute bottom-full right-0 mb-1 z-10 w-48 rounded border border-slate-300 bg-white px-2 py-1 text-[10px] leading-tight text-slate-700 shadow-md">
-                        {'Photo taken by ' +
-                          (photographerName ||
-                            'No attribution available for this image.')}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
 
-              {(taxonDesc || taxonWikiUrl) && (
-                <p className="max-w-prose text-sm md:text-md line-clamp-3">
-                  {taxonDescPreview}{' '}
-                  {taxonWikiUrl && (
-                    <a
-                      href={taxonWikiUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-blue-600 underline hover:text-blue-800"
-                    >
-                      (Wikipedia)
-                    </a>
-                  )}
-                </p>
-              )}
+              <div className="min-w-0 max-w-prose">
+                {(taxonDesc || taxonWikiUrl) && (
+                  <p className="text-sm md:text-md line-clamp-3">
+                    {taxonDescPreview}{' '}
+                    {taxonWikiUrl && (
+                      <a
+                        href={taxonWikiUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-blue-600 underline hover:text-blue-800"
+                      >
+                        (Wikipedia)
+                      </a>
+                    )}
+                  </p>
+                )}
+                {/* Outside the clamped paragraph so it is never cut off */}
+                {taxonLicenseCode && (
+                  <p className="mt-1 text-[11px] leading-tight text-black">
+                    {'Photo taken by ' +
+                      (photographerName ||
+                        'No attribution available for this image.')}
+                  </p>
+                )}
+              </div>
             </div>
           )
         )}
       </div>
-      {shouldDisplayResults && !isAdvancedSearchOpen && (
+      {/* Does ... eat ... results, below the organism description */}
+      {isDoesEatActive && (
+        <div className="px-5 pb-5">
+          {isDoesEatActive && doesEatResult?.status === 'no' && (
+            <div
+              role="status"
+              className="mt-3 p-4 border border-slate-200 rounded text-sm text-slate-600"
+            >
+              {doesEatResult.message}
+            </div>
+          )}
+
+          {isDoesEatActive &&
+            doesEatResult &&
+            doesEatResult.status !== 'no' &&
+            doesEatResult.message && (
+              <p
+                role="status"
+                className={`mt-4 text-center text-sm font-semibold ${
+                  doesEatResult.status === 'error'
+                    ? 'text-red-600'
+                    : 'text-slate-500 italic'
+                }`}
+              >
+                {doesEatResult.message}
+              </p>
+            )}
+
+          {isDoesEatActive && doesEatMatches.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center text-xs leading-tight text-slate-600 font-bold md:text-sm">
+              <span className="rounded border border-slate-900 bg-slate-900 px-1.5 py-0.5 text-[11px] text-white sm:rounded-md sm:px-2 sm:py-1 sm:text-xs md:text-sm">
+                {doesEatMatches.length}{' '}
+                {doesEatMatches.length === 1 ? 'Observation' : 'Observations'}
+              </span>
+              {doesEatPair && (
+                <span className="text-slate-800">
+                  Does {titleCase(doesEatPair.predator)} eat{' '}
+                  {titleCase(doesEatPair.prey)}?
+                  {activeAdvancedFiltersLabel && (
+                    <span className="ml-2 font-normal text-slate-600">
+                      {activeAdvancedFiltersLabel}
+                    </span>
+                  )}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={downloadDoesEatCsv}
+                className="font-medium text-slate-800 underline underline-offset-2 hover:text-black"
+              >
+                Download CSV
+              </button>
+            </div>
+          )}
+
+          {isDoesEatActive && doesEatMatches.length > 0 && (
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              {doesEatMatches.map(({ predator, prey }) => {
+                const predatorName =
+                  predator.taxon.preferred_common_name || predator.taxon.name
+                const preyName =
+                  prey.taxon.preferred_common_name || prey.taxon.name
+                const photoUrl = predator.photos?.[0]?.url
+                const attribution = predator.photos?.[0]?.attribution
+                const cardKey = `${predator.id}-${prey.id}`
+                return (
+                  <a
+                    key={cardKey}
+                    href={predator.uri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow"
+                  >
+                    {photoUrl ? (
+                      <img
+                        src={photoUrl.replace('square', 'medium')}
+                        alt={`${predatorName} eating ${preyName}`}
+                        className="h-48 w-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="flex h-48 w-full items-center justify-center bg-slate-100 text-xs text-slate-500">
+                        No photo
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 p-3 text-sm">
+                      <span>
+                        {titleCase(predatorName)} eating {titleCase(preyName)}
+                      </span>
+                      <div className="relative ml-auto shrink-0">
+                        {openDoesEatAttribution[cardKey] && (
+                          <div className="pointer-events-none absolute bottom-full right-0 mb-1 z-10 w-48 rounded border border-slate-300 bg-white px-2 py-1 text-[10px] leading-tight text-slate-700 shadow-md">
+                            {attribution ||
+                              'No attribution available for this image.'}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(evt) => {
+                            evt.preventDefault()
+                            evt.stopPropagation()
+                            setOpenDoesEatAttribution((prev) => ({
+                              ...prev,
+                              [cardKey]: !prev[cardKey],
+                            }))
+                          }}
+                          aria-expanded={!!openDoesEatAttribution[cardKey]}
+                          aria-label="Toggle image attribution"
+                          className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-xs text-slate-900 font-semibold border border-black hover:bg-slate-100"
+                        >
+                          CC
+                        </button>
+                      </div>
+                    </div>
+                  </a>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+      {showRegularResults && (
         <div className="sticky top-[160px] bg-white z-40 items-center flex flex-col mt-2">
           {/* Results summary and toolbar, not actual results*/}
           <div className="flex flex-row items-center gap-2">
@@ -1856,7 +2299,7 @@ export const Web = () => {
       )}
 
       {/* Taxon desc and image after search*/}
-      {shouldDisplayResults && (
+      {showRegularResults && (
         <div className="col-8 mt-3 space-y-6">
           {/* Search results, toolbar(grid, map etc) */}
           {isResultsLoading ? (
