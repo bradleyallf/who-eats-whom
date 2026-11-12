@@ -905,7 +905,7 @@ async def interaction_search(
   conditions: List[str] = ["o.etl_version_id = ANY(%s)"]
   params: List[Any] = [version_info["ids"]]
 
-  if ids:
+  if ids is not None:
     id_list = [int(i) for i in ids.split(",") if i.strip().isdigit()]
     if not id_list:
       return {"etl_version": version_info["version"], "results": []}
