@@ -29,6 +29,20 @@ import { useScreenSize } from '../../hooks'
 
 const getLastLetter = (str: string) => str[str.length - 1]
 
+// Keeps the final word and the trailing punctuation together so a "?" never wraps alone.
+const withUnbrokenEnd = (text: string, suffix: string) => {
+  const idx = text.lastIndexOf(' ')
+  return (
+    <>
+      {text.slice(0, idx + 1)}
+      <span className="whitespace-nowrap">
+        {text.slice(idx + 1)}
+        {suffix}
+      </span>
+    </>
+  )
+}
+
 const getTaxonDescPreviewMaxLength = (width: number) => {
   if (width < 640) return 100 // Mobile
   if (width < 1024) return 150 // Tablet
@@ -186,7 +200,6 @@ export const Web = () => {
   //  STATE
   // ---------------------
   const taxonMetaSentinelRef = useRef<HTMLDivElement | null>(null)
-  const [isTaxonMetaCondensed, setIsTaxonMetaCondensed] = useState(false)
 
   const { width } = useScreenSize()
   const taxonDescPreviewMaxLength = getTaxonDescPreviewMaxLength(width)
@@ -201,8 +214,6 @@ export const Web = () => {
 
   // Actual search/what appears in searchbox
   const [submittedSearch, setSubmittedSearch] = useState('')
-  // NOT IMPLEMENTED YET -- search delay for api call after
-  const debouncedSubSearch = useDebounce(submittedSearch, 500)
   const [recentTaxon, setRecentTaxon] = useState('')
   const [recentTaxDate, setRecentTaxDate] = useState('')
   const [isRecentTaxonLoading, setIsRecentTaxonLoading] = useState(true)
@@ -222,7 +233,6 @@ export const Web = () => {
   // Year filter added by user
   //const [advSearchShowing, setAdvSearchShowing] = useState(false)
   const [yearFilter, setYearFilter] = useState<string>('')
-  const debouncedYearFilter = useDebounce(yearFilter, 500)
   const [suggestionSource, setSuggestionSource] = useState<TaxonSuggestion[]>(
     []
   )
@@ -313,17 +323,6 @@ export const Web = () => {
   const setPartnerLoadingFailed = () => {
     setIsPartnerLoading(false)
     setEatenByData([])
-  }
-
-  function useDebounce<T>(value: T, delay: number) {
-    const [debounced, setDebounced] = useState(value)
-
-    useEffect(() => {
-      const timeout = setTimeout(() => setDebounced(value), delay)
-      return () => clearTimeout(timeout)
-    }, [value, delay])
-
-    return debounced
   }
 
   const getPartnerData = async (ids: string[]) => {
@@ -426,68 +425,6 @@ export const Web = () => {
   // --------------------- ===
   //  EFFECTS
   // ---------------------
-
-  // Checks what position on the screen the scroll is, determining if there should be a condensed
-  // Taxon description or not. MAY NOT NEED THIS ANYMORE ON SCROLL.
-  /** 
-  useEffect(() => {
-    const sentinel = taxonMetaSentinelRef.current
-    if (!sentinel) return
-
-    const collapseThreshold = 8
-    const expandThreshold = 28
-
-    const updateCondensedState = () => {
-      const top = sentinel.getBoundingClientRect().top
-      setIsTaxonMetaCondensed((prev) => {
-        if (!prev && top <= collapseThreshold) return true
-        if (prev && top >= expandThreshold) return false
-        return prev
-      })
-    } 
-
-    updateCondensedState()
-    window.addEventListener('scroll', updateCondensedState, { passive: true })
-    window.addEventListener('resize', updateCondensedState)
-
-    return () => {
-      window.removeEventListener('scroll', updateCondensedState)
-      window.removeEventListener('resize', updateCondensedState)
-    }
-  }, [shouldDisplayResults, selectedThumbnail, taxonDesc]) */
-
-  // Fetch suggestions when user types in the search box
-  /*
-  useEffect(() => {
-    const params = new URLSearchParams({
-      project_id: String(projectId),
-      //taxon_name: submittedSearch,
-      quality_grade: 'research',
-      per_page: '1',
-      fields: observationFieldsParam,
-      photo_licensed: 'true',
-      licensed: 'true',
-      order_by: 'created_at',
-      order: 'desc',
-    })
-
-    apiClient.get(`/observations?${params.toString()}`).then((data) => {
-      const mostRecent = data.data.results[0]
-      const date = new Date(mostRecent.created_at)
-      const readable = date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-      //console.log(readable)
-      //console.log(mostRecent)
-      setRecentTaxon(mostRecent.taxon.preferred_common_name)
-      setRecentTaxDate(readable)
-    })
-  }, [])
-  */
 
   useEffect(() => {
     const loadMostRecentWithResearchPartner = async () => {
@@ -1939,61 +1876,64 @@ export const Web = () => {
                     />
                   </div>
 
-                  {(submittedSearch || search).trim().length >= 3 && (
-                    <div>
-                      <span className="mb-1 block text-sm font-medium text-slate-700">
-                        Does ... eat ...?
-                      </span>
-                      <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-700">
-                        {type === types.eaten.key ? (
-                          <>
-                            <span>Does</span>
-                            <TaxonSearchInput
-                              className="w-full placeholder-[#bfb6b6] font-normal"
-                              ariaLabel="Predator"
-                              value={draftDoesEatOther}
-                              onChange={(value) => {
-                                setDraftDoesEatOther(value)
-                                setDraftDoesEatOtherId(null)
-                              }}
-                              onSelect={(suggestion) => {
-                                setDraftDoesEatOther(suggestion.label)
-                                setDraftDoesEatOtherId(suggestion.id)
-                              }}
-                              placeholder="Organism (ex. Osprey)"
-                            />
-                            <span>
-                              eat{' '}
-                              {titleCase((submittedSearch || search).trim())}?
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <span>
-                              Does{' '}
-                              {titleCase((submittedSearch || search).trim())}{' '}
-                              eat
-                            </span>
-                            <TaxonSearchInput
-                              className="w-full placeholder-[#bfb6b6] font-normal"
-                              ariaLabel="Prey"
-                              value={draftDoesEatOther}
-                              onChange={(value) => {
-                                setDraftDoesEatOther(value)
-                                setDraftDoesEatOtherId(null)
-                              }}
-                              onSelect={(suggestion) => {
-                                setDraftDoesEatOther(suggestion.label)
-                                setDraftDoesEatOtherId(suggestion.id)
-                              }}
-                              placeholder="Organism (ex. Fish)"
-                            />
-                            <span>?</span>
-                          </>
-                        )}
+                  {(submittedSearch || search).trim().length >= 3 &&
+                    submittedSearch === search && (
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-700">
+                          {type === types.eaten.key ? (
+                            <>
+                              <span>Does</span>
+                              <TaxonSearchInput
+                                className="w-full placeholder-[#bfb6b6] font-normal"
+                                ariaLabel="Predator"
+                                value={draftDoesEatOther}
+                                onChange={(value) => {
+                                  setDraftDoesEatOther(value)
+                                  setDraftDoesEatOtherId(null)
+                                }}
+                                onSelect={(suggestion) => {
+                                  setDraftDoesEatOther(suggestion.label)
+                                  setDraftDoesEatOtherId(suggestion.id)
+                                }}
+                                placeholder="Organism (ex. Osprey)"
+                              />
+                              <span>
+                                eat{' '}
+                                {withUnbrokenEnd(
+                                  titleCase((submittedSearch || search).trim()),
+                                  '?'
+                                )}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span>
+                                Does{' '}
+                                {titleCase((submittedSearch || search).trim())}{' '}
+                                eat
+                              </span>
+                              <div className="flex w-full items-center gap-1">
+                                <TaxonSearchInput
+                                  className="w-full placeholder-[#bfb6b6] font-normal"
+                                  ariaLabel="Prey"
+                                  value={draftDoesEatOther}
+                                  onChange={(value) => {
+                                    setDraftDoesEatOther(value)
+                                    setDraftDoesEatOtherId(null)
+                                  }}
+                                  onSelect={(suggestion) => {
+                                    setDraftDoesEatOther(suggestion.label)
+                                    setDraftDoesEatOtherId(suggestion.id)
+                                  }}
+                                  placeholder="Organism (ex. Fish)"
+                                />
+                                <span>?</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
                   {advancedSearchError && (
                     <p className="text-sm text-red-600">
@@ -2151,7 +2091,7 @@ export const Web = () => {
               {doesEatPair && (
                 <span className="text-slate-800">
                   Does {titleCase(doesEatPair.predator)} eat{' '}
-                  {titleCase(doesEatPair.prey)}?
+                  {withUnbrokenEnd(titleCase(doesEatPair.prey), '?')}
                   {activeAdvancedFiltersLabel && (
                     <span className="ml-2 font-normal text-slate-600">
                       {activeAdvancedFiltersLabel}
