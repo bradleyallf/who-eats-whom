@@ -32,6 +32,30 @@ const team = [
     bio: 'Undergraduate researcher focused on interface design, accessibility, and improving user experience.',
     img: `${basePath}Maithili-Bhoop.jpg`,
   },
+  {
+    name: 'Ansh Pethani',
+    role: 'Developer',
+    bio: 'Graduate researcher working on full-stack development & project management.',
+    img: `${basePath}Ansh.png`,
+  },
+  {
+    name: 'Yashvi Shah',
+    role: 'Developer',
+    bio: 'Graduate researcher contributing to software development and project management.',
+    img: `${basePath}Yashvi.png`,
+  },
+  {
+    name: 'Shriya Atluri',
+    role: 'Developer',
+    bio: 'Undergraduate researcher contributing to development, data pipelines, and testing.',
+    img: `${basePath}Shriya.jpg`,
+  },
+  {
+    name: 'Reshma Arun Chand',
+    role: 'Developer',
+    bio: 'Undergraduate researcher contributing to development and automated data pipelines.',
+    img: `${basePath}Reshma.jpg`,
+  },
 ]
 
 export const About = () => {
