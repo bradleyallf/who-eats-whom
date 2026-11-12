@@ -2044,7 +2044,7 @@ export const Web = () => {
                 {/* Outside the clamped paragraph so it is never cut off */}
                 {taxonLicenseCode && (
                   <p className="mt-1 text-[11px] leading-tight text-black">
-                    {'Photo taken by ' +
+                    {'Photo: ' +
                       (photographerName ||
                         'No attribution available for this image.')}
                   </p>
