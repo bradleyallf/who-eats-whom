@@ -220,6 +220,12 @@ export const Web = () => {
 
   // The taxonId from the API corresponding to a unique organism
   const [selectedTaxonId, setSelectedTaxonId] = useState<number | null>(null)
+  // The organism the "Does _ eat _" filter is built around. It survives switching
+  // between "who eats" / "who is eaten by", which clears the results themselves.
+  const [doesEatBase, setDoesEatBase] = useState<{
+    term: string
+    id: number | null
+  } | null>(null)
   const [isTaxonMetaLoading, setIsTaxonMetaLoading] = useState(false)
   const [taxonDesc, setTaxonDesc] = useState<string | null>()
   const [taxonWikiUrl, setTaxonWikiUrl] = useState<string>('')
@@ -880,6 +886,20 @@ export const Web = () => {
     setIsLocationDropdownOpen(speciesInputReady && trimmed.length >= 3)
   }
 
+  useEffect(() => {
+    if (!submittedSearch) return
+    setDoesEatBase((prev) => ({
+      term: submittedSearch,
+      id: selectedTaxonId ?? (prev?.term === submittedSearch ? prev.id : null),
+    }))
+  }, [submittedSearch, selectedTaxonId])
+
+  // The filter is only usable while the search bar still holds that organism.
+  const isDoesEatFilterReady =
+    doesEatBase !== null &&
+    doesEatBase.term.length >= 3 &&
+    doesEatBase.term === search.trim()
+
   const openAdvancedSearch = () => {
     setDraftYearFilter(yearFilter)
     setDraftLocationInput(locationInput)
@@ -1179,9 +1199,9 @@ export const Web = () => {
     setAdvancedSearchError(null)
     setPlaceLookupError(null)
 
-    const otherName = draftDoesEatOther.trim()
+    const otherName = isDoesEatFilterReady ? draftDoesEatOther.trim() : ''
     if (otherName) {
-      const searchedName = (submittedSearch || search).trim()
+      const searchedName = doesEatBase?.term ?? search.trim()
       if (searchedName.length < 3) {
         setAdvancedSearchError('Search for an organism first.')
         return
@@ -1227,7 +1247,10 @@ export const Web = () => {
       closeAdvancedSearch()
 
       // "who eats X" -> the typed organism is the predator, X is the prey.
-      const searched = { name: searchedName, id: selectedTaxonId }
+      const searched = {
+        name: searchedName,
+        id: doesEatBase?.id ?? selectedTaxonId,
+      }
       const other = { name: otherName, id: draftDoesEatOtherId }
       await runDoesEatCheck({
         predator: type === types.eaten.key ? other : searched,
@@ -1876,16 +1899,41 @@ export const Web = () => {
                     />
                   </div>
 
-                  {(submittedSearch || search).trim().length >= 3 &&
-                    submittedSearch === search && (
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-700">
-                          {type === types.eaten.key ? (
-                            <>
-                              <span>Does</span>
+                  {isDoesEatFilterReady && doesEatBase ? (
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-700">
+                        {type === types.eaten.key ? (
+                          <>
+                            <span>Does</span>
+                            <TaxonSearchInput
+                              className="w-full placeholder-[#bfb6b6] font-normal"
+                              ariaLabel="Predator"
+                              value={draftDoesEatOther}
+                              onChange={(value) => {
+                                setDraftDoesEatOther(value)
+                                setDraftDoesEatOtherId(null)
+                              }}
+                              onSelect={(suggestion) => {
+                                setDraftDoesEatOther(suggestion.label)
+                                setDraftDoesEatOtherId(suggestion.id)
+                              }}
+                              placeholder="Organism (ex. Osprey)"
+                            />
+                            <span>
+                              eat{' '}
+                              {withUnbrokenEnd(
+                                titleCase(doesEatBase.term),
+                                '?'
+                              )}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span>Does {titleCase(doesEatBase.term)} eat</span>
+                            <div className="flex w-full items-center gap-1">
                               <TaxonSearchInput
                                 className="w-full placeholder-[#bfb6b6] font-normal"
-                                ariaLabel="Predator"
+                                ariaLabel="Prey"
                                 value={draftDoesEatOther}
                                 onChange={(value) => {
                                   setDraftDoesEatOther(value)
@@ -1895,45 +1943,22 @@ export const Web = () => {
                                   setDraftDoesEatOther(suggestion.label)
                                   setDraftDoesEatOtherId(suggestion.id)
                                 }}
-                                placeholder="Organism (ex. Osprey)"
+                                placeholder="Organism (ex. Fish)"
                               />
-                              <span>
-                                eat{' '}
-                                {withUnbrokenEnd(
-                                  titleCase((submittedSearch || search).trim()),
-                                  '?'
-                                )}
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <span>
-                                Does{' '}
-                                {titleCase((submittedSearch || search).trim())}{' '}
-                                eat
-                              </span>
-                              <div className="flex w-full items-center gap-1">
-                                <TaxonSearchInput
-                                  className="w-full placeholder-[#bfb6b6] font-normal"
-                                  ariaLabel="Prey"
-                                  value={draftDoesEatOther}
-                                  onChange={(value) => {
-                                    setDraftDoesEatOther(value)
-                                    setDraftDoesEatOtherId(null)
-                                  }}
-                                  onSelect={(suggestion) => {
-                                    setDraftDoesEatOther(suggestion.label)
-                                    setDraftDoesEatOtherId(suggestion.id)
-                                  }}
-                                  placeholder="Organism (ex. Fish)"
-                                />
-                                <span>?</span>
-                              </div>
-                            </>
-                          )}
-                        </div>
+                              <span>?</span>
+                            </div>
+                          </>
+                        )}
                       </div>
-                    )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-700">
+                      <span>
+                        Select an organism and search for it first to use the
+                        Does _ eat _ filter.
+                      </span>
+                    </div>
+                  )}
 
                   {advancedSearchError && (
                     <p className="text-sm text-red-600">
