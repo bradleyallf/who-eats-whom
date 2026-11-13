@@ -1156,21 +1156,21 @@ def test_L4_055_mix_of_numeric_and_non_numeric_ids_returns_numeric_matches(clien
   assert resp.status_code == 200
   assert sorted(result_ids(resp)) == sorted([first_id, second_id])
 
-# Test is failing because the endpoint returns list without filters when params are empty
-# def test_L4_056_empty_ids_param_returns_empty_list(client):
-#   """
-#   L4-056: GET /api/v1/interactions?ids= returns 200 and an empty results array.
 
-#   Note: the endpoint's check is `if ids:`, which is false for an empty string,
-#   so today an empty ids value means "no ids filter" and normal results come
-#   back. This test is written to the plain-English case, so it is expected to
-#   fail until the endpoint is changed to `if ids is not None:` (or until the
-#   team decides that empty ids should mean "no filter" and this test is changed).
-#   """
-#   resp = client.get(URL, params={"ids": ""})
+def test_L4_056_empty_ids_param_returns_empty_list(client):
+  """
+  L4-056: GET /api/v1/interactions?ids= returns 200 and an empty results array.
 
-#   assert resp.status_code == 200
-#   assert resp.json()["results"] == []
+  Note: the endpoint's check is `if ids:`, which is false for an empty string,
+  so today an empty ids value means "no ids filter" and normal results come
+  back. This test is written to the plain-English case, so it is expected to
+  fail until the endpoint is changed to `if ids is not None:` (or until the
+  team decides that empty ids should mean "no filter" and this test is changed).
+  """
+  resp = client.get(URL, params={"ids": ""})
+
+  assert resp.status_code == 200
+  assert resp.json()["results"] == []
 
 
 def test_L4_057_ids_with_extra_commas_does_not_crash(client):

@@ -3,7 +3,6 @@ import { apiClient } from '../../utils';
 
 interface StatsSummary {
   interactions: number;
-  edges: number;
   taxa: number;
   locations: number;
 }
@@ -37,26 +36,22 @@ export const InteractiveFoodWeb = () => {
 
   const metrics = [
     {
+      label: '# of Unique Species',
+      value: stats?.taxa,
+    },
+    {
       label: '# of Interactions',
       value: stats?.interactions,
     },
     {
-      label: '# of Unique Nodes',
-      value: stats?.taxa,
-    },
-    {
-      label: '# of Edges',
-      value: stats?.edges,
-    },
-    {
-      label: 'Locations',
+      label: '# of Countries',
       value: stats?.locations,
     },
   ];
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         {metrics.map(({ label, value }) => (
           <div key={label} className="p-4 bg-white rounded-lg shadow text-center">
             <p className="text-3xl font-bold">

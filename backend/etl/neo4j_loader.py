@@ -74,7 +74,7 @@ def fetch_edges(
   cur.execute(
     # Same rules as postgres_loader.build_interactions, except that the partner
     # may be in a different version, as long as it is one of the versions passed
-    # in. A self-link is ignored. Pairs are counted per (predator taxon,
+    # in. Pairs are counted per (predator taxon,
     # prey taxon).
     """
     SELECT

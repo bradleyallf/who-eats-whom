@@ -580,86 +580,8 @@ async def species_detail(request: Request, taxon_id: int):
     ]
   }
 
-# Old food-web/summary endpoint
 
-# @app.get("/api/v1/food-web/summary", tags=["data"])
-# async def food_web_summary(
-#   request: Request,
-#   etl_version: Optional[str] = Query(None, description="Override ETL version; defaults to latest."),
-# ):
-#   pool = await get_pg_pool(request)
-#   cache = await get_redis_cache(request)
-#   version_info = await resolve_etl_version_id(pool, etl_version)
-#   cache_key = f"v{version_info['version']}:summary"
-
-#   async def producer():
-#     async with pool.connection() as conn:
-#       async with conn.cursor(row_factory=dict_row) as cur:
-#         await cur.execute("SELECT COUNT(*) AS total_species FROM species")
-#         total_species = (await cur.fetchone())["total_species"]
-
-#         await cur.execute(
-#           """
-#           SELECT
-#             COUNT(DISTINCT predator_taxon_id) AS predator_species,
-#             COUNT(DISTINCT prey_taxon_id) AS prey_species,
-#             COALESCE(SUM(interaction_count), 0) AS total_interactions
-#           FROM predator_prey_aggregates
-#           WHERE etl_version_id = %s
-#           """,
-#           (version_info["id"],),
-#         )
-#         aggregates = dict(await cur.fetchone())
-
-#     neo4j_metrics: Dict[str, Any] = {}
-#     driver: Optional[AsyncGraphDatabase] = request.app.state.neo4j_driver
-#     if driver:
-#       async with driver.session() as session:
-#         nodes_result = await session.run(
-#           "MATCH (s:Species {etl_version: $etl}) RETURN count(s) AS species",
-#           etl=version_info["version"],
-#         )
-#         edges_result = await session.run(
-#           "MATCH ()-[r:EATS {etl_version: $etl}]->() RETURN count(r) AS relationships",
-#           etl=version_info["version"],
-#         )
-#         top_predators_result = await session.run(
-#           """
-#           MATCH (pred:Species)-[r:EATS {etl_version:$etl}]->(:Species)
-#           RETURN pred.taxon_id AS taxon_id,
-#                  pred.scientific_name AS scientific_name,
-#                  SUM(r.interaction_count) AS total_interactions
-#           ORDER BY total_interactions DESC
-#           LIMIT 5
-#           """,
-#           etl=version_info["version"],
-#         )
-#         nodes_record = await nodes_result.single()
-#         edges_record = await edges_result.single()
-#         top_predators = await top_predators_result.data()
-#         neo4j_metrics = {
-#           "species_nodes": nodes_record["species"] if nodes_record else 0,
-#           "edges": edges_record["relationships"] if edges_record else 0,
-#           "top_predators": top_predators,
-#         }
-
-#     return {
-#       "etl_version": version_info["version"],
-#       "postgres": {
-#         "total_species": total_species,
-#         "predator_species": aggregates["predator_species"],
-#         "prey_species": aggregates["prey_species"],
-#         "total_interactions": aggregates["total_interactions"],
-#       },
-#       "neo4j": neo4j_metrics or None,
-#     }
-
-#   return await cached_response(cache, cache_key, producer)
-
-
-
-
-# New food-web/summary endpoint to get the summary statistics which appear at the top of the page in the Interactive food web - BY Shriya
+# New food-web/summary endpoint to get the summary statistics which appear at the top of the page in the Interactive food web
 
 @app.get("/api/v1/food-web/summary", tags=["data"])
 async def food_web_summary(
@@ -702,12 +624,6 @@ async def food_web_summary(
         obs_record = await obs_result.single()
         interactions = obs_record["interactions"] if obs_record and obs_record["interactions"] else 0
 
-        edges_result = await session.run(
-          "MATCH ()-[r:EATS]->() RETURN count(r) AS edges"
-        )
-        edges_record = await edges_result.single()
-        edges = edges_record["edges"] if edges_record else 0
-
         taxa_result = await session.run(
           """
           MATCH (n) RETURN count(DISTINCT n) AS taxa;
@@ -718,85 +634,12 @@ async def food_web_summary(
 
     return {
       "interactions": interactions,
-      "edges": edges,
       "taxa": taxa,
       "locations": locations,
     }
 
   return await cached_response(cache, cache_key, producer)
 
-
-# @app.get("/api/v1/predator-prey", tags=["data"])
-# async def predator_prey_edges(
-#   request: Request,
-#   predator_taxon_id: Optional[int] = Query(None, alias="predator"),
-#   prey_taxon_id: Optional[int] = Query(None, alias="prey"),
-#   limit: int = Query(100, ge=1, le=500),
-#   etl_version: Optional[str] = Query(None),
-# ):
-#   if predator_taxon_id is None and prey_taxon_id is None:
-#     raise HTTPException(status_code=400, detail="Provide predator or prey taxon id to filter results.")
-
-#   pool = await get_pg_pool(request)
-#   version_info = await resolve_etl_version_id(pool, etl_version)
-
-# #   conditions = ["agg.etl_version_id = %s"]
-# #   params: list[Any] = [version_info["id"]]
-#   conditions = ["agg.etl_version_id = ANY(%s)"]
-#   params: list[Any] = [version_info["ids"]]
-#   if predator_taxon_id is not None:
-#     conditions.append("agg.predator_taxon_id = %s")
-#     params.append(predator_taxon_id)
-#   if prey_taxon_id is not None:
-#     conditions.append("agg.prey_taxon_id = %s")
-#     params.append(prey_taxon_id)
-#   params.append(limit)
-
-#   where_clause = " AND ".join(conditions)
-
-#   async with pool.connection() as conn:
-#     async with conn.cursor(row_factory=dict_row) as cur:
-#       await cur.execute(
-#         f"""
-#         SELECT
-#         agg.predator_taxon_id,
-#         predator.scientific_name AS predator_scientific_name,
-#         agg.prey_taxon_id,
-#         prey.scientific_name AS prey_scientific_name,
-#         SUM(agg.interaction_count)::int AS interaction_count,
-#         MAX(agg.latest_observation_at) AS latest_observation_at
-#         FROM predator_prey_aggregates AS agg
-#         JOIN species AS predator ON predator.taxon_id = agg.predator_taxon_id
-#         JOIN species AS prey ON prey.taxon_id = agg.prey_taxon_id
-#         WHERE {where_clause}
-#         GROUP BY agg.predator_taxon_id, predator.scientific_name,
-#                 agg.prey_taxon_id, prey.scientific_name
-#         ORDER BY SUM(agg.interaction_count) DESC
-#         LIMIT %s
-#         """,
-#         # f"""
-#         # SELECT
-#         #   agg.predator_taxon_id,
-#         #   predator.scientific_name AS predator_scientific_name,
-#         #   agg.prey_taxon_id,
-#         #   prey.scientific_name AS prey_scientific_name,
-#         #   agg.interaction_count,
-#         #   agg.latest_observation_at
-#         # FROM predator_prey_aggregates AS agg
-#         # JOIN species AS predator ON predator.taxon_id = agg.predator_taxon_id
-#         # JOIN species AS prey ON prey.taxon_id = agg.prey_taxon_id
-#         # WHERE {where_clause}
-#         # ORDER BY agg.interaction_count DESC
-#         # LIMIT %s
-#         # """,
-#         params,
-#       )
-#       fetched_rows = await cur.fetchall()
-#       rows = [dict(row) for row in fetched_rows]
-#       return {
-#         "etl_version": version_info["version"],
-#         "results": rows,
-#       }
 
 # /api/v1/predator-prey endpoint which queries neo4j instead of postgres' predator_prey_aggregates table
 @app.get("/api/v1/predator-prey", tags=["data"])
