@@ -6,3 +6,4 @@ export * from './NotFound/NotFound'
 export * from './WhoSearch/WhoSearch'
 export * from './InteractiveFoodWeb/InteractiveFoodWeb'
 export * from './SummaryStatistics/SummaryStatistics'
+export * from "./ValidatorDashboard/ValidatorDashboard"
