@@ -279,6 +279,85 @@ export const About = () => {
           affiliated with iNaturalist in any way).
         </p>
       </section>
+      <section className="space-y-6">
+        <h2 className="text-3xl font-semibold">Media Coverage</h2>
+        <p className="text-lg text-slate-700">
+          We are grateful to the following media outlets for covering our
+          project and helping us share our project with a wider audience:
+        </p>
+        <ul>
+          <li className="text-lg text-slate-700">
+            Yahoo! News:{' '}
+            <a
+              href="https://www.yahoo.com/news/science/articles/why-scientists-want-photos-wildlife-180000033.html"
+              className="text-cyan-700 underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Why scientists want your photos of wildlife eating lunch
+            </a>
+          </li>
+          <li className="text-lg text-slate-700">
+            North Carolina State University:{' '}
+            <a
+              href="https://news.ncsu.edu/2026/09/who-eats-whom-research/"
+              className="text-cyan-700 underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              How Amateur Naturalists Are Helping Scientists Track What
+              Everything Eats{' '}
+            </a>
+          </li>
+          <li className="text-lg text-slate-700">
+            Grist:{' '}
+            <a
+              href="https://grist.org/science/why-scientists-want-your-photos-of-wildlife-eating-lunch/"
+              className="text-cyan-700 underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Why scientists want your photos of wildlife eating lunch
+            </a>
+          </li>
+          <li className="text-lg text-slate-700">
+            earth.com:{' '}
+            <a
+              href="https://www.earth.com/animals/thousands-of-wildlife-photos-are-helping-scientists-answer-one-big-question-who-eats-whom/"
+              className="text-cyan-700 underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Thousands of wildlife photos are helping scientists answer one big
+              question: Who eats whom?
+            </a>
+          </li>
+          <li className="text-lg text-slate-700">
+            IIT Mumbai:{' '}
+            <a
+              href="https://shaastramag.iitm.ac.in/special-feature/world-research-october-2026"
+              className="text-cyan-700 underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              World of research: October 2026
+            </a>
+          </li>
+
+          <li className="text-lg text-slate-700">
+            Phys.org:{' '}
+            <a
+              href="https://phys.org/news/2026-09-amateur-naturalists-scientists-track.html"
+              className="text-cyan-700 underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              How amateur naturalists are helping scientists track what
+              everything eats{' '}
+            </a>
+          </li>
+        </ul>
+      </section>
       <section className="space-y-10">
         <div className="space-y-3">
           <h2 className="text-3xl font-semibold">Cite Our Project</h2>
