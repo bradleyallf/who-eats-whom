@@ -19,7 +19,7 @@ Conventions used throughout this file:
     L5-029).
   * Where a test needs a particular kind of predator (one with many prey, one
     whose prey have different counts, one that is also prey of something else),
-    it first asks Neo4j for one, so it keeps working when your data changes. If
+    it first asks Neo4j for one, so it keeps working when the data changes. If
     the graph has no such species, the test is skipped and says why.
   * Test names follow the plain-English test IDs, e.g. test_L5_024_...
     covers test case L5-024.

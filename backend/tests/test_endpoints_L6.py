@@ -12,15 +12,14 @@ Conventions used throughout this file:
     the app reads (POSTGRES_DSN, NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD,
     REDIS_URL). Tests only ever read.
   * If Postgres or Neo4j is not configured, the tests that need them are skipped.
-  * The endpoint gets "locations" from Postgres and "interactions", "edges" and
+  * The endpoint gets "locations" from Postgres and "interactions", and
     "taxa" from Neo4j. So the expected values in these tests come from read-only
     queries on those same two databases (SQL for locations, Cypher for the rest).
   * Tests that need a service to be missing (L6-013, L6-016, L6-017, L6-018 and
     L6-026) start the real app with that environment variable unset, the same
     way the Layer 1 tests do. Nothing is replaced with a fake. In those tests
     Redis is always unset as well, so the app never reads from or writes to the
-    real cache. Without that, a response with zeros in it could be saved in Redis
-    and served to other tests for the next 300 seconds.
+    real cache.
   * The other tests use the real Redis. The summary is cached for 300 seconds, so
     if the data was reloaded in the last five minutes, a test that compares the
     answer with the database can see the older cached numbers. Wait for the cache
@@ -68,7 +67,7 @@ REAL_NEO4J = {
 URL = "/api/v1/food-web/summary"
 
 # The four fields every response must have (L6-001).
-METRIC_FIELDS = {"interactions", "edges", "taxa", "locations"}
+METRIC_FIELDS = {"interactions", "taxa", "locations"}
 
 # The Postgres table the locations count is read from.
 OBSERVATIONS_TABLE = "observations"
@@ -202,16 +201,14 @@ def db_location_stats(version_ids):
 def graph_totals():
   """
   Read-only: the three numbers the endpoint takes from Neo4j, as a dictionary
-  with interactions (the sum of interaction_count over all EATS relationships),
-  edges (the number of EATS relationships) and taxa (the number of distinct
+  with interactions (the sum of interaction_count over all EATS relationships) and taxa (the number of distinct
   nodes).
   """
   interactions = graph_query(
     "MATCH ()-[r:EATS]->() RETURN coalesce(sum(r.interaction_count), 0) AS n"
   )[0]["n"]
-  edges = graph_query("MATCH ()-[r:EATS]->() RETURN count(r) AS n")[0]["n"]
   taxa = graph_query("MATCH (n) RETURN count(DISTINCT n) AS n")[0]["n"]
-  return {"interactions": interactions, "edges": edges, "taxa": taxa}
+  return {"interactions": interactions, "taxa": taxa}
 
 
 def get_summary(client, **params):
@@ -232,7 +229,7 @@ def is_whole_number(value):
 
 def test_L6_001_returns_all_four_metric_fields(client):
   """
-  L6-001: GET /api/v1/food-web/summary returns 200 with interactions, edges,
+  L6-001: GET /api/v1/food-web/summary returns 200 with interactions,
   taxa and locations, each a number.
   """
   body = get_summary(client)
@@ -244,13 +241,13 @@ def test_L6_001_returns_all_four_metric_fields(client):
     assert is_whole_number(body[field]), f"{field} is {body[field]!r}, not a number"
 
 
-# L6-002 (all four fields are 0 with empty databases) is not tested: it needs
+# L6-002 (all three fields are 0 with empty databases) is not tested: it needs
 # empty databases.
 
 
 def test_L6_003_all_four_fields_are_non_negative_integers(client):
   """
-  L6-003: interactions, edges, taxa and locations are whole numbers of 0 or
+  L6-003: interactions, taxa and locations are whole numbers of 0 or
   more, never negative.
   """
   body = get_summary(client)
@@ -318,7 +315,7 @@ def test_L6_006_locations_is_distinct_country_count_not_observation_count(client
 
 
 # =========================================================================
-# Feature: Neo4j (interactions, edges, taxa)
+# Feature: Neo4j (interactions, taxa)
 # =========================================================================
 
 def test_L6_009_interactions_is_sum_of_interaction_count_over_all_eats(client):
@@ -332,16 +329,16 @@ def test_L6_009_interactions_is_sum_of_interaction_count_over_all_eats(client):
 
   assert body["interactions"] == expected
 
+# Skipped because the endpoint doesnt return the edges count now
+# def test_L6_010_edges_is_total_number_of_eats_relationships(client):
+#   """
+#   L6-010: edges equals the exact number of EATS relationships in Neo4j.
+#   """
+#   expected = graph_totals()["edges"]
 
-def test_L6_010_edges_is_total_number_of_eats_relationships(client):
-  """
-  L6-010: edges equals the exact number of EATS relationships in Neo4j.
-  """
-  expected = graph_totals()["edges"]
+#   body = get_summary(client)
 
-  body = get_summary(client)
-
-  assert body["edges"] == expected
+#   assert body["edges"] == expected
 
 
 def test_L6_011_taxa_is_total_distinct_nodes_in_graph(client):
@@ -363,7 +360,7 @@ def test_L6_011_taxa_is_total_distinct_nodes_in_graph(client):
 def test_L6_013_neo4j_not_configured_returns_zeros_not_500(monkeypatch):
   """
   L6-013: with Neo4j not configured, the response is 200 (not 500), and
-  interactions, edges and taxa are all 0. locations is still there.
+  interactions and taxa are all 0. locations is still there.
   """
   require_real_services()
 
@@ -373,7 +370,6 @@ def test_L6_013_neo4j_not_configured_returns_zeros_not_500(monkeypatch):
 
   assert resp.status_code == 200
   assert body["interactions"] == 0
-  assert body["edges"] == 0
   assert body["taxa"] == 0
   assert is_whole_number(body["locations"])
 
@@ -396,7 +392,7 @@ def test_L6_016_both_postgres_and_neo4j_unavailable_returns_503(monkeypatch):
 def test_L6_017_postgres_up_neo4j_down_still_returns_valid_response(monkeypatch):
   """
   L6-017: with Postgres connected and Neo4j not configured, the response is 200
-  with interactions, edges and taxa at 0 and locations at the real value (the
+  with interactions, and taxa at 0 and locations at the real value (the
   number of countries in the database).
   """
   require_real_services()
@@ -407,7 +403,6 @@ def test_L6_017_postgres_up_neo4j_down_still_returns_valid_response(monkeypatch)
   assert resp.status_code == 200
   assert resp.json() == {
     "interactions": 0,
-    "edges": 0,
     "taxa": 0,
     "locations": expected_locations,
   }
@@ -480,7 +475,6 @@ def test_L6_026_redis_not_configured_falls_back_to_the_databases(monkeypatch):
   assert resp.status_code == 200
   assert resp.json() == {
     "interactions": expected["interactions"],
-    "edges": expected["edges"],
     "taxa": expected["taxa"],
     "locations": expected["locations"],
   }

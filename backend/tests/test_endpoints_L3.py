@@ -16,7 +16,7 @@ Conventions used throughout this file:
   * If POSTGRES_DSN is not set, every test in this file is skipped.
   * Where a test needs a particular kind of species (one with no interactions,
     one without an image, one without a common name), it first asks the
-    database for one with a read-only query, so it keeps working when your
+    database for one with a read-only query, so it keeps working when the
     data changes.
   * Test names follow the plain-English test IDs, e.g. test_L3_002_...
     covers test case L3-002.
@@ -181,10 +181,6 @@ def test_L3_009_offset_paginates_correctly(client):
   1-5. The first 10 species are fetched in one request, and the second page
   must equal items 6-10 of that list.
 
-  Note: this assumes the list has a stable order. If species with the same
-  predator_events could come back in a different order from one query to the
-  next, this test would be flaky, and the fix would be a tie-breaker (such as
-  taxon_id) in the endpoint's ORDER BY.
   """
   first_ten = client.get("/api/v1/species", params={"limit": 10}).json()["results"]
 

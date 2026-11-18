@@ -15,7 +15,7 @@ Conventions used throughout this file:
     variables the app reads (POSTGRES_DSN, NEO4J_URI, NEO4J_USER,
     NEO4J_PASSWORD, REDIS_URL). Tests only ever read from the database.
   * Tests that need a service which is not configured are skipped, so start
-    your services and export those variables before running.
+    the services and export those variables before running.
   * FastAPI's lifespan is exercised through TestClient so the tests cover
     the environment-variable configuration and startup logic in
     backend/main.py.
@@ -40,7 +40,7 @@ from backend.main import app
 
 # The real service settings, read once when this file is imported (before any
 # test patches anything). They come from the same environment variables the app
-# reads. A value of None means that variable is not set in your environment.
+# reads. A value of None means that variable is not set in the environment.
 REAL_POSTGRES_DSN = main_module.POSTGRES_DSN
 REAL_NEO4J = {
   "neo4j_uri": main_module.NEO4J_URI,
@@ -65,7 +65,7 @@ REAL_REDIS_URL = main_module.REDIS_URL
 #
 # These tests exercise the real FastAPI lifespan so that the environment
 # variable -> app.state configuration logic in backend/main.py is tested.
-# Where a test says a service is "set", it uses the real value from your
+# Where a test says a service is "set", it uses the real value from the
 # environment (so the real service must be running). Where a test says a
 # service is "unset", the app is given None for it and nothing connects.
 #
@@ -626,7 +626,7 @@ def test_L1_018_503_is_consistent_across_postgres_dependent_endpoints(
 # the request succeeds.
 #
 # How the tests are built:
-#   - They run against the real services your app uses (the same environment
+#   - They run against the real services the app uses (the same environment
 #     variables as the app: POSTGRES_DSN, etc.), through the real FastAPI
 #     lifespan. Nothing is faked and nothing is written: tests only read.
 #   - Expected values come from reading etl_versions directly, so the tests

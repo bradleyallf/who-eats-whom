@@ -13,7 +13,7 @@ Conventions used throughout this file:
   * If POSTGRES_DSN is not set, every test in this file is skipped.
   * Where a test needs a particular kind of observation (one with an image,
     one without coordinates, one with a partner URL, ...), it first asks the
-    database for one with a read-only query, so it keeps working when your
+    database for one with a read-only query, so it keeps working when the
     data changes. If the database has no such observation, the test is
     skipped and says why.
   * Expected values come from the database, not from numbers typed into the
@@ -41,8 +41,6 @@ Differences from the plain-English cases:
     answer is always the same one.
   * taxon.default_photo is built from the OBSERVATION's image_url, not from the
     species' image_url (L4-063 and L4-064 check that).
-  * L4-056 (ids=) expects an empty list. The endpoint currently treats an empty
-    ids value as "no ids filter", so this test fails
 
 Run all tests - python -m pytest backend/tests/ -v
 Run one test - python -m pytest backend/tests/test_endpoints_L4.py::{name of the test} -v
@@ -1160,12 +1158,6 @@ def test_L4_055_mix_of_numeric_and_non_numeric_ids_returns_numeric_matches(clien
 def test_L4_056_empty_ids_param_returns_empty_list(client):
   """
   L4-056: GET /api/v1/interactions?ids= returns 200 and an empty results array.
-
-  Note: the endpoint's check is `if ids:`, which is false for an empty string,
-  so today an empty ids value means "no ids filter" and normal results come
-  back. This test is written to the plain-English case, so it is expected to
-  fail until the endpoint is changed to `if ids is not None:` (or until the
-  team decides that empty ids should mean "no filter" and this test is changed).
   """
   resp = client.get(URL, params={"ids": ""})
 
